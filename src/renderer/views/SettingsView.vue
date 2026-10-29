@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue';
 import QRCode from 'qrcode';
 import { state } from '../store';
 import type { Settings } from '../../core/types';
+import PageHeader from '../ui/PageHeader.vue';
+import Notice from '../ui/Notice.vue';
 
 const s = computed(() => state.value!);
 const refreshing = ref(false);
@@ -93,12 +95,18 @@ async function refresh() {
   refreshing.value = false;
 }
 
+// Données anciennes : le patch du client et celui des stats ne correspondent pas
+const stale = computed(() => {
+  const c = state.value?.data.clientPatch;
+  const p = state.value?.data.patch;
+  return !!c && !!p && !c.startsWith(p) && !p.startsWith(c);
+});
 const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 </script>
 
 <template>
-  <div class="wrap">
-    <h1>Réglages</h1>
+  <div class="page wrap">
+    <PageHeader title="Réglages" sub="Ce que l’app fait pendant la partie, au champ select et en dehors. Les changements s’appliquent tout de suite." />
 
     <section class="card">
       <h2>Pendant la partie</h2>
@@ -135,11 +143,17 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2
           <div class="faint small">{{ o.hint }}</div>
         </div>
       </label>
-      <div v-if="s.settings.readCards" class="row2 cards-test">
-        <span class="faint small">Enregistrement de l’écran : <b :class="cardPerm === 'granted' ? 'good' : 'bad'">{{ PERM[cardPerm] ?? cardPerm }}</b></span>
-        <button v-if="cardPerm !== 'granted'" class="btn primary" :disabled="cardBusy" @click="permAction('request')">Demander l’autorisation</button>
-        <button v-if="cardPerm !== 'granted'" class="btn" :disabled="cardBusy" @click="permAction('settings')">Ouvrir les Réglages Système</button>
-        <button class="btn" :disabled="cardBusy" @click="testCards">{{ cardBusy ? 'Lecture…' : 'Tester la lecture' }}</button>
+      <div v-if="s.settings.readCards" class="perm">
+        <div class="perm-head">
+          <span class="small">Enregistrement de l’écran (lecture des cartes)</span>
+          <span class="chip" :class="cardPerm === 'granted' ? 'ok' : cardPerm === 'unsupported' ? '' : 'warn'">{{ cardPerm === 'granted' ? '✓ ' : '' }}{{ PERM[cardPerm] ?? cardPerm }}</span>
+        </div>
+        <Notice v-if="cardPerm === 'unsupported'" kind="empty"><p>La lecture des cartes utilise la reconnaissance de texte de macOS : indisponible sur ce système.</p></Notice>
+        <div v-else class="row2 btns">
+          <button v-if="cardPerm !== 'granted'" class="btn primary" :disabled="cardBusy" @click="permAction('request')">Demander l’autorisation</button>
+          <button v-if="cardPerm !== 'granted'" class="btn" :disabled="cardBusy" @click="permAction('settings')">Ouvrir les Réglages Système</button>
+          <button class="btn" :disabled="cardBusy" @click="testCards">{{ cardBusy ? 'Lecture…' : 'Tester la lecture' }}</button>
+        </div>
       </div>
       <p v-if="cardMsg" class="small">{{ cardMsg }}</p>
     </section>
@@ -206,9 +220,7 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2
         <div>
           <div v-if="s.data.patch">arammeta · patch {{ s.data.patch }} · chargées à {{ time(s.data.loadedAt!) }}</div>
           <div v-if="s.data.error" class="bad small">{{ s.data.error }}</div>
-          <div v-if="s.data.clientPatch && s.data.patch && !s.data.patch.startsWith(s.data.clientPatch)" class="bad small">
-            Client en {{ s.data.clientPatch }} : les stats Mayhem sont encore celles du {{ s.data.patch }}.
-          </div>
+          <Notice v-if="stale" kind="warn"><p>Client en {{ s.data.clientPatch }} : les stats Mayhem sont encore celles du {{ s.data.patch }}. Elles se mettent à jour quelques jours après un patch.</p></Notice>
           <div v-if="s.data.balance" class="small">Équilibrage ARAM : {{ s.data.balance }}</div>
           <div class="faint small">Mises en cache 12 h. Les augments Mayhem changent souvent : rafraîchis après un patch.</div>
         </div>
@@ -228,19 +240,22 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2
 </template>
 
 <style scoped>
-.wrap { padding: 22px 24px 30px; display: flex; flex-direction: column; gap: 14px; max-width: 780px; }
-h1 { font-size: 26px; }
-h2 { font-size: 15px; margin-bottom: 10px; }
+.wrap { max-width: 820px; }
+h2 { font-size: var(--fs-lg); margin-bottom: 10px; }
 .card { padding: 16px 18px; }
 .small { font-size: 12px; }
-.opt { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.opt { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); cursor: pointer; }
 .opt:first-of-type { border-top: 0; }
 .opt input { accent-color: var(--gold); margin-top: 3px; }
 .data { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .row2 { display: flex; gap: 10px; align-items: center; }
 .row2.mode { margin-bottom: 10px; }
-.row2 label { width: 62px; }
-.select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; font: inherit; flex: 1; }
+.row2 label { width: 70px; flex: none; }
+.row2 .select { flex: 1; min-width: 0; }
+.perm { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.perm-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chip.ok { color: var(--good); border-color: rgba(63, 208, 181, 0.4); }
+.btns { flex-wrap: wrap; }
 .phone { display: flex; gap: 14px; align-items: center; padding-top: 10px; }
 .phone img { border-radius: var(--radius); }
 .mono { font-family: ui-monospace, Menlo, monospace; user-select: all; word-break: break-all; }

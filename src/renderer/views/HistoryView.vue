@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Notice from '../ui/Notice.vue';
 import { QUEUE_LABEL } from '../../core/modes';
 const BAR: Record<string, string> = { good: 'up', bad: 'down', '': 'mid' };
 const LANE_FR: Record<string, string> = { top: 'haut', jungle: 'jungle', mid: 'milieu', adc: 'tireur', support: 'support' };
@@ -138,15 +139,14 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
 <template>
   <div class="wrap">
     <div class="head">
-      <h1>Historique</h1>
       <div class="filters">
-        <div class="seg">
-          <button v-for="m in (['all', 'aram', 'mayhem', 'sr'] as const)" :key="m" :class="{ on: mode === m }" @click="mode = m">
+        <div class="seg" role="group" aria-label="Mode">
+          <button v-for="m in (['all', 'aram', 'mayhem', 'sr'] as const)" :key="m" :aria-pressed="mode === m" :class="{ on: mode === m }" @click="mode = m">
             {{ m === 'all' ? 'Tout' : m === 'aram' ? 'ARAM' : m === 'sr' ? 'Faille' : 'Mayhem' }}
           </button>
         </div>
-        <div class="seg">
-          <button v-for="r in (['all', 'win', 'loss'] as const)" :key="r" :class="{ on: result === r }" @click="result = r">
+        <div class="seg" role="group" aria-label="Résultat">
+          <button v-for="r in (['all', 'win', 'loss'] as const)" :key="r" :aria-pressed="result === r" :class="{ on: result === r }" @click="result = r">
             {{ r === 'all' ? 'Tous' : r === 'win' ? 'Victoires' : 'Défaites' }}
           </button>
         </div>
@@ -161,14 +161,11 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
       </div>
     </div>
 
-    <div v-if="loading" class="faint">Chargement…</div>
-    <div v-else-if="!games.length" class="empty slim">
-      <h2>Aucune partie enregistrée</h2>
-      <p>Tes parties ARAM et Mayhem sont importées depuis le client à la connexion, puis enregistrées à chaque fin de partie.</p>
-    </div>
+    <div v-if="loading" class="loading" aria-busy="true"><div v-for="i in 4" :key="i" class="skeleton sk" /></div>
+    <Notice v-else-if="!games.length" kind="empty"><p>Aucune partie enregistrée. Tes parties sont importées depuis le client à la connexion, puis enregistrées à chaque fin de partie.</p></Notice>
 
     <template v-else>
-      <div class="kpis">
+      <div v-if="filtered.length" class="kpis">
         <div class="kpi card">
           <div class="faint small">Winrate</div>
           <div class="big num" :class="kpi.n ? (kpi.wins / kpi.n >= 0.5 ? 'good' : 'bad') : ''">{{ pct(kpi.n ? kpi.wins / kpi.n : null) }}</div>
@@ -226,7 +223,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
       </div>
 
       <section class="card list">
-        <div v-if="!filtered.length" class="faint pad">Aucune partie pour ces filtres.</div>
+        <div v-if="!filtered.length" class="faint pad">Aucune partie pour ces filtres{{ mode === 'sr' ? ' : tes parties de Faille s’ajoutent à la fin de chaque partie classée, normale ou Swiftplay' : '' }}.</div>
         <template v-for="g in filtered.slice(0, shown)" :key="g.gameId">
           <button class="game" :class="[g.win ? 'w' : 'l', { open: open === g.gameId }]" @click="toggle(g)">
             <div class="champ">
@@ -301,20 +298,18 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
 </template>
 
 <style scoped>
-.wrap { padding: 22px 24px 30px; display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
+.wrap { display: flex; flex-direction: column; gap: 14px; }
+.loading { display: flex; flex-direction: column; gap: 8px; }
+.sk { height: 64px; }
 .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.head h1 { font-size: 22px; }
 .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.seg { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
-.seg button { border: 0; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: var(--radius); cursor: pointer; font: inherit; font-size: 13px; }
-.seg button.on { background: var(--gold-soft); color: var(--gold); }
 .select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; font: inherit; font-size: 13px; }
 .small { font-size: 12px; }
 .pad { padding: 12px; }
 .empty.slim { height: auto; padding: 60px 20px; }
 .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .kpi { padding: 12px 14px; }
-.big { font-size: 24px; font-family: var(--display); font-weight: 400; color: var(--gold-hi); margin: 3px 0 1px; }
+.big { font-size: 22px; font-family: var(--display); font-weight: 400; color: var(--text); margin: 3px 0 1px; }
 .form { display: flex; gap: 4px; align-items: center; }
 .form .faint { margin-right: 6px; }
 .list { padding: 4px 0; }

@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { tone, state, championIcon, pct, hideBroken } from '../store';
 import { aggregate, recap } from '../insights';
+import Notice from '../ui/Notice.vue';
+import Confidence from '../ui/Confidence.vue';
 import type { AugmentPanel, HistoryEntry } from '../../core/types';
 
 const games = ref<HistoryEntry[]>([]);
@@ -70,7 +72,6 @@ const date = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-
 <template>
   <div class="wrap">
     <div class="head">
-      <h1>Mes stats</h1>
       <div class="right">
         <span class="faint small">{{ msg }}</span>
         <button class="btn" :disabled="!st.total" @click="exportNow">Sauvegarder</button>
@@ -80,10 +81,7 @@ const date = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-
       </div>
     </div>
 
-    <div v-if="!st.total" class="empty slim">
-      <h2>Aucune partie enregistrée</h2>
-      <p>L’app récupère tes dernières parties ARAM et Mayhem à la connexion, puis enregistre chaque nouvelle partie (avec tes augments).</p>
-    </div>
+    <Notice v-if="!st.total" kind="empty"><p>Aucune partie ARAM ou Mayhem enregistrée. L’app récupère tes dernières parties à la connexion, puis enregistre chaque nouvelle partie (avec tes augments).</p></Notice>
 
     <template v-else>
       <div class="kpis">
@@ -95,11 +93,13 @@ const date = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-
           <div class="faint small">Winrate ARAM</div>
           <div class="big num">{{ pct(wr(st.byMode.aram.wins, st.byMode.aram.games)) }}</div>
           <div class="faint small num">{{ st.byMode.aram.games }} parties</div>
+          <Confidence :winrate="st.byMode.aram.wins / st.byMode.aram.games" :games="st.byMode.aram.games" />
         </div>
         <div v-if="st.byMode.mayhem.games" class="kpi card">
           <div class="faint small">Winrate Mayhem</div>
           <div class="big num">{{ pct(wr(st.byMode.mayhem.wins, st.byMode.mayhem.games)) }}</div>
           <div class="faint small num">{{ st.byMode.mayhem.games }} parties</div>
+          <Confidence :winrate="st.byMode.mayhem.wins / st.byMode.mayhem.games" :games="st.byMode.mayhem.games" />
         </div>
         <div v-if="follow" class="kpi card" title="Choix d’augments lus à l’écran : winrate de la partie selon que tu as pris la carte recommandée ou une autre">
           <div class="faint small">Reco d’augment suivie</div>
@@ -222,15 +222,14 @@ const date = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-
 </template>
 
 <style scoped>
-.wrap { padding: 22px 24px 30px; display: flex; flex-direction: column; gap: 16px; max-width: 1100px; }
-.head { display: flex; justify-content: space-between; align-items: center; }
-.head h1 { font-size: 22px; }
+.wrap { display: flex; flex-direction: column; gap: 16px; }
+.head { display: flex; justify-content: flex-end; align-items: center; }
 .right { display: flex; gap: 12px; align-items: center; }
 .small { font-size: 12px; }
 .empty.slim { height: auto; padding: 60px 20px; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .kpi { padding: 14px 16px; }
-.big { font-size: 32px; font-family: var(--display); font-weight: 400; color: var(--gold-hi); margin: 4px 0 2px; }
+.big { font-size: 26px; font-family: var(--display); font-weight: 400; color: var(--text); margin: 4px 0 2px; line-height: 1.1; }
 .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
 .table, .recent { padding: 14px 16px; }
 h2 { font-size: 14px; margin-bottom: 10px; }

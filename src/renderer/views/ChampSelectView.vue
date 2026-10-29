@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { tone, state, championIcon, pct, signed, hideBroken } from '../store';
 import Home from '../Home.vue';
+import Notice from '../ui/Notice.vue';
 import SrSelectPanel from './SrSelectPanel.vue';
 
 const cs = computed(() => state.value?.champSelect ?? null);
@@ -65,7 +66,7 @@ const open = ref<number | null>(null);
   <Home v-if="!cs" />
   <SrSelectPanel v-else-if="cs.sr" :cs="cs" />
 
-  <div v-else class="wrap">
+  <div v-else class="page wrap">
     <!-- La décision : le seul bloc qui compte quand le chrono tourne -->
     <section v-if="decision" class="decision" :class="[decision.kind, { reco: decision.kind !== 'keep' }]">
       <img @error="hideBroken" :src="championIcon(decision.champ.championId)" width="76" height="76" class="icon portrait" alt="" />
@@ -79,7 +80,10 @@ const open = ref<number | null>(null);
         </div>
       </div>
       <div class="dact">
-        <div class="score num wide" :class="decision.champ.score >= 0 ? 'good' : 'bad'">{{ signed(decision.champ.score) }}</div>
+        <div class="score-box" title="Score = points de winrate attendus (winrate Mayhem, synergies, compo, tes résultats). Un indice de classement, pas une probabilité de victoire.">
+          <span class="score num wide">{{ signed(decision.champ.score) }}</span>
+          <span class="faint xs">score</span>
+        </div>
         <button v-if="decision.action" class="btn primary big" :disabled="busy !== null" @click="take(decision.champ.championId)">
           {{ busy === decision.champ.championId ? '…' : decision.action }}
         </button>
@@ -88,11 +92,13 @@ const open = ref<number | null>(null);
         </button>
       </div>
     </section>
+    <Notice v-else kind="info"><p>Ton champion n’est pas encore connu : le conseil apparaît dès que tes cartes ou ton champion sont visibles.</p></Notice>
 
     <p v-if="toast" class="toast" :class="toast.ok ? 'good' : 'bad'">{{ toast.text }}</p>
 
     <!-- Ton équipe en une ligne -->
-    <section class="team">
+    <section class="team" aria-label="Ton équipe">
+      <span class="eyebrow">Ton équipe</span>
       <div class="allies">
         <img @error="hideBroken" v-for="a in cs.allies" :key="a.championId" :src="championIcon(a.championId)" :title="a.name" class="icon" width="30" height="30" alt="" />
         <span v-if="!cs.allies.length" class="faint">Alliés en attente</span>
@@ -119,10 +125,10 @@ const open = ref<number | null>(null);
             <img @error="hideBroken" :src="championIcon(c.championId)" class="icon" width="40" height="40" alt="" />
             <span class="nm">
               <span class="n">{{ c.name }}</span>
-              <span class="src" :class="c.source">{{ SOURCE_LABEL[c.source] }}</span>
+              <span class="src" :class="`src-${c.source}`">{{ SOURCE_LABEL[c.source] }}</span>
               <span v-if="c.balanceChange" class="chg" :title="c.balanceChange">équilibrage modifié</span>
             </span>
-            <span class="score num wide" :class="c.score > 0 ? 'good' : c.score < 0 ? 'bad' : ''">{{ signed(c.score) }}</span>
+            <span class="score num" :class="c.score < 0 ? 'neg' : ''" :title="`Score ${signed(c.score)} (points de winrate attendus)`">{{ signed(c.score) }}</span>
           </button>
           <div v-if="open === c.championId" class="detail">
             <ul>
@@ -146,9 +152,12 @@ const open = ref<number | null>(null);
     </section>
 
     <div class="foot">
-      <button v-if="decision?.action" class="btn" :disabled="!cs.myChampionId || busy === 'loadout'" @click="loadout">
-        {{ busy === 'loadout' ? 'Import…' : 'Importer runes et sorts' }}
-      </button>
+      <div v-if="decision?.action" class="loadout">
+        <button class="btn" :disabled="!cs.myChampionId || busy === 'loadout'" @click="loadout">
+          {{ busy === 'loadout' ? 'Import…' : 'Importer runes et sorts' }}
+        </button>
+        <span v-if="!cs.myChampionId" class="faint xs">Disponible une fois ton champion choisi.</span>
+      </div>
       <p v-if="cs.dataNote" class="faint small">{{ cs.dataNote }}</p>
       <p class="faint small">Score = points de winrate attendus : winrate Mayhem, synergies avec tes alliés, compo, tes propres résultats.</p>
     </div>
@@ -156,24 +165,25 @@ const open = ref<number | null>(null);
 </template>
 
 <style scoped>
-.wrap { padding: 22px 26px 30px; max-width: 980px; display: flex; flex-direction: column; gap: 18px; }
+.wrap { max-width: 980px; }
 .small { font-size: 12px; }
 .decision {
   position: relative; display: grid; grid-template-columns: 76px 1fr auto; gap: 18px; align-items: center;
   padding: 20px 22px; background: linear-gradient(120deg, rgba(200, 170, 110, 0.13) 0%, #0f1d2a 45%, #0a1520 100%);
 }
 /* Garder son champion : pas de recommandation, simple filet d'or patiné */
-.decision.keep { border: 1px solid transparent; border-image: var(--frame) 1; }
+.decision.keep { border: 1px solid var(--border-strong); background: var(--surface-1); }
 .portrait { border-radius: var(--radius); }
-.dtext h1 { font-size: 28px; line-height: 1.05; }
+.dtext h1 { font-size: 26px; line-height: 1.05; }
 .dtext p { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
 .dmeta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .dmeta b { font-weight: 700; margin-left: 2px; }
 .dact { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.score { font-size: 30px; font-weight: 750; line-height: 1; }
-.btn.big { padding: 11px 18px; font-size: 15px; border-radius: var(--radius); }
+.score-box { display: flex; flex-direction: column; align-items: flex-end; }
+.score { font-size: 26px; line-height: 1; color: var(--gold-hi); }
+.xs { font-size: var(--fs-xs); }
 .toast { margin: -6px 0 0; font-weight: 600; }
-.team { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13px; }
+.team { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: var(--fs-sm); padding: 10px 14px; border: 1px solid var(--border); background: var(--surface-1); }
 .allies { display: flex; gap: 4px; }
 .adbar { display: flex; gap: 6px; align-items: center; }
 .lbl { font-size: 11px; color: var(--muted); font-weight: 650; }
@@ -181,26 +191,28 @@ const open = ref<number | null>(null);
 .ad { height: 100%; background: #ff9d5c; }
 .need { color: var(--gold); font-weight: 600; }
 .mates { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-.mate { color: var(--text); background: var(--panel); border-radius: var(--radius); padding: 2px 7px; }
-.others h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
-.others ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.others li { border-radius: var(--radius); background: var(--panel); }
+.mate { color: var(--text); background: var(--surface-2); border-radius: var(--radius); padding: 2px 7px; }
+.others h2 { font-size: var(--fs-md); margin-bottom: 8px; }
+.others ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.others li { border-bottom: 1px solid var(--border); }
 .others li.mine { box-shadow: inset 3px 0 0 var(--muted); }
 .row { width: 100%; display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; padding: 8px 12px; border: 0; background: transparent; cursor: pointer; text-align: left; border-radius: var(--radius); }
-.row:hover { background: rgba(255, 255, 255, 0.025); }
+.row:hover, .row:focus-visible { background: var(--surface-2); }
 .nm { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .n { font-weight: 650; font-size: 15px; }
 .src { font-size: 12px; color: var(--muted); }
-.src.card { color: var(--gold); }
-.src.bench { color: var(--blue); }
-.src.trade { color: var(--good); }
+.src-card { color: var(--gold); }
+.src-bench { color: var(--blue); }
+.src-trade { color: var(--good); }
 .chg { font-size: 12px; color: #f0b45a; }
-.others .score { font-size: 20px; }
+.others .score { font-size: var(--fs-lg); font-family: 'Barlow', sans-serif; font-weight: 700; color: var(--text); }
+.others .score.neg { color: var(--muted); }
 .detail { padding: 0 12px 12px 64px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .detail ul { list-style: none; margin: 0; padding: 0; width: 100%; max-width: 560px; font-size: 13px; color: var(--muted); }
 .detail ul li { display: flex; justify-content: space-between; gap: 12px; background: none; padding: 2px 0; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
 .foot { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.loadout { display: flex; gap: 10px; align-items: center; }
 .foot p { margin: 0; }
 @media (max-width: 760px) {
   .decision { grid-template-columns: 56px 1fr; }

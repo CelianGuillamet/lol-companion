@@ -112,6 +112,18 @@ Toujours regarder ces fichiers avant de deviner un format ou de régler un seuil
 - `ui/CommandSearch.vue` (⌘K), `ui/PlayerCard.vue` (identité + rangs, LCU `/lol-ranked/v1/current-ranked-stats`).
 - Les écrans sont enveloppés dans un `div.page` pour la transition (certains écrans ont plusieurs racines).
 
+## Design system (v1.57)
+- Tokens dans `src/renderer/styles.css` : `--surface-1/2/3`, `--border`, `--border-strong`, `--ok/--warn/--danger/--info`,
+  `--fs-xs…--fs-2xl`, `--sp-1…6`, `--page-x`, `--ctl-h`, `--dur`. Classes globales : `.page`, `.page-head`,
+  `.card` (surface sobre, plus de cadre d'or), `.btn` / `.btn.primary` (un seul par écran) / `.btn.ghost`,
+  `.seg`, `.input`, `.select`, `.notice.n-*`, `.skeleton`, `.kpi`, `.eyebrow`, `kbd`, `.sr-only`.
+- Composants : `ui/PageHeader.vue`, `ui/Segmented.vue`, `ui/Notice.vue`, `ui/Confidence.vue`, `ui/CommandSearch.vue`,
+  `ui/PlayerCard.vue`, `ui/PurchaseLine.vue`. Ne pas recréer de segmented / message d'état local.
+- Règle de hiérarchie : une seule mise en avant forte par surface (`.reco` = cristal + or). Les autres blocs sont des
+  surfaces sobres. Couleurs vertes / rouges = significatives (`tone`) ou signées (le signe porte l'info).
+- Attention : la classe globale `.empty` (écran vide centré) existe ; d'où le préfixe `n-` des messages d'état.
+- Vérifier : `npm test`, `npm run typecheck`, `npm run build`, puis les scénarios Electron (README).
+
 ## Design (v1.50, « Atelier Hextech »)
 Jetons dans src/renderer/styles.css : encre --bg #050d16, panneaux --panel/--panel-2, or patiné --gold #c8aa6e,
 parchemin --text, cristal --blue #0ac8b9 (réservé au vivant / focus). Titres Marcellus (h1 en capitales), interface

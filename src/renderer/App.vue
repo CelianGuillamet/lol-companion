@@ -19,6 +19,12 @@ window.__setTab = (t: string) => (tab.value = (LEGACY[t] ?? t) as Tab);
 
 const s = computed(() => state.value!);
 const live = computed(() => !!s.value.champSelect || (['InProgress', 'GameStart', 'Reconnect'].includes(s.value.phase ?? '') && !!s.value.mode));
+// Données anciennes : le client est passé à un patch que les stats Mayhem n'ont pas encore
+const stale = computed(() => {
+  const c = s.value.data.clientPatch;
+  const p = s.value.data.patch;
+  return !!c && !!p && !c.startsWith(p) && !p.startsWith(c);
+});
 const modeLabel = computed(() => (s.value.mode === 'mayhem' ? 'Mayhem' : s.value.mode === 'aram' ? 'ARAM' : s.value.mode === 'sr' ? (QUEUE_LABEL[s.value.queueId ?? 0] ?? 'Faille') : null));
 
 // Quand la partie avance (champ select, chargement), on revient sur « Maintenant »
@@ -75,22 +81,24 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
       </nav>
       <div class="side-foot">
         <PlayerCard />
-        <div class="conn" :class="s.connection">
-          <span class="dot" />
-          <span>{{ s.connection === 'connected' ? 'Client connecté' : 'Client League fermé' }}</span>
+        <div class="status" role="status">
+          <div class="conn" :class="s.connection">
+            <span class="dot" aria-hidden="true" />
+            <span>{{ s.connection === 'connected' ? (s.phase && s.phase !== 'None' ? (PHASE_LABEL[s.phase] ?? s.phase) : 'Client connecté') : 'Client League fermé' }}</span>
+            <span v-if="modeLabel && s.connection === 'connected' && s.phase && s.phase !== 'None'" class="mode">{{ modeLabel }}</span>
+          </div>
+          <div v-if="s.data.patch" class="data" :class="{ stale }" :title="stale ? 'Le client est sur un patch plus récent que les statistiques Mayhem' : 'Statistiques Mayhem arammeta'">
+            Stats Mayhem {{ s.data.patch }}<template v-if="stale"> · client {{ s.data.clientPatch }}</template>
+          </div>
+          <div v-else-if="s.data.error" class="data err">Stats Mayhem indisponibles</div>
         </div>
-        <div class="phase">
-          {{ s.phase && s.phase !== 'None' ? (PHASE_LABEL[s.phase] ?? s.phase) : 'Pas de partie' }}<template v-if="modeLabel && s.phase && s.phase !== 'None'"> en {{ modeLabel }}</template>
-        </div>
-        <div v-if="s.data.patch" class="faint small">Données du patch {{ s.data.patch }}</div>
-        <div v-else-if="s.data.error" class="bad small">Données Mayhem indisponibles</div>
       </div>
     </aside>
 
     <main class="main">
       <!-- Enveloppe : la transition a toujours un élément racine (certains écrans en ont plusieurs) -->
       <Transition name="page" mode="out-in">
-        <div :key="tab" class="page">
+        <div :key="tab" class="view">
           <NowView v-if="tab === 'now'" />
           <PrepareView v-else-if="tab === 'prepare'" />
           <GamesView v-else-if="tab === 'games'" />
@@ -130,14 +138,19 @@ nav { display: flex; flex-direction: column; }
 .nav.on::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; background: linear-gradient(180deg, #f0e6d2, #c8aa6e 50%, #785a28); }
 .nav.on svg { color: var(--gold); }
 .live { width: 7px; height: 7px; transform: rotate(45deg); background: var(--blue); margin-left: auto; box-shadow: 0 0 8px rgba(10, 200, 185, 0.9); }
-.side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding: 12px 18px 0; font-size: 12px; border-top: 1px solid #1c1a14; margin-inline: 0; }
-.conn { display: flex; gap: 8px; align-items: center; color: var(--muted); }
+.side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 0; font-size: 12px; border-top: 1px solid var(--border); }
+.status { display: flex; flex-direction: column; gap: 4px; }
+.conn { display: flex; gap: 8px; align-items: center; color: var(--muted); font-weight: 600; }
+.conn .mode { margin-left: auto; color: var(--gold); font-weight: 600; font-size: 11.5px; }
+.data { color: var(--faint); font-size: 11.5px; padding-left: 15px; }
+.data.stale { color: var(--warn); }
+.data.err { color: var(--bad); }
 .dot { width: 7px; height: 7px; transform: rotate(45deg); background: var(--faint); flex: none; }
 .conn.connected .dot { background: var(--blue); box-shadow: 0 0 6px rgba(10, 200, 185, 0.8); }
 .phase { color: var(--text); font-weight: 600; }
 .small { font-size: 12px; }
 .main { min-width: 0; min-height: 0; overflow: auto; }
-.page { height: 100%; }
+.view { height: 100%; }
 .search { display: flex; align-items: center; gap: 8px; margin: -8px 14px 0; padding: 7px 10px; border: 1px solid var(--line); background: rgba(10, 21, 32, 0.6); color: var(--faint); font: inherit; font-size: 13px; cursor: pointer; }
 .search:hover { color: var(--text); border-color: var(--rule); }
 .search kbd { margin-left: auto; font: inherit; font-size: 11px; border: 1px solid var(--line); padding: 0 5px; }

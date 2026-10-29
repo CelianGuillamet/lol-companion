@@ -1,8 +1,11 @@
 <script setup lang="ts">
-// Accueil hors champ select : ta forme, ta dernière partie et tes champions qui gagnent.
+// Accueil hors champ select. Deux questions : « où j'en suis ? » (statut du client, ta session, ta dernière
+// partie) puis « qu'est-ce qui marche pour moi ? » (champions, effet du classement, équilibrage).
 import { computed, ref, watch } from 'vue';
 import { tone, state, championIcon, pct, hideBroken } from './store';
 import { recap } from './insights';
+import PageHeader from './ui/PageHeader.vue';
+import Notice from './ui/Notice.vue';
 import type { HistoryEntry } from '../core/types';
 
 const games = ref<HistoryEntry[]>([]);
@@ -47,83 +50,142 @@ const follow = computed(() => {
 });
 const changes = ref<{ championId: number; name: string; at: number; text: string; played: number }[]>([]);
 watch(() => `${state.value?.connection}-${state.value?.data.balance}`, async () => (changes.value = (await window.api.balanceChanges()).filter((c) => c.played > 0).slice(0, 6)), { immediate: true });
-const phoneOff = computed(() => state.value && !state.value.settings.phone);
+const phoneOff = computed(() => state.value && !state.value.settings.phone && state.value.settings.panelMode === 'window');
+const connected = computed(() => state.value?.connection === 'connected');
+const sub = computed(() =>
+  connected.value
+    ? 'Lance une partie (ARAM, Mayhem, classée, normale, Swiftplay…) : cet écran passe tout seul au champ select, puis en partie.'
+    : 'Ouvre le client League : l’app suivra ton salon, ton champ select et ta partie.',
+);
+const importing = ref(false);
+const imported = ref<number | null>(null);
+async function importNow() {
+  importing.value = true;
+  imported.value = (await window.api.importHistory()).added;
+  importing.value = false;
+}
+const go = (tab: string) => window.__setTab?.(tab);
+// Même chemin que ⌘K (écouté par App.vue)
+const openSearch = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+const winsOf = (x: { n: number; wr: number }) => Math.round(x.wr * x.n);
 </script>
 
 <template>
-  <div class="home">
-    <div class="intro">
-      <h1>Entre deux parties</h1>
-      <p>Lance une partie (ARAM, Mayhem, classée, normale, Swiftplay…) : cet écran passe tout seul au champ select, puis en partie.</p>
+  <div class="page home">
+    <PageHeader title="Avant la partie" :sub="sub">
+      <button class="btn" title="Rechercher un champion (⌘K)" @click="openSearch">Chercher un champion <kbd>⌘K</kbd></button>
+      <button class="btn" @click="go('prepare')">Tier list</button>
+    </PageHeader>
+
+    <Notice v-if="!games.length" kind="empty">
+      <p>Aucune partie enregistrée pour l’instant. Tes parties ARAM, Mayhem et Faille s’ajoutent seules à la fin de chaque partie.</p>
+      <p v-if="imported != null" class="faint">{{ imported ? `${imported} partie(s) importée(s).` : 'Rien de nouveau dans l’historique du client.' }}</p>
+      <template v-if="connected" #action>
+        <button class="btn" :disabled="importing" @click="importNow">{{ importing ? 'Import…' : 'Importer depuis le client' }}</button>
+      </template>
+    </Notice>
+
+    <div v-else class="grid">
+      <div class="col">
+        <section class="card box session">
+          <div class="eyebrow">Ta session</div>
+          <div class="row">
+            <div>
+              <div class="val num" :class="last10 != null ? tone(Math.round(last10 * form.length), form.length) : ''">{{ pct(last10, 0) }}</div>
+              <div class="faint xs">de victoires sur tes {{ form.length }} dernières parties</div>
+            </div>
+            <div class="pips" aria-label="Dernières parties, de la plus ancienne à la plus récente">
+              <span v-for="g in form" :key="g.gameId" class="pip" :class="g.win ? 'w' : 'l'" role="img" :aria-label="g.win ? 'victoire' : 'défaite'" :title="`${g.championName} · ${g.win ? 'victoire' : 'défaite'}`" />
+            </div>
+          </div>
+          <div v-if="today" class="today sm">
+            <span>Aujourd’hui</span>
+            <strong class="num" :class="tone(today.w, today.n)">{{ today.w }} V · {{ today.n - today.w }} D</strong>
+            <span class="champs"><img v-for="c in today.champs" :key="c" @error="hideBroken" :src="championIcon(c)" width="20" height="20" class="icon" alt="" /></span>
+          </div>
+        </section>
+
+        <section v-if="last" class="card box">
+          <div class="eyebrow">Ta dernière partie</div>
+          <div class="lastline">
+            <img @error="hideBroken" :src="championIcon(last.game.championId)" width="36" height="36" class="icon" alt="" />
+            <div>
+              <div class="md"><strong>{{ last.game.championName }}</strong> · <span :class="last.game.win ? 'good' : 'bad'">{{ last.game.win ? 'Victoire' : 'Défaite' }}</span></div>
+              <div class="faint sm num">{{ last.game.kills }} / {{ last.game.deaths }} / {{ last.game.assists }}</div>
+            </div>
+          </div>
+          <div v-if="!last.lines.length" class="faint sm">Dans ta moyenne sur tous les points comparés.</div>
+          <ul v-else class="lines">
+            <li v-for="l in last.lines" :key="l.text" class="sm" :class="l.good ? 'good' : 'bad'"><span aria-hidden="true">{{ l.good ? '▲' : '▼' }}</span> {{ l.text }}</li>
+          </ul>
+          <button class="btn ghost self-start" @click="go('games')">Voir l’historique</button>
+        </section>
+      </div>
+
+      <div class="col">
+        <section class="card box">
+          <div class="eyebrow">Tes champions qui gagnent</div>
+          <p v-if="!best.length" class="faint sm">Il faut au moins 3 parties sur un champion pour le classer.</p>
+          <ul v-else class="champs-list">
+            <li v-for="c in best" :key="c.id">
+              <img @error="hideBroken" :src="championIcon(c.id)" width="24" height="24" class="icon" alt="" />
+              <span>{{ c.name }}</span>
+              <span class="num faint xs">{{ c.wins }} V · {{ c.games - c.wins }} D</span>
+              <span class="num" :class="tone(c.wins, c.games)">{{ pct(c.wins / c.games, 0) }}</span>
+            </li>
+          </ul>
+          <p class="faint xs">Classés par winrate lissé (5 parties à ton winrate moyen) ; vert ou rouge seulement si l’écart tient sur l’échantillon.</p>
+        </section>
+
+        <section v-if="follow" class="card box">
+          <div class="eyebrow">Suivre le classement paie-t-il ?</div>
+          <div class="cmp">
+            <div><span class="faint xs">Champion fort en Mayhem (≥ 52 %)</span><strong class="num" :class="tone(winsOf(follow.hi), follow.hi.n)">{{ pct(follow.hi.wr, 0) }}</strong><span class="faint xs">{{ follow.hi.n }} parties</span></div>
+            <div><span class="faint xs">Champion faible (&lt; 49 %)</span><strong class="num" :class="tone(winsOf(follow.lo), follow.lo.n)">{{ pct(follow.lo.wr, 0) }}</strong><span class="faint xs">{{ follow.lo.n }} parties</span></div>
+          </div>
+          <p v-if="follow.hi.wr - follow.lo.wr >= 0.08" class="sm">Oui : prendre le champion conseillé au champ select te fait gagner plus souvent.</p>
+        </section>
+
+        <section v-if="changes.length" class="card box">
+          <div class="eyebrow">Équilibrage modifié sur tes champions</div>
+          <ul class="changes">
+            <li v-for="c in changes" :key="c.championId" class="sm">
+              <img @error="hideBroken" :src="championIcon(c.championId)" width="20" height="20" class="icon" alt="" />
+              <span><strong>{{ c.name }}</strong> <span class="faint">{{ c.text }}</span></span>
+            </li>
+          </ul>
+        </section>
+      </div>
     </div>
 
-    <div v-if="games.length" class="cards">
-      <section class="card box">
-        <h3>Ta forme</h3>
-        <div class="pips">
-          <span v-for="g in form" :key="g.gameId" class="pip" :class="g.win ? 'w' : 'l'" role="img" :aria-label="g.win ? 'victoire' : 'défaite'" :title="`${g.championName} · ${g.win ? 'victoire' : 'défaite'}`" />
-        </div>
-        <div class="big num" :class="last10 != null ? tone(Math.round(last10 * form.length), form.length) : ''">{{ pct(last10, 0) }}</div>
-        <div class="faint small">sur tes {{ Math.min(10, games.length) }} dernières parties</div>
-        <div v-if="today" class="small today">
-          Aujourd’hui : <strong :class="tone(today.w, today.n)">{{ today.w }}V {{ today.n - today.w }}D</strong>
-          <img v-for="c in today.champs" :key="c" @error="hideBroken" :src="championIcon(c)" width="18" height="18" class="icon" alt="" />
-        </div>
-      </section>
-
-      <section class="card box">
-        <h3>Tes champions qui gagnent</h3>
-        <div v-if="!best.length" class="faint small">Il faut 3 parties sur un champion.</div>
-        <div v-for="c in best" :key="c.id" class="champ">
-          <img @error="hideBroken" :src="championIcon(c.id)" width="24" height="24" class="icon" alt="" />
-          <span>{{ c.name }}</span>
-          <span class="num faint small">{{ c.wins }}V {{ c.games - c.wins }}D</span>
-          <span class="num" :class="tone(c.wins, c.games)">{{ pct(c.wins / c.games, 0) }}</span>
-        </div>
-      </section>
-
-      <section v-if="follow" class="card box">
-        <h3>Ce que disent tes parties</h3>
-        <div class="small">Champion fort en Mayhem (≥ 52 %) : <strong :class="follow.hi.wr >= 0.5 ? 'good' : 'bad'">{{ pct(follow.hi.wr, 0) }}</strong> de victoires <span class="faint">({{ follow.hi.n }} parties)</span></div>
-        <div class="small">Champion faible (&lt; 49 %) : <strong :class="follow.lo.wr >= 0.5 ? 'good' : 'bad'">{{ pct(follow.lo.wr, 0) }}</strong> <span class="faint">({{ follow.lo.n }} parties)</span></div>
-        <div v-if="follow.hi.wr - follow.lo.wr >= 0.08" class="faint small">Suivre le classement du champ select te rapporte vraiment.</div>
-      </section>
-
-      <section v-if="changes.length" class="card box">
-        <h3>Équilibrage modifié sur tes champions</h3>
-        <div v-for="c in changes" :key="c.championId" class="change small">
-          <img @error="hideBroken" :src="championIcon(c.championId)" width="20" height="20" class="icon" alt="" />
-          <span><strong>{{ c.name }}</strong> <span class="faint">{{ c.text }}</span></span>
-        </div>
-      </section>
-
-      <section v-if="last" class="card box">
-        <h3>Ta dernière partie</h3>
-        <div class="small">{{ last.game.championName }} · <span :class="last.game.win ? 'good' : 'bad'">{{ last.game.win ? 'victoire' : 'défaite' }}</span> · {{ last.game.kills }}/{{ last.game.deaths }}/{{ last.game.assists }}</div>
-        <div v-if="!last.lines.length" class="faint small">Dans ta moyenne.</div>
-        <div v-for="l in last.lines" :key="l.text" class="small" :class="l.good ? 'good' : 'bad'">{{ l.good ? '▲' : '▼' }} {{ l.text }}</div>
-      </section>
-    </div>
-
-    <p v-if="phoneOff" class="faint small tip">
-      Un seul écran ? Réglages → « Sur ton téléphone ou ta tablette » affiche les augments et le prochain achat sur ton
-      téléphone pendant la partie.
-    </p>
+    <Notice v-if="phoneOff" kind="info">
+      <p>Un seul écran ? Le panneau en jeu peut aussi s’afficher sur ton téléphone (Réglages → téléphone ou tablette).</p>
+      <template #action><button class="btn ghost" @click="go('settings')">Réglages</button></template>
+    </Notice>
   </div>
 </template>
 
 <style scoped>
-.home { padding: 28px 26px; display: flex; flex-direction: column; gap: 20px; max-width: 1040px; }
-.intro h1 { font-size: 30px; }
-.intro p { margin: 6px 0 0; color: var(--muted); }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.box { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
-.box h3 { margin: 0 0 4px; }
+.home { max-width: 1080px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.box { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.session .row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.val { font-family: var(--display); font-size: 30px; line-height: 1; color: var(--text); }
 .pips { display: flex; gap: 4px; }
-.big { font-size: 38px; font-family: var(--display); font-weight: 400; line-height: 1.05; }
-.small { font-size: 12px; }
-.champ { display: grid; grid-template-columns: 24px 1fr auto 44px; gap: 8px; align-items: center; font-size: 13px; }
-.tip { margin: 0; }
-.today { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
-.change { display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: start; }
+.today { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border); color: var(--muted); }
+.today .champs { display: flex; gap: 3px; margin-left: auto; }
+.lastline { display: flex; gap: 12px; align-items: center; }
+.lines, .champs-list, .changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.champs-list li { display: grid; grid-template-columns: 24px 1fr auto 44px; gap: 10px; align-items: center; font-size: var(--fs-md); }
+.changes li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; align-items: start; }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cmp > div { display: flex; flex-direction: column; gap: 2px; }
+.cmp strong { font-family: var(--display); font-size: 22px; font-weight: 400; }
+.self-start { align-self: flex-start; padding-left: 0; }
+.xs { font-size: var(--fs-xs); }
+.sm { font-size: var(--fs-sm); }
+.md { font-size: var(--fs-md); }
+p { margin: 0; }
 </style>

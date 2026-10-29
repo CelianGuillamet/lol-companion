@@ -11,6 +11,8 @@ const b = computed(() => props.panel ?? state.value?.build ?? (props.compact ? n
 const ct = computed(() => (state.value?.counters && state.value.counters.enemies.length ? state.value.counters : null));
 const nb = computed(() => (state.value?.nextBuy?.rows.length ? state.value.nextBuy : null));
 const ROLE = { ad: 'build AD', ap: 'build AP', tank: 'build tank' } as const;
+// Nom réel, ou null si le client n'a donné qu'un identifiant (« #8112 ») : on n'affiche pas un faux nom
+const known = (n?: string | null) => (n && !/^#\d+$/.test(n) ? n : null);
 </script>
 
 <template>
@@ -78,16 +80,33 @@ const ROLE = { ad: 'build AD', ap: 'build AP', tank: 'build tank' } as const;
     <div class="grid">
       <section v-if="b.runes" class="card block">
         <h2>Runes <span class="faint">{{ b.source === 'OP.GG' ? 'les plus jouées (OP.GG)' : 'recommandées par le client' }}</span></h2>
+        <!-- Arbre principal (clé de voûte + 3 runes) puis arbre secondaire (2 runes) : l'ordre de la page du client -->
         <div class="runes">
-          <div class="styles">
-            <img @error="hideBroken" v-if="b.runes.primary?.icon" :src="b.runes.primary.icon" :title="b.runes.primary.name" width="26" height="26" alt="" />
-            <img @error="hideBroken" v-if="b.runes.secondary?.icon" :src="b.runes.secondary.icon" :title="b.runes.secondary.name" width="20" height="20" class="sub" alt="" />
+          <div class="tree">
+            <div class="tname">
+              <img @error="hideBroken" v-if="b.runes.primary?.icon" :src="b.runes.primary.icon" width="18" height="18" alt="" />
+              <span class="eyebrow">{{ known(b.runes.primary?.name) ?? 'Principal' }}</span>
+            </div>
+            <div class="prow">
+              <figure v-for="(p, i) in b.runes.perks.slice(0, 4)" :key="p.id" :class="{ key: i === 0 }">
+                <img @error="hideBroken" v-if="p.icon" :src="p.icon" :width="i === 0 ? 44 : 30" :height="i === 0 ? 44 : 30" alt="" />
+                <span v-else class="noicon" :class="{ key: i === 0 }" aria-hidden="true" />
+                <figcaption>{{ known(p.name) ?? 'rune inconnue' }}</figcaption>
+              </figure>
+            </div>
           </div>
-          <div class="perks">
-            <figure v-for="(p, i) in b.runes.perks" :key="p.id" :class="{ key: i === 0 }">
-              <img @error="hideBroken" v-if="p.icon" :src="p.icon" :width="i === 0 ? 46 : 30" :height="i === 0 ? 46 : 30" alt="" />
-              <figcaption>{{ p.name }}</figcaption>
-            </figure>
+          <div v-if="b.runes.perks.length > 4" class="tree sub">
+            <div class="tname">
+              <img @error="hideBroken" v-if="b.runes.secondary?.icon" :src="b.runes.secondary.icon" width="16" height="16" alt="" />
+              <span class="eyebrow">{{ known(b.runes.secondary?.name) ?? 'Secondaire' }}</span>
+            </div>
+            <div class="prow">
+              <figure v-for="p in b.runes.perks.slice(4, 6)" :key="p.id">
+                <img @error="hideBroken" v-if="p.icon" :src="p.icon" width="30" height="30" alt="" />
+                <span v-else class="noicon" aria-hidden="true" />
+                <figcaption>{{ known(p.name) ?? 'rune inconnue' }}</figcaption>
+              </figure>
+            </div>
           </div>
         </div>
       </section>
@@ -183,22 +202,25 @@ const ROLE = { ad: 'build AD', ap: 'build AP', tank: 'build tank' } as const;
 .grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
 .compact .grid { grid-template-columns: 1fr; }
 .block { padding: 14px 16px; }
-h2 { font-size: 14px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+h2 { font-size: var(--fs-md); margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
 h2 .faint { font-weight: 400; font-size: 12px; }
 .small { font-size: 12px; }
 .ic { border-radius: var(--radius); background: var(--panel-2); border: 1px solid var(--line); }
 .ic.big { border-color: rgba(200, 170, 110, 0.5); }
-.runes { display: flex; gap: 14px; align-items: flex-start; }
-.styles { display: flex; flex-direction: column; gap: 8px; align-items: center; padding-top: 6px; }
-.styles .sub { opacity: 0.8; }
-.perks { display: flex; flex-wrap: wrap; gap: 10px 14px; }
-figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; }
+.runes { display: flex; flex-direction: column; gap: 12px; }
+.tree { display: flex; flex-direction: column; gap: 6px; }
+.tree.sub { padding-top: 10px; border-top: 1px solid var(--border); }
+.tname { display: flex; gap: 6px; align-items: center; }
+.prow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-start; }
+figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 68px; }
 figure.key { width: 84px; }
-figure img { border-radius: 50%; background: var(--panel-2); }
+figure img, .noicon { border-radius: 50%; background: var(--surface-2); }
+.noicon { width: 30px; height: 30px; box-shadow: inset 0 0 0 1px var(--border-strong); }
+.noicon.key { width: 44px; height: 44px; }
 figcaption { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.2; }
 .spells { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
 .spells .names { flex: 1; font-size: 13px; }
-.core { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.core { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
 .core:first-of-type { border-top: 0; padding-top: 0; }
 .core.best .cname { color: var(--gold); }
 .items { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -212,7 +234,7 @@ figcaption { font-size: 11px; color: var(--muted); text-align: center; line-heig
 .enemies { display: flex; gap: 6px; margin: -4px 0 8px; }
 .enemy { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .fed { font-size: 10px; color: var(--bad); font-weight: 700; }
-.threat { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 8px 0; border-top: 1px solid var(--line); }
+.threat { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 8px 0; border-top: 1px solid var(--border); }
 .tname { font-weight: 650; font-size: 13px; }
 .titems { display: flex; gap: 5px; }
 .bal { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }

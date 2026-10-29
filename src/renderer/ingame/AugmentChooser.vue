@@ -159,8 +159,8 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
             <span v-if="a.games < 300" class="tag faint">peu de données</span>
           </span>
         </span>
-        <span class="wr num wide" :class="delta(a) >= 0 ? 'good' : 'bad'">{{ pct(wrAt(a, round), 0) }}</span>
-        <span class="d num">{{ fmtDelta(delta(a)) }}</span>
+        <span class="wr num">{{ pct(wrAt(a, round), 0) }}</span>
+        <span class="d num" :class="delta(a) >= 0.5 ? 'good' : delta(a) <= -0.5 ? 'bad' : ''" :title="`Écart au winrate du champion (${pct(champWr, 1)})`">{{ fmtDelta(delta(a)) }}</span>
       </li>
       <li v-if="!rows.length" class="none">Aucun augment ne correspond.</li>
     </ol>
@@ -170,28 +170,31 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
 <style scoped>
 .chooser { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
-.rar { display: flex; gap: 6px; }
+.rar { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-1); }
 .rar button {
-  border: 1px solid var(--line); background: var(--panel); color: var(--muted); padding: 8px 14px; border-radius: var(--radius);
-  cursor: pointer; font-weight: 650;
+  min-height: var(--ctl-h); border: 0; background: transparent; color: var(--muted); padding: 0 14px;
+  cursor: pointer; font-weight: 650; font-size: var(--fs-sm);
 }
-.rar button.on { color: var(--r); background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent); border-color: var(--r); box-shadow: inset 0 -2px 0 var(--r); }
-.rar button.rarity-kPrismatic.on { border-image: var(--rarity-prism) 1; box-shadow: inset 0 -2px 0 var(--prismatic); }
+.rar button + button { border-left: 1px solid var(--border); }
+/* La rareté active prend sa couleur (souligné) : même code que les cartes du jeu */
+.rar button.on { color: var(--r); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--r); }
 .tools { display: flex; gap: 8px; align-items: center; }
-.rounds { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
-.rounds button { border: 0; background: transparent; color: var(--muted); padding: 4px 8px; border-radius: var(--radius); cursor: pointer; font-size: 12px; position: relative; }
-.rounds button.on { background: var(--panel-2); color: var(--text); font-weight: 650; }
-.rounds button.auto::after { content: ''; position: absolute; top: 3px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
-.search { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; font: inherit; font-size: 13px; width: 170px; min-width: 0; }
-.context { margin: 0; font-size: 12px; color: var(--muted); }
-.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; overflow: auto; }
+.rounds { display: flex; background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 2px; }
+.rounds button { border: 0; background: transparent; color: var(--muted); min-height: 26px; padding: 0 9px; border-radius: var(--radius); cursor: pointer; font-size: var(--fs-sm); position: relative; }
+.rounds button.on { background: var(--surface-3); color: var(--text); font-weight: 650; }
+/* Point = choix en cours d'après ton niveau en jeu */
+.rounds button.auto::after { content: ''; position: absolute; top: 3px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+.search { min-height: var(--ctl-h); background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 0 10px; font: inherit; font-size: var(--fs-sm); width: 180px; min-width: 0; }
+.search:focus { border-color: var(--gold); outline: none; }
+.context { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; overflow: auto; border-top: 1px solid var(--border); }
 li {
-  display: grid; grid-template-columns: 26px 30px 1fr auto 44px; gap: 10px; align-items: center;
-  padding: 6px 10px; border-radius: var(--radius); background: var(--panel);
+  display: grid; grid-template-columns: 26px 30px 1fr auto 48px; gap: 10px; align-items: center;
+  min-height: 44px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: transparent;
 }
-li.top { background: var(--panel-2); }
+li.top { background: var(--surface-1); }
 /* Le meilleur choix : cadre de recommandation (.reco, styles.css) */
-li.best { padding: 11px 12px 11px 16px; background: linear-gradient(90deg, rgba(200, 170, 110, 0.14), var(--panel-2) 60%); }
+li.best { padding: 11px 12px 11px 16px; border-bottom-color: transparent; background: linear-gradient(90deg, rgba(200, 170, 110, 0.14), var(--surface-2) 60%); }
 li.best .n { font-size: 15px; font-weight: 700; }
 li.trap .n { color: var(--muted); }
 .rank { color: var(--faint); font-size: 13px; text-align: right; font-weight: 650; }
@@ -201,16 +204,19 @@ li.top .rank { color: var(--text); }
 .n { font-weight: 600; }
 .tags { display: flex; gap: 4px; flex-wrap: wrap; }
 .tag { font-size: 11px; padding: 0 6px; border-radius: var(--radius); background: rgba(255, 255, 255, 0.05); }
-.wr { font-size: 16px; font-weight: 700; text-align: right; }
-.d { font-size: 12px; color: var(--faint); text-align: right; }
+.wr { font-size: var(--fs-lg); font-weight: 700; text-align: right; color: var(--text); }
+.d { font-size: var(--fs-sm); color: var(--faint); text-align: right; font-weight: 600; }
+.d.good { color: var(--good); }
+.d.bad { color: var(--bad); }
 .none { grid-template-columns: 1fr; color: var(--muted); font-size: 13px; }
 .cards { display: flex; flex: none; flex-direction: column; gap: 10px; }
 .cards-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
 .cards h2 { font-size: 19px; }
 .read-status { font-size: 12px; color: var(--muted); }
 .decision { margin: 0; font-size: 13px; color: var(--muted); }
-.offered-list { gap: 8px; overflow: visible; }
-.offered-list li { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 12px; gap: 12px; }
+.offered-list { gap: 8px; overflow: visible; border-top: 0; }
+.offered-list li { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 12px; gap: 12px; background: var(--surface-1); border: 1px solid var(--border); }
+.offered-list li.best { border-color: transparent; }
 .offered-list li.best { padding: 16px; }
 .offered-list .name { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .offered-list .n { overflow-wrap: anywhere; }
@@ -222,8 +228,7 @@ li.top .rank { color: var(--text); }
 .card-stat .wr { color: var(--text); font-size: 19px; }
 .metric-note { margin: 0; color: var(--muted); font-size: 12px; }
 .filters { margin-top: 6px; }
-.doubt { margin: 0; padding: 10px 12px; border-left: 2px solid var(--gold); background: var(--gold-soft); font-size: 13px; color: var(--text); }
-kbd { font: inherit; font-size: 11px; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 4px; color: var(--muted); }
+.doubt { margin: 0; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--surface-1); font-size: var(--fs-sm); color: var(--text); }
 .more { align-self: flex-start; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
 .more:hover { color: var(--text); }
 @media (max-width: 520px) {

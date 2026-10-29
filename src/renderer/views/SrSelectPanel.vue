@@ -29,7 +29,7 @@ async function loadout() {
 </script>
 
 <template>
-  <div class="wrap">
+  <div class="page wrap">
     <section class="head" :class="{ reco: !!sr.me }">
       <img v-if="sr.me" @error="hideBroken" :src="championIcon(sr.me.id)" width="76" height="76" class="icon portrait" alt="" />
       <div class="txt">
@@ -89,19 +89,18 @@ async function loadout() {
 </template>
 
 <style scoped>
-.wrap { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; overflow: auto; height: 100%; }
+.wrap { max-width: 980px; }
 .head { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 16px 18px; background: linear-gradient(110deg, rgba(200, 170, 110, 0.14), var(--panel-2) 60%); }
 .head p { margin: 4px 0 0; }
 .portrait { border-radius: var(--radius); }
 .tier { margin-left: 8px; color: var(--gold); font-family: var(--display); }
-.btn.big { padding: 10px 16px; }
 .block { padding: 12px 14px; }
 .block h2 { margin-bottom: 8px; }
 .mu { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: center; }
 .mu.favorable { box-shadow: inset 3px 0 0 var(--good); }
 .mu.défavorable { box-shadow: inset 3px 0 0 var(--bad); }
 .cp { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.cp li { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center; padding: 4px 8px; background: var(--panel); }
+.cp li { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .n { font-weight: 650; }
 .toast { margin: 0; }
 .small { font-size: 12px; }

@@ -1,6 +1,6 @@
 # ARAM Companion (Mac)
 
-Outil perso pour ARAM et ARAM: Mayhem sur macOS. API officielles uniquement (client League local, API Live Client
+Outil perso pour ARAM, ARAM: Mayhem et la Faille (classée, normale, Swiftplay) sur macOS. API officielles uniquement (client League local, API Live Client
 du jeu, CommunityDragon, arammeta, wiki LoL) : pas de lecture mémoire, pas d'injection, pas de timers.
 
 ## Lancer l'app
@@ -56,6 +56,17 @@ rendu dans le répertoire temporaire affiché. Ajouter `ARAM_TEST_PARTIAL=1` pou
 (onglets Augments / Achat). Ces variables se placent avant la commande Electron, comme `DISPLAY`.
 Les données et le profil Electron sont isolés ; ces tests ne valident pas la capture OCR native macOS.
 Les options `--no-sandbox --disable-gpu` concernent ce test dans le conteneur.
+
+### Vérifier la navigation (hors partie)
+
+Avec le faux client `node dist/demo.mjs stats` et le port affiché :
+
+```bash
+DISPLAY=:103 ARAM_DEMO_PORT=<port> ./node_modules/.bin/electron test/shell-smoke.cjs --no-sandbox --disable-gpu
+```
+
+Parcourt ⌘1 à ⌘4, la recherche ⌘K (filtre, Entrée, Échap), la fiche champion, les contrôles segmentés au
+clavier et les filtres de l’historique, à 900 × 640, et vérifie l’absence de débordement horizontal.
 
 ### Vérifier les achats immédiats
 

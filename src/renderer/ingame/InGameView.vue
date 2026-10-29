@@ -60,13 +60,14 @@ const showBuild = ref(false);
 .waiting h1 { font-size: 22px; }
 .waiting p { margin: 0; color: var(--muted); max-width: 380px; }
 .ingame { height: 100%; display: flex; flex-direction: column; min-height: 0; }
-.head { display: flex; gap: 12px; align-items: center; padding: 14px 18px 12px; border-bottom: 1px solid var(--line); }
+.head { display: flex; gap: 12px; align-items: center; padding: 14px 18px 12px; border-bottom: 1px solid var(--border); background: var(--surface-1); }
 .who h1 { font-size: 22px; line-height: 1.1; }
 .sub { display: flex; gap: 10px; font-size: 12px; margin-top: 2px; }
-.round { color: var(--good); font-weight: 650; }
-.tabs { margin-left: auto; display: flex; gap: 4px; }
-.tabs button { border: 1px solid var(--line); background: var(--panel); color: var(--muted); padding: 7px 12px; border-radius: var(--radius); font-weight: 600; }
-.tabs button.on { background: var(--panel-2); color: var(--text); }
+.round { color: var(--blue); font-weight: 650; }
+.tabs { margin-left: auto; display: flex; border: 1px solid var(--border-strong); border-radius: var(--radius); }
+.tabs button { min-height: 36px; border: 0; background: transparent; color: var(--muted); padding: 0 14px; font: inherit; font-weight: 650; cursor: pointer; }
+.tabs button + button { border-left: 1px solid var(--border); }
+.tabs button.on { background: var(--gold-soft); color: var(--gold-hi); box-shadow: inset 0 -2px 0 var(--gold); }
 .cols { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr); gap: 18px; padding: 14px 18px 18px; overflow: auto; }
 .cols.single { grid-template-columns: minmax(0, 640px); }
 .left { min-height: 0; }

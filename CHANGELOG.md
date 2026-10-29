@@ -1,5 +1,32 @@
 # Journal des versions
 
+## v1.57 — 29 oct. 2026 — refonte de l'interface (fondations, parcours, états)
+- **Fondations partagées** : surfaces à 3 niveaux et filets froids (l'or n'encadre plus chaque panneau : il est
+  réservé à la navigation active, à l'action principale et à LA recommandation), échelle typographique,
+  espacements, hauteur unique des contrôles, boutons secondaires sobres, étiquettes « eyebrow ».
+- **Composants communs** : en-tête d'écran (`PageHeader`), contrôle segmenté au clavier (`Segmented`, flèches
+  gauche / droite), messages d'état (`Notice` : info, attention, erreur, vide — icône + texte, jamais la couleur
+  seule), chargements en bandes discrètes.
+- **Accueil « Avant la partie »** : statut du client dans la phrase d'en-tête, ta session (winrate des 10
+  dernières, forme, aujourd'hui), ta dernière partie, puis ce qui marche pour toi ; accès direct à la recherche
+  et à la tier list ; historique vide → import en un clic.
+- **Préparer** : en-tête unique, mode et rôles en contrôles segmentés, erreurs OP.GG / arammeta expliquées ;
+  fiche champion avec retour « Tier list » et bascule Mayhem / rôles au même endroit ; runes présentées par
+  arbre (principal, secondaire) sans faux noms quand le client ne donne qu'un identifiant.
+- **Champ select** : score présenté comme un indice (« score », explication au survol), options secondaires
+  sans couleur criarde, import des runes expliqué tant que ton champion n'est pas choisi, attente expliquée.
+- **En partie** : « Contre leur équipe » d'abord (ce qui change ton build, menaces prioritaires marquées), leur
+  équipe en une ligne dépliable ; liste d'augments allégée (winrate neutre, écart signé coloré seulement au-delà
+  de 0,5 point) ; achat principal sans cadre concurrent quand il n'est pas achetable.
+- **Mes parties / Réglages** : un seul titre par écran, chiffres clés à taille utile avec leur fiabilité,
+  filtres annoncés aux lecteurs d'écran, KPI masqués quand un filtre ne renvoie rien ; permission
+  « Enregistrement de l'écran » présentée comme un état, fonction indiquée indisponible hors macOS ; stats
+  anciennes (patch du client ≠ patch des stats) signalées dans la barre latérale et les réglages.
+- Barre latérale : statut du client, phase et mode sur une ligne, fraîcheur des stats Mayhem.
+- Tests : règles d'affichage (`tone`, `confidenceOf`) et parcours Electron `test/shell-smoke.cjs` (⌘K, ⌘1-4,
+  flèches des contrôles segmentés, fiche, filtres, débordement à 900 px). Rendu vérifié sous Linux ; rendu natif
+  macOS (polices, vibrance, focus clavier réel) à vérifier sur le Mac.
+
 ## v1.56 — 29 oct. 2026 — acheter le bon composant maintenant
 - **Améliorations de composants** : le prochain achat tient compte des sous-composants déjà possédés pour
   proposer une amélioration achetable. Exemple : un composant de 900 or issu d’un composant possédé de 400 or

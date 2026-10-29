@@ -114,8 +114,9 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
   margin: 6px;
   padding: 12px 12px 8px;
   border-radius: var(--radius);
-  background: rgba(14, 21, 32, 0.9);
-  border: 1px solid var(--line);
+  background: rgba(8, 16, 24, 0.92);
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 0 rgba(200, 170, 110, 0.35); /* filet d'or en haut : repère discret par-dessus le jeu */
   font-size: 12.5px;
   display: flex;
   flex-direction: column;
@@ -123,7 +124,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
 }
 .title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .title strong { }
-.rar { color: var(--r, var(--gold)); font-family: var(--display); font-size: 13px; margin-bottom: 3px; }
+.rar { color: var(--r, var(--gold)); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
 .row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 3px 6px; border-radius: var(--radius); position: relative; }
 .row img { border-radius: var(--radius); }
 .row.best { font-weight: 700; font-size: 13.5px; padding: 7px 6px 7px 14px; background: rgba(200, 170, 110, 0.12); }

@@ -1,5 +1,5 @@
 /*
- * Identité « Atelier Hextech » (v1.50) : un instrument Hextech posé sur le pont de l'Abîme hurlant.
+ * Identité « Atelier Hextech » (v1.50, consolidée v1.55) : un instrument Hextech posé sur le pont de l'Abîme hurlant.
  * Encre abyssale, cadres d'or patiné, texte parchemin ; le bleu Hextech est réservé au « vivant » (en partie,
  * focus clavier). Un seul élément audacieux : le cadre de la recommandation (or + cristal Hextech, voir .reco).
  * Polices libres proches de l'esprit du client (aucune police ni aucun logo de Riot) :
@@ -31,6 +31,38 @@
   --frame: linear-gradient(180deg, #785a28 0%, #3a2e18 100%);
   --radius: 2px;
   --display: 'Marcellus', 'Iowan Old Style', Georgia, serif;
+
+  /* v1.55 — surfaces : 3 niveaux seulement. L'or n'encadre plus chaque panneau : il est réservé à la navigation
+     active, à l'action principale et (avec le cristal) à LA recommandation. */
+  --surface-1: #0b1621; /* panneau */
+  --surface-2: #101e2b; /* rangée, contrôle */
+  --surface-3: #152636; /* survol, sélection */
+  --border: #1d2b37; /* filet froid de tous les panneaux */
+  --border-strong: #2b3c4b;
+  --ok: var(--good); /* achetable, favorable */
+  --warn: #e2c27a; /* économiser, attention */
+  --danger: var(--bad); /* défavorable, défaite */
+  --info: #7fc6e8;
+
+  /* Échelle typographique (px) : 11.5 · 12.5 · 14 · 15.5 · 18 · 24 */
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 15.5px;
+  --fs-xl: 18px;
+  --fs-2xl: 24px;
+  /* Espacements (multiples de 4) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --page-x: 28px;
+  /* Contrôles */
+  --ctl-h: 32px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 0.14s;
   font-family: 'Barlow', -apple-system, system-ui, sans-serif;
   font-size: 14.5px;
   line-height: 1.42;
@@ -58,31 +90,36 @@ img { display: block; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
 
-/* Boutons du client : fond sombre, filet d'or, texte or clair ; le principal est « chargé » d'Hextech */
+/* Boutons : secondaire = filet froid, texte parchemin ; principal = filet d'or et fond cristal sombre (un seul
+   par écran). Même hauteur partout. */
 .btn {
-  border: 1px solid transparent;
-  border-image: linear-gradient(180deg, #c8aa6e, #785a28) 1;
-  background: linear-gradient(180deg, #1a232b, #11181f);
-  padding: 7px 14px;
+  min-height: var(--ctl-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 0 14px;
   cursor: pointer;
   font-weight: 600;
-  color: #cdbe91;
-  letter-spacing: 0.02em;
+  font-size: var(--fs-sm);
+  color: var(--text);
   white-space: nowrap;
-  transition: color 0.15s, box-shadow 0.15s, filter 0.15s;
+  transition: color var(--dur), background var(--dur), border-color var(--dur);
 }
-.btn:hover { color: var(--gold-hi); box-shadow: inset 0 0 12px rgba(200, 170, 110, 0.18); }
-.btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+.btn:hover { background: var(--surface-3); border-color: var(--rule); color: var(--gold-hi); }
+.btn:disabled { opacity: 0.45; cursor: default; background: var(--surface-2); border-color: var(--border-strong); color: var(--text); }
 .btn.primary {
-  border-image: linear-gradient(180deg, #f0e6d2, #c8aa6e 40%, #785a28) 1;
+  border-color: var(--gold);
   background: linear-gradient(180deg, #0d3f48, #08222b);
-  color: #cdfafa;
-  font-family: var(--display);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 400;
+  color: #e6fbfa;
 }
-.btn.primary:hover { box-shadow: inset 0 0 16px rgba(10, 200, 185, 0.35), 0 0 12px rgba(10, 200, 185, 0.15); }
+.btn.primary:hover { border-color: var(--gold-hi); box-shadow: inset 0 0 14px rgba(10, 200, 185, 0.3); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+.btn.big { min-height: 40px; padding: 0 18px; font-size: var(--fs-md); }
 
 .chip {
   display: inline-flex;
@@ -97,12 +134,12 @@ img { display: block; }
 }
 .chip.warn { color: #e2c27a; border-color: rgba(226, 194, 122, 0.35); background: rgba(226, 194, 122, 0.07); }
 
-/* Cadre de panneau : filet d'or patiné, coins vifs (pas de carte arrondie générique) */
+/* Panneau : surface sobre et filet froid. Plus de cadre d'or sur chaque bloc (v1.55) : quand tout est encadré
+   d'or, plus rien n'est prioritaire. */
 .card {
-  background: linear-gradient(180deg, rgba(15, 29, 42, 0.92), rgba(9, 19, 29, 0.92));
-  border: 1px solid transparent;
-  border-image: var(--frame) 1;
-  border-radius: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .icon { border-radius: var(--radius); background: var(--panel-2); object-fit: cover; box-shadow: 0 0 0 1px rgba(120, 90, 40, 0.55); }
@@ -120,11 +157,53 @@ img { display: block; }
 .empty p { margin: 0; max-width: 420px; line-height: 1.5; }
 
 h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 400; color: var(--gold-hi); }
-/* Titres de page en capitales espacées, à la manière des écrans du client */
+/* Titres de page en capitales espacées ; titres de section en serif, plus petits ; étiquettes en « eyebrow » */
 h1, .display { letter-spacing: 0.06em; text-transform: uppercase; }
-h1 { font-size: 26px; line-height: 1.15; }
-h2 { font-size: 16px; letter-spacing: 0.03em; color: var(--gold); }
-h3 { font-size: 15px; letter-spacing: 0.02em; color: var(--gold); }
+h1 { font-size: var(--fs-2xl); line-height: 1.15; }
+h2 { font-size: var(--fs-lg); letter-spacing: 0.02em; color: var(--gold-hi); }
+h3 { font-size: var(--fs-md); letter-spacing: 0.02em; color: var(--gold); }
+.eyebrow { font-family: 'Barlow', sans-serif; font-size: var(--fs-xs); font-weight: 650; letter-spacing: 0.09em; text-transform: uppercase; color: var(--gold); }
+
+/* En-tête de page : titre + sous-titre à gauche, actions à droite (PageHeader.vue) */
+.page { padding: var(--sp-6) var(--page-x) 32px; display: flex; flex-direction: column; gap: var(--sp-4); }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-3) var(--sp-4); flex-wrap: wrap; }
+.page-head .sub { margin: 4px 0 0; color: var(--muted); font-size: var(--fs-sm); max-width: 70ch; }
+.page-head .actions { display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
+
+/* Contrôle segmenté (Segmented.vue) : un seul style pour tous les choix exclusifs */
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-1); flex-wrap: wrap; }
+.seg button { min-height: 30px; border: 0; background: transparent; color: var(--muted); padding: 0 12px; font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: color var(--dur), background var(--dur); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-selected='true'], .seg button.on { background: var(--gold-soft); color: var(--gold-hi); box-shadow: inset 0 -2px 0 var(--gold); }
+.seg button:hover:not([aria-selected='true']):not(.on) { color: var(--text); background: var(--surface-2); }
+
+/* Champs de saisie et listes déroulantes */
+.input, .select { min-height: var(--ctl-h); background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 0 10px; font: inherit; font-size: var(--fs-sm); }
+.input:focus, .select:focus { border-color: var(--gold); outline: none; }
+
+/* Message d'état (Notice.vue) : info, attention, erreur, vide — icône + texte, jamais la couleur seule */
+.notice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-left-width: 3px; background: var(--surface-1); font-size: var(--fs-sm); color: var(--text); }
+.notice .ico { flex: none; width: 16px; text-align: center; font-weight: 800; }
+.notice.n-info { border-left-color: var(--info); } .notice.n-info .ico { color: var(--info); }
+.notice.n-warn { border-left-color: var(--warn); } .notice.n-warn .ico { color: var(--warn); }
+.notice.n-error { border-left-color: var(--danger); } .notice.n-error .ico { color: var(--danger); }
+.notice.n-empty { border-left-color: var(--border-strong); color: var(--muted); }
+.notice p { margin: 0; }
+.notice .act { margin-left: auto; }
+
+/* Chargement : bandes discrètes, coupées par « Réduire les animations » */
+.skeleton { background: linear-gradient(90deg, var(--surface-1), var(--surface-3), var(--surface-1)); background-size: 200% 100%; animation: sk 1.3s linear infinite; border-radius: var(--radius); }
+@keyframes sk { to { background-position: -200% 0; } }
+
+/* Chiffre clé (KPI) : valeur lisible, pas géante */
+.kpi { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; }
+.kpi .lbl { font-size: var(--fs-xs); color: var(--faint); }
+.kpi .val { font-family: var(--display); font-size: 26px; line-height: 1.1; color: var(--text); }
+.kpi .note { font-size: var(--fs-xs); color: var(--faint); }
+
+kbd { font: inherit; font-size: 11px; color: var(--faint); border: 1px solid var(--border-strong); border-radius: 2px; padding: 0 5px; }
+/* Texte lisible par les lecteurs d'écran seulement */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Grands chiffres : même voix que les titres */
 .wide { font-family: var(--display); letter-spacing: 0.02em; }
 
@@ -173,7 +252,8 @@ body.overlay { background: transparent; }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2416; border: 1px solid var(--rule); }
+::-webkit-scrollbar-thumb { background: #1f2d39; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #2b3c4b; }
 
 input[type='checkbox'], input[type='radio'] { accent-color: var(--gold); }
 select, input[type='text'], input:not([type]) { color-scheme: dark; }

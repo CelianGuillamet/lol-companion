@@ -23,7 +23,7 @@ const fmt = (n: number) => n.toLocaleString('fr-FR');
 </template>
 
 <style scoped>
-.label { color: var(--gold); font-family: var(--display); font-size: 13px; margin-bottom: 3px; }
+.label { color: var(--gold); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
 .row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 3px 6px; }
 .row img { border-radius: var(--radius); }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -3,7 +3,7 @@
 // 1. le prochain item, gros, avec la raison en clair (qui en face l'impose) ;
 // 2. ton parcours sur 6 places : ce que tu as déjà (coché), ce qui vient ensuite ;
 // 3. les deux équipes en direct : dégâts, rôle, score et items de chacun, et ce que ça change pour toi.
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { state, championIcon, hideBroken } from '../store';
 import { purchaseOf } from '../purchase';
 
@@ -22,6 +22,9 @@ const nextIndex = computed(() => (nb.value?.plan ?? []).findIndex((s) => !s.owne
 const fmt = (n: number) => n.toLocaleString('fr-FR');
 const lane = computed(() => state.value?.counters?.lane ?? null);
 const DMG: Record<string, string> = { AD: 'physique', AP: 'magique', mixte: 'mixte' };
+// En partie, la lecture courte d'abord : ce qui change ton build, puis leur équipe en une ligne ; le détail
+// (dégâts, rôles, items de chacun) se déplie.
+const teamOpen = ref(false);
 </script>
 
 <template>
@@ -84,8 +87,30 @@ const DMG: Record<string, string> = { AD: 'physique', AP: 'magique', mixte: 'mix
     </div>
 
     <template v-if="ct">
-      <h3>Leur équipe</h3>
-      <ul class="team">
+      <h3>Contre leur équipe</h3>
+      <ul v-if="ct.threats.length || ct.notes?.length" class="reads">
+        <li v-for="t in ct.threats" :key="t.key" :class="{ urgent: t.urgent }">
+          <div>
+            <span v-if="t.urgent" class="badge">prioritaire</span>
+            <b>{{ t.title }}</b> : {{ t.why }}<template v-if="t.champions.length"> ({{ t.champions.map((c) => c.name).join(', ') }})</template>.
+          </div>
+          <div class="its">
+            <img v-for="it in t.items.slice(0, 3)" :key="it.id" @error="hideBroken" :src="it.icon ?? ''" :title="it.name" width="24" height="24" class="ic" alt="" />
+          </div>
+        </li>
+        <li v-for="n in ct.notes ?? []" :key="n" class="note">{{ n }}</li>
+      </ul>
+      <p v-else class="faint small">Rien de particulier en face : suis le build.</p>
+
+      <button class="strip" :aria-expanded="teamOpen" aria-controls="enemy-detail" @click="teamOpen = !teamOpen">
+        <span class="faint small">Leur équipe</span>
+        <span v-for="e in ct.enemies" :key="e.id" class="mini-ch" :class="{ fed: e.fed }" :title="`${e.name}${e.kda ? ` · ${e.kda}` : ''}${e.fed ? ' · en avance' : ''}`">
+          <img @error="hideBroken" :src="championIcon(e.id)" width="26" height="26" class="ch" alt="" />
+          <span v-if="e.fed" class="fedtag num">{{ e.fed }}</span>
+        </span>
+        <span class="toggle small">{{ teamOpen ? 'Masquer' : 'Détails' }}</span>
+      </button>
+      <ul v-if="teamOpen" id="enemy-detail" class="team">
         <li v-for="e in ct.enemies" :key="e.id" :class="{ fed: e.fed }">
           <img @error="hideBroken" :src="championIcon(e.id)" width="30" height="30" class="ch" alt="" />
           <div class="who">
@@ -100,19 +125,6 @@ const DMG: Record<string, string> = { AD: 'physique', AP: 'magique', mixte: 'mix
           </div>
         </li>
       </ul>
-
-      <ul v-if="ct.threats.length || ct.notes?.length" class="reads">
-        <li v-for="t in ct.threats" :key="t.key" :class="{ urgent: t.urgent }">
-          <div>
-            <b>{{ t.title }}</b>{{ t.urgent ? ' — prioritaire' : '' }} : {{ t.why }}<template v-if="t.champions.length"> ({{ t.champions.map((c) => c.name).join(', ') }})</template>.
-          </div>
-          <div class="its">
-            <img v-for="it in t.items.slice(0, 3)" :key="it.id" @error="hideBroken" :src="it.icon ?? ''" :title="it.name" width="24" height="24" class="ic" alt="" />
-          </div>
-        </li>
-        <li v-for="n in ct.notes ?? []" :key="n" class="note">{{ n }}</li>
-      </ul>
-      <p v-else class="faint small">Rien de particulier en face : suis le build.</p>
 
       <div v-if="ct.allies?.length" class="allies">
         <span class="faint small">Ton équipe</span>
@@ -132,8 +144,9 @@ h2 { font-size: 15px; }
 h3 { margin: 8px 0 0; }
 .gold { color: var(--gold); font-weight: 700; font-size: 15px; }
 .dead { color: var(--bad); }
-.ic { border-radius: var(--radius); background: var(--panel-2); display: block; }
-.next { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 12px 12px 18px; background: linear-gradient(110deg, rgba(200, 170, 110, 0.14), var(--panel-2) 55%); }
+.ic { border-radius: var(--radius); background: var(--surface-2); display: block; }
+.next { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 12px 12px 18px; background: var(--surface-1); border: 1px solid var(--border); }
+.next.reco { border-color: transparent; background: linear-gradient(110deg, rgba(200, 170, 110, 0.14), var(--surface-2) 55%); }
 .big { border-radius: var(--radius); }
 .next .name { font-weight: 700; font-size: 17px; }
 .what { min-width: 0; overflow-wrap: anywhere; }
@@ -145,7 +158,7 @@ h3 { margin: 8px 0 0; }
 .price s { font-weight: 500; font-size: 11.5px; }
 .price div + div { font-size: 11.5px; font-weight: 600; }
 .path { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.slot { position: relative; aspect-ratio: 1; max-width: 52px; border-radius: var(--radius); background: var(--panel); display: grid; place-items: center; border: 1px solid var(--line); }
+.slot { position: relative; aspect-ratio: 1; max-width: 52px; border-radius: var(--radius); background: var(--surface-1); display: grid; place-items: center; border: 1px solid var(--border-strong); }
 .slot .ic { width: 100%; height: 100%; border-radius: var(--radius); }
 .slot.owned .ic { opacity: 0.55; }
 .slot.now { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
@@ -154,7 +167,7 @@ h3 { margin: 8px 0 0; }
 .src { margin: 0; font-size: 11.5px; color: var(--faint); }
 .then { margin: 0; font-size: 12.5px; }
 .team, .reads { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.team li { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 5px 8px; border-radius: var(--radius); background: var(--panel); }
+.team li { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 5px 8px; border-bottom: 1px solid var(--border); }
 .team li.fed { box-shadow: inset 3px 0 0 var(--bad); }
 .ch { border-radius: 50%; display: block; }
 .who .n { font-weight: 650; font-size: 13px; }
@@ -165,13 +178,21 @@ h3 { margin: 8px 0 0; }
 .dmg.AD { color: #ff9b6b; }
 .dmg.AP { color: #8fb8ff; }
 .its { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }
-.reads li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); background: var(--panel); font-size: 12.5px; }
-.reads li.urgent { box-shadow: inset 3px 0 0 var(--gold); }
+.reads li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface-1); font-size: var(--fs-sm); }
+.reads li.urgent { border-left: 3px solid var(--gold); }
+.badge { display: inline-block; margin-right: 6px; padding: 0 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0a1520; background: var(--gold); border-radius: 2px; }
+.strip { display: flex; gap: 6px; align-items: center; width: 100%; padding: 6px 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.strip:hover { background: var(--surface-1); }
+.strip .faint { margin-right: 4px; }
+.mini-ch { position: relative; display: flex; flex-direction: column; align-items: center; }
+.mini-ch.fed .ch { box-shadow: 0 0 0 2px var(--bad); }
+.fedtag { font-size: 10px; color: var(--bad); font-weight: 700; line-height: 1.1; }
+.toggle { margin-left: auto; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .reads li.note { color: var(--muted); }
 .allies { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ally { position: relative; display: flex; flex-direction: column; align-items: center; }
 .mini { font-size: 9.5px; color: var(--muted); }
-.lane { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 8px 10px; background: var(--panel); }
+.lane { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 8px 10px; background: var(--surface-1); border: 1px solid var(--border); }
 .lane .n { font-weight: 650; font-size: 13px; }
 .lane .t { font-size: 12px; color: var(--muted); }
 .lane.favorable { box-shadow: inset 3px 0 0 var(--good); }

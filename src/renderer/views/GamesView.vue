@@ -1,25 +1,28 @@
 <script setup lang="ts">
-// « Mes parties » : le résumé de tes stats et l'historique complet.
+// « Mes parties » : le résumé (que montrent mes résultats ?) et l'historique complet (que s'est-il passé ?).
 import { ref } from 'vue';
 import StatsView from './StatsView.vue';
 import HistoryView from './HistoryView.vue';
+import PageHeader from '../ui/PageHeader.vue';
+import Segmented from '../ui/Segmented.vue';
 
 const sub = ref<'summary' | 'history'>('summary');
+const OPTS = [
+  { value: 'summary' as const, label: 'Résumé' },
+  { value: 'history' as const, label: 'Toutes les parties' },
+];
 </script>
 
 <template>
-  <div class="games">
-    <nav class="sub" role="tablist">
-      <button role="tab" :aria-selected="sub === 'summary'" :class="{ on: sub === 'summary' }" @click="sub = 'summary'">Résumé</button>
-      <button role="tab" :aria-selected="sub === 'history'" :class="{ on: sub === 'history' }" @click="sub = 'history'">Toutes les parties</button>
-    </nav>
+  <div class="page games">
+    <PageHeader title="Mes parties" sub="Tes résultats enregistrés sur ce Mac. Stats perso : ARAM et Mayhem ; la Faille a son propre filtre dans l’historique.">
+      <Segmented v-model="sub" :options="OPTS" label="Vue" />
+    </PageHeader>
     <StatsView v-if="sub === 'summary'" />
     <HistoryView v-else />
   </div>
 </template>
 
 <style scoped>
-.sub { display: flex; gap: 4px; padding: 16px 24px 0; }
-.sub button { border: 0; background: transparent; color: var(--muted); padding: 7px 12px; border-radius: var(--radius); cursor: pointer; font-weight: 600; }
-.sub button.on { background: var(--panel-2); color: var(--text); }
+.games { max-width: 1160px; }
 </style>
