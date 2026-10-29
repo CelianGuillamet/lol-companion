@@ -18,6 +18,7 @@ mq.addEventListener('change', onMq);
 onBeforeUnmount(() => mq.removeEventListener('change', onMq));
 const view = ref<'augs' | 'buy'>(panel.value ? 'augs' : 'buy');
 const showBuild = ref(false);
+const headliner = computed(() => state.value?.headliner ?? null);
 </script>
 
 <template>
@@ -42,6 +43,11 @@ const showBuild = ref(false);
       </nav>
     </header>
 
+    <section v-if="headliner" class="headliner" aria-label="Headliner de la partie">
+      <div class="hl-name"><span class="faint small">Headliner</span> <strong>{{ headliner.name }}</strong> <span class="faint small">· {{ headliner.source === 'écran' ? 'lu à l’écran' : 'd’après tes cartes' }}</span></div>
+      <ul><li v-for="t in headliner.tips" :key="t">{{ t }}</li></ul>
+    </section>
+
     <div class="cols" :class="{ single: !panel }">
       <AugmentChooser v-if="panel && (!narrow || view === 'augs')" :panel="panel" class="left" />
       <div v-if="!narrow || view === 'buy' || !panel" class="right">
@@ -56,6 +62,11 @@ const showBuild = ref(false);
 </template>
 
 <style scoped>
+.headliner { padding: 8px 18px 9px; border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.headliner .hl-name strong { font-family: var(--display); color: var(--gold-hi); letter-spacing: 0.04em; }
+.headliner ul { margin: 4px 0 0; padding-left: 18px; color: var(--text); font-size: var(--fs-sm); }
+.headliner li + li { margin-top: 2px; }
+.headliner .small { font-size: 12px; }
 .waiting { height: 100%; display: grid; place-content: center; text-align: center; gap: 6px; padding: 30px; }
 .waiting h1 { font-size: 22px; }
 .waiting p { margin: 0; color: var(--muted); max-width: 380px; }

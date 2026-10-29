@@ -8,6 +8,8 @@ export type UsageEvent =
   | { type: 'cards_seen'; at: number; championId: number; round: number | null; ids: number[]; best: number | null; unsure: boolean }
   | { type: 'card_picked'; at: number; gameId: number; round: number | null; ids: number[]; best: number | null; picked: number | null; followed: boolean; win: boolean }
   | { type: 'ocr_miss'; at: number; text: string }
+  /** Headliner reconnu en partie (pour vérifier la lecture : texte lu à l'écran, ou cartes). */
+  | { type: 'headliner_seen'; at: number; key: string; source: 'écran' | 'cartes'; text?: string }
   /** Item fini acheté en partie, et ce que l'app conseillait juste avant (followed = c'était le même). */
   | { type: 'item_bought'; at: number; championId: number; id: number; reco: number | null; plan: number[]; followed: boolean };
 

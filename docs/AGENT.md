@@ -129,3 +129,9 @@ Jetons dans src/renderer/styles.css : encre --bg #050d16, panneaux --panel/--pan
 parchemin --text, cristal --blue #0ac8b9 (réservé au vivant / focus). Titres Marcellus (h1 en capitales), interface
 Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose brille : la recommandation (.reco)**
 — ne pas réutiliser ce cadre ailleurs. Pas de logos / polices / images de Riot (hors icônes CDragon déjà utilisées).
+
+## Headliner (v1.55)
+- `src/core/headliner.ts` : 8 headliners + conseils. Reconnu en direct par `CardReader` (ligne exacte lue dans
+  `cardsArea()`, lignes avec « ! » ignorées) ou par les cartes Pentakill 3170-3173 (`Engine.setOffered`) →
+  `state.headliner`, remis à zéro au champ select, noté dans `HistoryGame.headliner` (clé). Capture de test :
+  `ARAM_SMOKE_HEADLINER="Command Line"`.

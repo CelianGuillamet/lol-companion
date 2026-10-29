@@ -161,6 +161,11 @@ describe('moteur contre un faux client League', () => {
     mock.state.phase = 'InProgress';
     await engine.tick();
     expect(engine.state.augments?.championId).toBe(54);
+    // cartes Pentakill lues à l'écran → headliner de la partie, noté avec la partie
+    engine.setOffered({ ids: [3170, 3171, 3172], names: ['A', 'B', 'C'], rarity: null, unsure: null, misses: [] });
+    expect(engine.state.headliner).toMatchObject({ key: 'pentakill', name: 'Pentakill', source: 'cartes' });
+    expect(engine.state.headliner?.tips.length).toBeGreaterThan(0);
+    engine.setOffered(null);
     mock.state.phase = 'EndOfGame';
     mock.state.eogGameId = 77;
     mock.state.games[77] = game(77, 2400, 54, true, [1058]);
@@ -168,6 +173,8 @@ describe('moteur contre un faux client League', () => {
     expect(engine.state.stats.total).toBe(3);
     expect(engine.state.stats.recent[0].gameId).toBe(77);
     expect(existsSync(join(dataDir, 'history.json'))).toBe(true);
+    expect(engine.rawHistory().find((g) => g.gameId === 77)?.headliner).toBe('pentakill');
+    expect(engine.getHistory().find((g) => g.gameId === 77)?.headliner).toBe('Pentakill');
     const callsBefore = mock.calls.length;
     await engine.tick(); // pas de double enregistrement
     expect(mock.calls.slice(callsBefore).some((c) => c.path.includes('/games/77'))).toBe(false);
@@ -184,6 +191,7 @@ describe('moteur contre un faux client League', () => {
     mock.state.games[88] = game(88, 2400, 54, false, [3078]);
     await engine.tick();
     expect(engine.state.stats.recent.some((g) => g.gameId === 88)).toBe(true);
+    expect(engine.rawHistory().find((g) => g.gameId === 88)?.headliner).toBeUndefined(); // remis à zéro au champ select
   });
 
   it('retrouve ton champion si l’app est lancée en pleine partie', async () => {

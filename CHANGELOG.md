@@ -51,6 +51,16 @@
   et du doute dans le panneau par-dessus le jeu, y compris sa densité minimale.
 - Vérification cloud avec faux client et fixtures ; capture/OCR et comportement natif macOS à vérifier sur Mac.
 
+## v1.55b — 29 oct. 2026 — headliner de la partie (déployé sur le Mac par une autre session, intégré dans main avec la v1.57)
+- **Headliner Mayhem reconnu en partie** : nom lu sur la bannière du début (lecture des cartes, même autorisation),
+  ou déduit des cartes Pentakill (choix 1 et niveau 18). Affiché en haut de l'écran en partie et de la fenêtre second
+  écran avec 1-2 conseils (Command Line : « reroll une carte Or pour viser du Prismatique » ; K/DA : 4 cartes = un
+  augment en plus ; True Damage : enclumes sur éliminations et tours ; Cafe Cuties : reliques de soin…).
+- Lecture stricte : « PENTAKILL! », « BEES!!! » ou le fil des éliminations ne déclenchent rien.
+- Le headliner reconnu est enregistré avec la partie : Historique et « Par headliner » (Mes stats) l'utilisent.
+- Parties à 5 augments depuis le 26.21 marquées **« K/DA (probable) »** dans l'historique (9 parties chez toi).
+- Journal et `probe-output/usage.json` (`headliner_seen`) notent ce qui a été lu, pour vérifier la bannière.
+
 ## v1.54 — 29 oct. 2026 — navigation, fiche champion, fiabilité
 - **Carte joueur** dans la barre latérale : Riot ID, icône, niveau, rang solo et flex (LP), lus dans ton client ;
   mise à jour après chaque partie.

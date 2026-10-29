@@ -207,10 +207,12 @@ export interface HistoryGame {
   enemies?: number[];
   allyNames?: string[]; // Riot ID des 4 coéquipiers (même ordre que allies)
   noDetail?: boolean; // détail introuvable dans le client
+  /** Headliner Mayhem noté en direct (clé de headliner.ts, ex. « commandline ») : lu à l'écran ou d'après les cartes. */
+  headliner?: string;
 }
 
 /** Ligne de l'onglet Historique (noms et icônes résolus). */
-export interface HistoryEntry extends HistoryGame {
+export interface HistoryEntry extends Omit<HistoryGame, 'headliner'> {
   championName: string;
   headliner: string | null; // headliner Mayhem de la partie (déduit de l'augment marqueur, ex. « Pentakill »)
   championWr: number | null; // winrate Mayhem global (arammeta) du champion, pour mesurer si suivre le classement paie
@@ -305,6 +307,13 @@ export interface Settings {
   overlayDensity: 'full' | 'compact' | 'minimal';
 }
 
+export interface LiveHeadliner {
+  key: string;
+  name: string;
+  source: 'écran' | 'cartes';
+  tips: string[];
+}
+
 /** Les 3 cartes d'augments lues à l'écran (de gauche à droite). */
 export interface OfferedCards {
   ids: number[];
@@ -351,6 +360,8 @@ export interface AppState {
   augRound: number | null;
   /** Cartes d'augments lues à l'écran, null si aucune lecture en cours. */
   offered?: OfferedCards | null;
+  /** Headliner Mayhem de la partie en cours, reconnu à l'écran (bannière) ou d'après ses cartes ; null sinon. */
+  headliner?: LiveHeadliner | null;
   stats: StatsView;
   settings: Settings;
   log: LogEntry[];
