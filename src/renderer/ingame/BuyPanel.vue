@@ -6,6 +6,8 @@
 import { computed } from 'vue';
 import { state, championIcon, hideBroken } from '../store';
 
+withDefaults(defineProps<{ emphasize?: boolean }>(), { emphasize: true });
+
 const nb = computed(() => state.value?.nextBuy ?? null);
 const ct = computed(() => (state.value?.counters?.enemies.length ? state.value.counters : null));
 const next = computed(() => nb.value?.rows[0] ?? null);
@@ -32,7 +34,7 @@ const DMG: Record<string, string> = { AD: 'physique', AP: 'magique', mixte: 'mix
     <p v-if="!nb" class="faint small">L’or et tes items s’affichent dès que la partie a commencé.</p>
 
     <template v-else>
-      <article v-if="next" class="next reco">
+      <article v-if="next" class="next" :class="{ reco: emphasize }">
         <img @error="hideBroken" :src="next.item.icon ?? ''" width="56" height="56" class="ic big" alt="" />
         <div class="what">
           <div class="name">{{ next.item.name }}</div>

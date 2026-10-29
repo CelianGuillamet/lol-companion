@@ -133,6 +133,10 @@ champ select). Ne pas l'utiliser ailleurs.
 
 ## Lecture des cartes d'augments (validée par Celian le 28 oct. 2026, voir docs/ux-discovery/)
 
+- [x] (v1.55) J1 : cartes reconnues avant les filtres, position dans le jeu conservée après classement, lecture
+  partielle sans classement, accès manuel conservé. L’achat ne concurrence plus le cadre des augments en vue
+  large. Régressions de présentation et scénarios Electron dans `test/augment-chooser-smoke.cjs` (fixtures).
+  Reste à mesurer la rapidité de décision et à vérifier le rendu sur le vrai setup macOS.
 - [x] (v1.39) Capture de la fenêtre du jeu + Vision (JXA) + correspondance stricte (`src/core/cardmatch.ts`), cartes
   en tête de la vue en jeu, notification « Prends … », télémétrie locale `probe-output/usage.json`.
 - [x] (28 oct.) Autorisation accordée ; capture + Vision validées sur le Mac (« Tester la lecture » : 28 lignes lues, accents compris).

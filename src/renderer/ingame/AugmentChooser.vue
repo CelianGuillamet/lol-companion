@@ -5,6 +5,8 @@
 import { computed, ref, watch } from 'vue';
 import { tone, state, pct, hideBroken, wrAt, ROUND_LABEL } from '../store';
 import type { AugmentPanel, AugmentRow, Rarity } from '../../core/types';
+import { presentOfferedCards } from '../offered-cards';
+import Confidence from '../ui/Confidence.vue';
 
 const props = defineProps<{ panel: AugmentPanel; prepare?: boolean }>();
 
@@ -48,24 +50,17 @@ const byId = computed(() => {
   for (const a of offered.value?.extra ?? []) if (!m.has(a.id)) m.set(a.id, a);
   return m;
 });
-const cards = computed(() => {
-  const o = offered.value;
-  if (!o) return [];
-  return o.ids
-    .map((id, i) => ({ id, name: o.names[i], a: byId.value.get(id) ?? null }))
-    .sort((x, y) => score(y) - score(x));
-});
+const presentation = computed(() => presentOfferedCards(offered.value, byId.value, round.value));
+const cards = computed(() => presentation.value.cards);
 // Classement des cartes : winrate au moment du choix, corrigé selon ton build en cours (bonus / malus affiché)
 const fitOf = (id: number) => offered.value?.fit?.[id] ?? null;
-function score(c: { id: number; a: AugmentRow | null }) {
-  return c.a ? wrAt(c.a, round.value) + (fitOf(c.id)?.delta ?? 0) : -1;
-}
-const sure = computed(() => !!offered.value && !offered.value.unsure);
+const sure = computed(() => presentation.value.sure);
 const showAll = ref(false);
 watch(offered, (o) => {
   if (!o) showAll.value = false;
 });
 const listOpen = computed(() => !offered.value || showAll.value);
+const doubt = computed(() => offered.value?.unsure || 'Données insuffisantes pour comparer les trois cartes');
 
 const q = ref('');
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -91,36 +86,19 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
 
 <template>
   <section class="chooser">
-    <header>
-      <div class="rar" role="tablist" aria-label="Rareté des cartes proposées">
-        <button
-          v-for="r in RARITIES"
-          :key="r.key"
-          role="tab"
-          :aria-selected="rarity === r.key"
-          :class="[`rarity-${r.key}`, { on: rarity === r.key }]"
-          @click="rarity = r.key"
-        >
-          {{ r.label }}
-        </button>
-      </div>
-      <div class="tools">
-        <div v-if="hasRounds" class="rounds" title="Un augment ne vaut pas pareil au début et au niveau 15">
-          <button :class="{ on: manualRound === 'all' }" @click="manualRound = 'all'">Global</button>
-          <button v-for="n in 4" :key="n" :class="{ on: round === n && manualRound !== 'all', auto: state?.augRound === n }" @click="manualRound = n">{{ n }}</button>
-        </div>
-        <input v-model="q" class="search" placeholder="Chercher…" spellcheck="false" aria-label="Chercher un augment" />
-      </div>
-    </header>
     <section v-if="offered" class="cards" aria-live="polite">
-      <h3>Tes cartes <span class="src">lues à l’écran</span></h3>
-      <p v-if="offered.unsure" class="doubt">{{ offered.unsure }} : vérifie dans la liste. <kbd>⌘⇧R</kbd> pour relire.</p>
-      <ol class="list">
+      <div class="cards-heading">
+        <h2>Tes cartes</h2>
+        <span class="read-status">{{ sure ? '3 sur 3 reconnues' : 'Lecture à vérifier' }}</span>
+      </div>
+      <p class="decision" v-if="sure">Prends la première, puis retrouve sa position dans le jeu.</p>
+      <p v-else class="doubt" role="status">{{ doubt }}. Aucun conseil pour ce tirage. Vérifie dans la liste ou relis avec <kbd>⌘⇧R</kbd>.</p>
+      <ol class="list offered-list" :aria-label="sure ? 'Tes cartes classées par recommandation' : 'Cartes reconnues, sans classement'">
         <li v-for="(c, i) in cards" :key="c.id" :class="{ best: sure && i === 0, reco: sure && i === 0, top: true, trap: traps.has(c.id) || myTraps.has(c.id) }">
-          <span class="rank num">{{ i + 1 }}</span>
           <img v-if="c.a?.icon" @error="hideBroken" :src="c.a.icon" width="30" height="30" class="ic" alt="" />
           <span v-else class="ic" />
           <span class="name">
+            <span class="card-cue"><b v-if="sure">{{ i === 0 ? 'À prendre' : 'Alternative' }}</b><span v-if="c.position">{{ c.position }} dans le jeu</span></span>
             <span class="n">{{ c.name }}</span>
             <span class="tags">
               <span v-if="myTraps.has(c.id)" class="tag bad">tu perds avec ({{ myTraps.get(c.id)!.wins }}V {{ myTraps.get(c.id)!.games - myTraps.get(c.id)!.wins }}D)</span>
@@ -132,15 +110,34 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
               <span v-else-if="c.a.games < 300" class="tag faint">peu de données</span>
             </span>
           </span>
-          <template v-if="c.a">
-            <span class="wr num wide" :class="score(c) - champWr >= 0 ? 'good' : 'bad'" :title="fitOf(c.id) ? `${pct(wrAt(c.a, round), 0)} en moyenne, corrigé selon ton build` : ''">{{ pct(score(c), 0) }}</span>
-            <span class="d num">{{ fmtDelta((score(c) - champWr) * 100) }}</span>
-          </template>
-          <template v-else><span /><span /></template>
+          <span v-if="c.a && c.score != null" class="card-stat num">
+            <span class="metric-label">{{ c.adjusted ? 'Score ajusté' : c.a.estimated ? 'Winrate estimé' : 'Winrate' }}</span>
+            <span class="wr wide">{{ c.adjusted ? `${(c.score * 100).toFixed(0)} pts` : pct(c.score, 0) }}</span>
+            <span class="sample">{{ c.a.estimated ? 'estimation' : `${c.a.games.toLocaleString('fr-FR')} parties` }}</span>
+            <Confidence v-if="!c.a.estimated && !c.adjusted" :winrate="wrAt(c.a, round)" :games="c.a.games" compact />
+          </span>
         </li>
       </ol>
-      <button class="more" :aria-expanded="showAll" @click="showAll = !showAll">{{ showAll ? 'Masquer la liste' : `Toute la liste (${pool.length})` }}</button>
+      <p v-if="cards.some((c) => c.adjusted)" class="metric-note">Score ajusté selon ton build : un indice de classement, pas une probabilité de victoire.</p>
+      <button class="more" :aria-expanded="showAll" @click="showAll = !showAll">{{ showAll ? 'Masquer la liste' : 'Vérifier dans la liste complète' }}</button>
     </section>
+
+    <header v-if="listOpen" class="filters">
+      <div class="rar" role="group" aria-label="Rareté des augments">
+        <button v-for="r in RARITIES" :key="r.key" :aria-pressed="rarity === r.key" :class="[`rarity-${r.key}`, { on: rarity === r.key }]" @click="rarity = r.key">{{ r.label }}</button>
+      </div>
+      <div class="tools">
+        <div v-if="hasRounds" class="rounds" role="group" aria-label="Moment du choix d’augment">
+          <button :aria-pressed="manualRound === 'all'" :class="{ on: manualRound === 'all' }" @click="manualRound = 'all'">Global</button>
+          <button v-for="n in 4" :key="n" :aria-label="`Choix ${n} : ${ROUND_LABEL[n - 1]}`" :aria-pressed="round === n && manualRound !== 'all'" :class="{ on: round === n && manualRound !== 'all', auto: state?.augRound === n }" @click="manualRound = n">{{ n }}</button>
+        </div>
+        <input v-model="q" class="search" placeholder="Chercher un augment…" spellcheck="false" aria-label="Chercher un augment" />
+      </div>
+    </header>
+    <p v-if="offered && sure" class="context">
+      {{ round ? `Classement pour le choix ${round} (${ROUND_LABEL[round - 1]}).` : 'Classement sur toute la partie.' }}
+      <span v-if="manualRound !== null">Comparaison manuelle.</span>
+    </p>
 
     <p v-if="listOpen" class="context">
       <template v-if="round">Classés pour le choix {{ round }} ({{ ROUND_LABEL[round - 1] }}){{ manualRound === null ? ', d’après ton niveau' : '' }}.</template>
@@ -185,7 +182,7 @@ header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify
 .rounds button { border: 0; background: transparent; color: var(--muted); padding: 4px 8px; border-radius: var(--radius); cursor: pointer; font-size: 12px; position: relative; }
 .rounds button.on { background: var(--panel-2); color: var(--text); font-weight: 650; }
 .rounds button.auto::after { content: ''; position: absolute; top: 3px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
-.search { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; font: inherit; font-size: 13px; width: 140px; }
+.search { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; font: inherit; font-size: 13px; width: 170px; min-width: 0; }
 .context { margin: 0; font-size: 12px; color: var(--muted); }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; overflow: auto; }
 li {
@@ -207,11 +204,25 @@ li.top .rank { color: var(--text); }
 .wr { font-size: 16px; font-weight: 700; text-align: right; }
 .d { font-size: 12px; color: var(--faint); text-align: right; }
 .none { grid-template-columns: 1fr; color: var(--muted); font-size: 13px; }
-.cards { display: flex; flex-direction: column; gap: 6px; }
-.cards h3 { margin: 2px 0 0; font-size: 15px; }
-.cards .src { font-size: 11px; color: var(--faint); font-weight: 500; margin-left: 6px; }
-.cards .best .n { font-size: 17px; }
-.doubt { margin: 0; font-size: 12px; color: var(--gold); }
+.cards { display: flex; flex: none; flex-direction: column; gap: 10px; }
+.cards-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.cards h2 { font-size: 19px; }
+.read-status { font-size: 12px; color: var(--muted); }
+.decision { margin: 0; font-size: 13px; color: var(--muted); }
+.offered-list { gap: 8px; overflow: visible; }
+.offered-list li { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 12px; gap: 12px; }
+.offered-list li.best { padding: 16px; }
+.offered-list .name { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.offered-list .n { overflow-wrap: anywhere; }
+.cards .best .n { font-size: 21px; line-height: 1.2; color: var(--gold-hi); }
+.card-cue { display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--muted); font-size: 12px; }
+.card-cue b { color: var(--gold); font-weight: 600; }
+.card-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.metric-label, .sample { font-size: 11px; color: var(--muted); }
+.card-stat .wr { color: var(--text); font-size: 19px; }
+.metric-note { margin: 0; color: var(--muted); font-size: 12px; }
+.filters { margin-top: 6px; }
+.doubt { margin: 0; padding: 10px 12px; border-left: 2px solid var(--gold); background: var(--gold-soft); font-size: 13px; color: var(--text); }
 kbd { font: inherit; font-size: 11px; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 4px; color: var(--muted); }
 .more { align-self: flex-start; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
 .more:hover { color: var(--text); }
@@ -219,5 +230,10 @@ kbd { font: inherit; font-size: 11px; border: 1px solid var(--line); border-radi
   li { grid-template-columns: 22px 28px 1fr auto; gap: 8px; }
   .d { display: none; }
   .rar button { padding: 8px 10px; }
+  .tools { flex-wrap: wrap; width: 100%; }
+  .search { flex: 1; }
+  .offered-list li, .offered-list li.best { gap: 8px; padding: 12px; }
+  .cards .best .n { font-size: 19px; }
+  .card-stat .wr { font-size: 17px; }
 }
 </style>

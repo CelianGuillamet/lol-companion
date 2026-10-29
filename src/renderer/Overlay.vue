@@ -5,6 +5,7 @@
 import { computed } from 'vue';
 import { state, pct, hideBroken, wrAt, ROUND_LABEL } from './store';
 import type { AugmentRow, Rarity } from '../core/types';
+import { presentOfferedCards } from './offered-cards';
 
 const panel = computed(() => state.value?.augments ?? null);
 const round = computed(() => state.value?.augRound ?? null);
@@ -25,22 +26,16 @@ const byId = computed(() => {
   for (const a of offered.value?.extra ?? []) if (!m.has(a.id)) m.set(a.id, a);
   return m;
 });
-const cards = computed(() => {
-  const o = offered.value;
-  if (!o) return [];
-  return o.ids
-    .map((id, i) => ({ id, name: o.names[i], a: byId.value.get(id) ?? null }))
-    .sort((x, y) => (y.a ? wrAt(y.a, round.value) + (o.fit?.[y.id]?.delta ?? 0) : -1) - (x.a ? wrAt(x.a, round.value) + (o.fit?.[x.id]?.delta ?? 0) : -1));
-});
+const presentation = computed(() => presentOfferedCards(offered.value, byId.value, round.value));
+const cards = computed(() => presentation.value.cards);
 const buy = computed(() => state.value?.nextBuy?.rows[0] ?? null);
 // Faille : pas d'augments, le panneau montre ton adversaire de lane et le prochain achat
 const density = computed(() => state.value?.settings.overlayDensity ?? 'compact');
 const threats = computed(() => (state.value?.counters?.threats ?? []).slice(0, 2));
 /** Mode minimal : la seule chose à faire maintenant (meilleure carte lue, sinon prochain achat). */
 const one = computed(() => {
-  const o = offered.value;
   const c = cards.value[0];
-  if (o && !o.unsure && c) return { what: `Prends ${c.name}`, num: c.a ? pct(wrAt(c.a, round.value) + (o.fit?.[c.id]?.delta ?? 0), 0) : '', good: true };
+  if (presentation.value.sure && c) return { what: `Prends ${c.name} · ${c.position}`, num: c.adjusted ? `${(c.score! * 100).toFixed(0)} pts` : pct(c.score, 0), good: true };
   const b = buy.value;
   if (b) return { what: `Achète ${b.item.name}`, num: b.missing ? `−${b.missing}` : 'OK', good: !b.missing };
   return null;
@@ -88,12 +83,12 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
 
     <section v-if="offered" class="cards">
       <div class="rar">Tes cartes</div>
-      <p v-if="offered.unsure" class="doubt">{{ offered.unsure }}</p>
-      <div v-for="(c, i) in cards" :key="c.id" class="row" :class="{ best: !offered.unsure && i === 0, reco: !offered.unsure && i === 0 }">
+      <p v-if="!presentation.sure" class="doubt">{{ offered.unsure || 'Données insuffisantes' }} · aucun conseil</p>
+      <div v-for="(c, i) in cards" :key="c.id" class="row" :class="{ best: presentation.sure && i === 0, reco: presentation.sure && i === 0 }">
         <img v-if="c.a?.icon" @error="hideBroken" :src="c.a.icon" width="22" height="22" alt="" />
         <span v-else />
-        <span class="name">{{ c.name }}<span v-if="myTraps.has(c.id)" class="bad"> · tu perds avec</span><span v-else-if="offered.fit?.[c.id]" :class="offered.fit[c.id].good ? 'good' : 'bad'"> · {{ offered.fit[c.id].good ? 'va avec ton build' : 'pas ton build' }}</span></span>
-        <span class="num">{{ c.a ? pct(wrAt(c.a, round) + (offered.fit?.[c.id]?.delta ?? 0), 0) : '—' }}</span>
+        <span class="name"><span v-if="c.position" class="position">{{ presentation.sure && i === 0 ? 'À prendre · ' : '' }}{{ c.position }}</span>{{ c.name }}<span v-if="myTraps.has(c.id)" class="bad"> · tu perds avec</span><span v-else-if="offered.fit?.[c.id]" :class="offered.fit[c.id].good ? 'good' : 'bad'"> · {{ offered.fit[c.id].good ? 'va avec ton build' : 'pas ton build' }}</span></span>
+        <span class="num" :aria-label="c.adjusted ? 'Score ajusté selon le build' : c.a?.estimated ? 'Winrate estimé' : 'Winrate'">{{ c.score == null ? '—' : c.adjusted ? `${(c.score * 100).toFixed(0)} pts` : pct(c.score, 0) }}</span>
       </div>
     </section>
 
@@ -146,6 +141,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
 .row.best { font-weight: 700; font-size: 13.5px; padding: 7px 6px 7px 14px; background: rgba(200, 170, 110, 0.12); }
 
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.position { display: block; font-size: 11px; color: var(--gold); font-weight: 500; }
 .num { font-weight: 650; }
 .doubt { margin: 0 0 2px; font-size: 11.5px; color: var(--gold); }
 .why { font-size: 11px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

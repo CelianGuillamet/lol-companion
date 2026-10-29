@@ -1,5 +1,17 @@
 # Journal des versions
 
+## v1.55 — 29 oct. 2026 — choisir ses augments d’un coup d’œil
+- **Tes cartes avant les filtres** : la lecture complète affiche d’abord la carte à prendre, puis les deux
+  alternatives. Chaque carte conserve sa position dans le jeu (gauche, milieu, droite) malgré le classement.
+- **Lecture partielle explicite** : pas de classement ni de position supposée quand une carte manque ; accès
+  direct à la liste et à la recherche manuelle. Sans données sur une carte, le tirage n’est pas conseillé.
+- **Statistiques lisibles** : les corrections liées au build sont affichées comme un score en points, distinct
+  d’un winrate. Les estimations restent signalées ; la fiabilité des winrates observés utilise le composant partagé.
+- **Un seul cadre de recommandation** : sur la vue Mayhem large, l’achat reste lisible sans concurrencer les
+  augments. Sur la vue compacte, l’onglet Achat garde sa propre mise en avant. Même présentation des positions
+  et du doute dans le panneau par-dessus le jeu, y compris sa densité minimale.
+- Vérification cloud avec faux client et fixtures ; capture/OCR et comportement natif macOS à vérifier sur Mac.
+
 ## v1.54 — 29 oct. 2026 — navigation, fiche champion, fiabilité
 - **Carte joueur** dans la barre latérale : Riot ID, icône, niveau, rang solo et flex (LP), lus dans ton client ;
   mise à jour après chaque partie.

@@ -36,16 +36,16 @@ const showBuild = ref(false);
           <span v-if="panel" class="faint">Winrate Mayhem {{ pct(panel.championWinrate) }}</span>
         </div>
       </div>
-      <nav v-if="narrow && panel" class="tabs">
-        <button :class="{ on: view === 'augs' }" @click="view = 'augs'">Augments</button>
-        <button :class="{ on: view === 'buy' }" @click="view = 'buy'">Achat</button>
+      <nav v-if="narrow && panel" class="tabs" aria-label="Informations en partie">
+        <button :aria-pressed="view === 'augs'" :class="{ on: view === 'augs' }" @click="view = 'augs'">Augments</button>
+        <button :aria-pressed="view === 'buy'" :class="{ on: view === 'buy' }" @click="view = 'buy'">Achat</button>
       </nav>
     </header>
 
     <div class="cols" :class="{ single: !panel }">
       <AugmentChooser v-if="panel && (!narrow || view === 'augs')" :panel="panel" class="left" />
       <div v-if="!narrow || view === 'buy' || !panel" class="right">
-        <BuyPanel />
+        <BuyPanel :emphasize="!panel || narrow" />
         <div v-if="build" class="more">
           <button class="btn" :aria-expanded="showBuild" @click="showBuild = !showBuild">{{ showBuild ? 'Masquer le build complet' : 'Voir le build complet' }}</button>
           <BuildView v-if="showBuild" compact no-live />

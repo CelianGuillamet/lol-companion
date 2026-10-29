@@ -33,3 +33,26 @@ npm run typecheck
 ```
 
 Code : `src/core/` (logique sans Electron), `electron/` (fenêtres, serveur téléphone), `src/renderer/` (interface).
+
+### Vérifier le choix d’augment dans Electron (cloud Linux)
+
+Après `npm run build`, compiler et lancer le faux client dans un terminal :
+
+```bash
+./node_modules/.bin/esbuild test/demo.ts --bundle --platform=node --format=esm --outfile=dist/demo.mjs
+node dist/demo.mjs ingame
+```
+
+Il affiche un port local à reporter dans `ARAM_DEMO_PORT`. Avec un écran virtuel Xorg déjà démarré
+(par exemple `:101`), lancer dans un autre terminal :
+
+```bash
+DISPLAY=:101 ARAM_DEMO_PORT=<port> ./node_modules/.bin/electron test/augment-chooser-smoke.cjs --no-sandbox --disable-gpu
+```
+
+Le scénario vérifie les positions après classement, le dépliage de la liste et la recherche, puis capture le
+rendu dans le répertoire temporaire affiché. Ajouter `ARAM_TEST_PARTIAL=1` pour une lecture partielle,
+`ARAM_TEST_NO_CARDS=1` pour le repli manuel ou `ARAM_TEST_COMPACT=1` pour la vue second écran à 390 px
+(onglets Augments / Achat). Ces variables se placent avant la commande Electron, comme `DISPLAY`.
+Les données et le profil Electron sont isolés ; ces tests ne valident pas la capture OCR native macOS.
+Les options `--no-sandbox --disable-gpu` concernent ce test dans le conteneur.
