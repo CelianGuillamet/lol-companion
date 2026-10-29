@@ -105,6 +105,13 @@ Toujours regarder ces fichiers avant de deviner un format ou de régler un seuil
 - Confiance : `src/core/stats.ts` (Wilson 95 %). Counter-pick gardé seulement si la borne basse > 50 %.
 - Les stats perso (history.stats / personal(null)) excluent la Faille.
 
+## Composants partagés (v1.54)
+- `src/renderer/ui/Confidence.vue` + `confidenceOf()` (store.ts) : fiabilité d'un winrate, 3 crans selon la
+  demi-largeur de Wilson 95 % (≤ 1,5 pt fiable, ≤ 4 pts indicatif). À utiliser pour TOUT winrate affiché comme reco.
+- `tone(wins, games)` (store.ts) : vert / rouge d'un résultat perso seulement si Wilson 80 % exclut 50 %.
+- `ui/CommandSearch.vue` (⌘K), `ui/PlayerCard.vue` (identité + rangs, LCU `/lol-ranked/v1/current-ranked-stats`).
+- Les écrans sont enveloppés dans un `div.page` pour la transition (certains écrans ont plusieurs racines).
+
 ## Design (v1.50, « Atelier Hextech »)
 Jetons dans src/renderer/styles.css : encre --bg #050d16, panneaux --panel/--panel-2, or patiné --gold #c8aa6e,
 parchemin --text, cristal --blue #0ac8b9 (réservé au vivant / focus). Titres Marcellus (h1 en capitales), interface

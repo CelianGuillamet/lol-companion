@@ -10,7 +10,7 @@ import { History, parseGame, participantStats, hasFullDetail, type RawGame } fro
 import { scoreCandidates, needsOf } from './advisor';
 import { parseSession, readSubset, pickCard, takeFromBench, requestTradeDetailed, type ParsedChampSelect, type RawSession } from './champselect';
 import { applyRunes, applySpells, applyItemSet, bestSpells, recommendedPage } from './loadout';
-import { loadSettings, saveSettings } from './settings';
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './settings';
 import { modeOf, opggModeOf, QUEUE_LABEL, SR_MAP_ID } from './modes';
 import { wilson, verdictOf } from './stats';
 import { Balance, badges } from './balance';
@@ -130,7 +130,7 @@ export class Engine extends EventEmitter {
       nextBuy: null,
       augRound: null,
       stats: { total: 0, byMode: { aram: { games: 0, wins: 0 }, mayhem: { games: 0, wins: 0 }, sr: { games: 0, wins: 0 } }, champions: [], augments: [], recent: [], vsEnemies: [], withAllies: [], duos: [] },
-      settings: { autoRunes: true, autoSpells: true, autoItemSet: false, overlay: true, overlayDisplay: 'auto', panelMode: 'window', notifications: true, autoAccept: false, augmentNotify: false, secondOnTop: false, autoLaunch: 'off', phone: false, phonePort: 8787, phoneToken: '', readCards: true },
+      settings: { ...DEFAULT_SETTINGS },
       log: [],
     };
   }
@@ -272,7 +272,7 @@ export class Engine extends EventEmitter {
     return badges(this.balance.forChampion([m?.name_en ?? '', m?.alias ?? '', this.game.championName(id, '')].filter(Boolean), mode));
   }
 
-  private champName = (id: number): string => this.game.championName(id, this.meta.champion(id)?.name_en);
+  private champName = (id: number, fallback?: string): string => this.game.championName(id, this.meta.champion(id)?.name_en || fallback);
   private augName = (id: number): string => this.game.augmentName(id, this.meta.tierList?.augs[String(id)]?.name_en);
 
   /** Panneau d'augments d'un champion quelconque (page champion de Mes stats). */
@@ -316,6 +316,14 @@ export class Engine extends EventEmitter {
         if (id > 0) out.push({ id, name: this.champName(id), winrate: r.winRate, games: r.games, tier: r.tier, roleRate: r.roleRate });
       }
     return out.sort((a, b) => (a.tier ?? 9) - (b.tier ?? 9) || b.winrate - a.winrate);
+  }
+
+  /** Rôles où le champion est joué (≥ 5 %), du plus joué au moins joué (OP.GG). */
+  async championLanes(championId: number): Promise<{ lane: string; roleRate: number }[]> {
+    const name = this.meta.champion(championId)?.name_en || this.champName(championId);
+    const key = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const rows = (await this.opggData.laneMeta()).get(key) ?? [];
+    return rows.filter((r) => r.roleRate >= 0.05).sort((a, b) => b.roleRate - a.roleRate).map((r) => ({ lane: r.lane, roleRate: r.roleRate }));
   }
 
   /** Ton rôle actuel (Faille), pour ouvrir la tier list sur le bon rôle. */
@@ -498,6 +506,7 @@ export class Engine extends EventEmitter {
       if (!this.recordStartedAt) this.recordStartedAt = Date.now();
       this.recordAttempts++;
       this.recordedGame = await this.recordFinishedGame();
+      if (this.recordedGame) void this.refreshPlayer(); // LP et rang à jour
       if (!this.recordedGame && Date.now() - this.recordStartedAt > 45_000) this.fallbackRecord();
     }
     // Filet de sécurité : la fin de partie est passée sans enregistrement → on relit l'historique du client.
@@ -518,6 +527,7 @@ export class Engine extends EventEmitter {
   }
 
   private setDisconnected(): void {
+    this.state.player = null;
     if (this.state.connection === 'connected') this.log('info', 'Client League fermé');
     this.state.connection = 'searching';
     this.state.phase = null;
@@ -535,9 +545,29 @@ export class Engine extends EventEmitter {
     const me = await this.lcu!.get<{ puuid: string; gameName?: string; displayName?: string }>('/lol-summoner/v1/current-summoner');
     this.puuid = me?.puuid ?? null;
     this.state.summonerName = me?.gameName || me?.displayName || null;
+    void this.refreshPlayer();
     this.refreshStats();
     void this.importHistory();
     void this.checkPatch();
+  }
+
+  /** Carte joueur : Riot ID, icône, niveau et rangs classés (client local, à la connexion et après chaque partie). */
+  async refreshPlayer(): Promise<void> {
+    const lcu = this.lcu;
+    if (!lcu) return;
+    const me = await lcu.get<{ gameName?: string; tagLine?: string; displayName?: string; profileIconId?: number; summonerLevel?: number }>('/lol-summoner/v1/current-summoner');
+    if (!me) return;
+    const ranked = await lcu.get<{ queues?: { queueType?: string; tier?: string; division?: string; leaguePoints?: number; wins?: number; losses?: number }[] }>('/lol-ranked/v1/current-ranked-stats');
+    const QUEUE: Record<string, 'Solo/Duo' | 'Flex'> = { RANKED_SOLO_5x5: 'Solo/Duo', RANKED_FLEX_SR: 'Flex' };
+    this.state.player = {
+      riotId: me.gameName ? `${me.gameName}${me.tagLine ? `#${me.tagLine}` : ''}` : (me.displayName ?? ''),
+      iconUrl: me.profileIconId != null ? `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/${me.profileIconId}.jpg` : null,
+      level: me.summonerLevel ?? null,
+      ranks: (ranked?.queues ?? [])
+        .filter((q) => q.queueType && QUEUE[q.queueType] && q.tier && q.tier !== 'NONE' && q.tier !== '')
+        .map((q) => ({ queue: QUEUE[q.queueType!], tier: q.tier!, division: q.division && q.division !== 'NA' ? q.division : '', lp: q.leaguePoints ?? 0, wins: q.wins ?? 0, losses: q.losses ?? 0 })),
+    };
+    this.emitIfChanged();
   }
 
   private lastPatchCheck = 0;
@@ -1267,11 +1297,11 @@ export class Engine extends EventEmitter {
           out.counterPicks = counterPicksFrom(theirs, (wr, n) => wilson(wr, n).lo, 6)
             .filter((c) => !taken.has(c.id))
             .slice(0, 4)
-            .map((c) => ({ ...c, name: this.champName(c.id), mastery: mastery.get(c.id)?.level ?? null }));
+            .map((c) => ({ ...c, name: this.champName(c.id, c.name), mastery: mastery.get(c.id)?.level ?? null }));
         }
       }
       // Ennemis (tous rôles) qui battent ton champion d'après OP.GG
-      out.dangers = (mine?.losesTo ?? []).filter((c) => enemies.includes(c.id) && c.id !== opp && c.games >= 200).map((c) => ({ id: c.id, name: this.champName(c.id), myWinRate: c.myWinRate, games: c.games }));
+      out.dangers = (mine?.losesTo ?? []).filter((c) => enemies.includes(c.id) && c.id !== opp && c.games >= 200).map((c) => ({ id: c.id, name: this.champName(c.id, c.name), myWinRate: c.myWinRate, games: c.games }));
     }
     return out;
   }
@@ -1317,6 +1347,12 @@ export class Engine extends EventEmitter {
       boots: a?.boots ? [stat(a.boots)] : [],
       starter: (a?.starter?.ids ?? []).map(itemOf),
       skills: a && a.skillMax.length ? { order: a.skillOrder, max: a.skillMax } : null,
+      matchups: a
+        ? {
+            beats: a.beats.filter((c) => c.games >= 200).slice(0, 5).map((c) => ({ id: c.id, name: this.champName(c.id, c.name), winrate: c.myWinRate, games: c.games, ...wilson(c.myWinRate, c.games) })),
+            losesTo: a.losesTo.filter((c) => c.games >= 200).slice(0, 5).map((c) => ({ id: c.id, name: this.champName(c.id, c.name), winrate: c.myWinRate, games: c.games, ...wilson(c.myWinRate, c.games) })),
+          }
+        : undefined,
       balance: [],
       note: a
         ? `${queue} · ${lane ? LANE_LABEL[lane] : ''} : stats OP.GG du patch (${a.games.toLocaleString('fr-FR')} parties, ${Math.round(a.winRate * 100)} % de victoires).`

@@ -2,12 +2,14 @@
 import { QUEUE_LABEL } from '../core/modes';
 // Navigation par moment d'utilisation, pas par fonction :
 // Maintenant (suit la partie) · Préparer (tier list, fiches champion) · Mes parties · Réglages.
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { state, PHASE_LABEL } from './store';
 import NowView from './views/NowView.vue';
 import PrepareView from './views/PrepareView.vue';
 import GamesView from './views/GamesView.vue';
 import SettingsView from './views/SettingsView.vue';
+import PlayerCard from './ui/PlayerCard.vue';
+import CommandSearch from './ui/CommandSearch.vue';
 
 type Tab = 'now' | 'prepare' | 'games' | 'settings';
 const tab = ref<Tab>('now');
@@ -27,6 +29,23 @@ watch(
   },
 );
 
+// Raccourcis : ⌘1 à ⌘4 pour les écrans, ⌘K pour la recherche
+const searching = ref(false);
+const ORDER: Tab[] = ['now', 'prepare', 'games', 'settings'];
+function onKey(e: KeyboardEvent) {
+  if (!e.metaKey || e.altKey || e.ctrlKey) return;
+  if (e.key === 'k') {
+    searching.value = !searching.value;
+    e.preventDefault();
+  } else if (/^[1-4]$/.test(e.key)) {
+    tab.value = ORDER[Number(e.key) - 1];
+    searching.value = false;
+    e.preventDefault();
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKey));
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'now', label: 'Maintenant', icon: 'M12 3a9 9 0 100 18 9 9 0 000-18zm0 3a6 6 0 110 12 6 6 0 010-12zm0 3a3 3 0 100 6 3 3 0 000-6z' },
   { id: 'prepare', label: 'Préparer', icon: 'M4 4h16v4H4zM4 10h11v4H4zM4 16h7v4H4z' },
@@ -42,17 +61,23 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
         <span class="mark" aria-hidden="true"><span class="gem" /></span>
         <span class="brand-name">ARAM Companion</span>
       </div>
-      <nav>
-        <button v-for="t in tabs" :key="t.id" class="nav" :class="{ on: tab === t.id }" :aria-current="tab === t.id ? 'page' : undefined" @click="tab = t.id">
+      <button class="search" title="Rechercher un champion ou un écran (⌘K)" @click="searching = true">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M10 3a7 7 0 015.6 11.2l4.6 4.6-1.4 1.4-4.6-4.6A7 7 0 1110 3zm0 2a5 5 0 100 10 5 5 0 000-10z" fill="currentColor" /></svg>
+        <span>Rechercher</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <nav aria-label="Écrans">
+        <button v-for="(t, i) in tabs" :key="t.id" :title="`${t.label} (⌘${i + 1})`" class="nav" :class="{ on: tab === t.id }" :aria-current="tab === t.id ? 'page' : undefined" @click="tab = t.id">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path :d="t.icon" fill="currentColor" /></svg>
           <span>{{ t.label }}</span>
           <span v-if="t.id === 'now' && live" class="live" title="Partie en cours" />
         </button>
       </nav>
       <div class="side-foot">
+        <PlayerCard />
         <div class="conn" :class="s.connection">
           <span class="dot" />
-          <span>{{ s.connection === 'connected' ? (s.summonerName ?? 'Client connecté') : 'Client League fermé' }}</span>
+          <span>{{ s.connection === 'connected' ? 'Client connecté' : 'Client League fermé' }}</span>
         </div>
         <div class="phase">
           {{ s.phase && s.phase !== 'None' ? (PHASE_LABEL[s.phase] ?? s.phase) : 'Pas de partie' }}<template v-if="modeLabel && s.phase && s.phase !== 'None'"> en {{ modeLabel }}</template>
@@ -63,11 +88,17 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
     </aside>
 
     <main class="main">
-      <NowView v-if="tab === 'now'" />
-      <PrepareView v-else-if="tab === 'prepare'" />
-      <GamesView v-else-if="tab === 'games'" />
-      <SettingsView v-else />
+      <!-- Enveloppe : la transition a toujours un élément racine (certains écrans en ont plusieurs) -->
+      <Transition name="page" mode="out-in">
+        <div :key="tab" class="page">
+          <NowView v-if="tab === 'now'" />
+          <PrepareView v-else-if="tab === 'prepare'" />
+          <GamesView v-else-if="tab === 'games'" />
+          <SettingsView v-else />
+        </div>
+      </Transition>
     </main>
+    <CommandSearch v-if="searching" @close="searching = false" @go="(t) => (tab = t as Tab)" />
   </div>
 </template>
 
@@ -106,4 +137,12 @@ nav { display: flex; flex-direction: column; }
 .phase { color: var(--text); font-weight: 600; }
 .small { font-size: 12px; }
 .main { min-width: 0; min-height: 0; overflow: auto; }
+.page { height: 100%; }
+.search { display: flex; align-items: center; gap: 8px; margin: -8px 14px 0; padding: 7px 10px; border: 1px solid var(--line); background: rgba(10, 21, 32, 0.6); color: var(--faint); font: inherit; font-size: 13px; cursor: pointer; }
+.search:hover { color: var(--text); border-color: var(--rule); }
+.search kbd { margin-left: auto; font: inherit; font-size: 11px; border: 1px solid var(--line); padding: 0 5px; }
+/* Transition d'écran : courte, sans mouvement si « Réduire les animations » (règle globale dans styles.css) */
+.page-enter-active, .page-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.page-enter-from { opacity: 0; transform: translateY(4px); }
+.page-leave-to { opacity: 0; }
 </style>

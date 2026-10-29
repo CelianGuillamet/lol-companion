@@ -15,6 +15,19 @@ export interface RawParticipant {
   spell1Id?: number;
   spell2Id?: number;
   stats?: Record<string, number | boolean>;
+  /** Historique du client : couloir et rôle (« MIDDLE » / « SOLO », « BOTTOM » / « DUO_SUPPORT »…). */
+  timeline?: { lane?: string; role?: string };
+}
+
+/** Rôle Faille d'après la timeline du client ; null si absent ou ambigu (pas de rôle inventé). */
+export function laneOfTimeline(t: RawParticipant['timeline']): string | null {
+  const lane = String(t?.lane ?? '').toUpperCase();
+  const role = String(t?.role ?? '').toUpperCase();
+  if (lane === 'TOP') return 'top';
+  if (lane === 'JUNGLE') return 'jungle';
+  if (lane === 'MIDDLE' || lane === 'MID') return 'mid';
+  if (lane === 'BOTTOM' || lane === 'BOT') return role === 'DUO_SUPPORT' || role === 'SUPPORT' ? 'support' : role === 'DUO_CARRY' || role === 'CARRY' ? 'adc' : null;
+  return null;
 }
 
 export interface RawGame {
@@ -86,6 +99,7 @@ export function parseGame(game: RawGame, puuid: string): HistoryGame | null {
     deaths: st.deaths,
     assists: st.assists,
     augments: st.augments,
+    ...(mode === 'sr' && laneOfTimeline(me.timeline) ? { position: laneOfTimeline(me.timeline)! } : {}),
   };
   if (!me.stats || !('goldEarned' in me.stats)) return base; // ancien format / données partielles
   const others = (game.participants ?? []).filter((p) => p !== me);

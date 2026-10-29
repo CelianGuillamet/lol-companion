@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue';
 import { state, championIcon, hideBroken } from '../store';
 import BuildView from './BuildView.vue';
+import Confidence from '../ui/Confidence.vue';
 import type { ChampSelectView, MatchupView } from '../../core/types';
 
 const props = defineProps<{ cs: ChampSelectView }>();
@@ -36,8 +37,8 @@ async function loadout() {
         <h1>{{ sr.me ? sr.me.name : 'Choisis ton champion' }}</h1>
         <p v-if="sr.me" class="num">
           {{ p(sr.me.winRate) }} de victoires sur {{ fmt(sr.me.games) }} parties
-          <span class="faint">(95 % : {{ p(sr.me.lo) }}–{{ p(sr.me.hi) }})</span>
-          <span v-if="sr.me.tier" class="tier">tier {{ sr.me.tier }}</span>
+          <Confidence :winrate="sr.me.winRate" :games="sr.me.games" />
+          <span v-if="sr.me.tier" class="tier" :title="`Palier OP.GG ${sr.me.tier} (1 = le plus fort)`">palier {{ ['S', 'S', 'A', 'B', 'C', 'D'][sr.me.tier] ?? 'D' }}</span>
         </p>
         <p v-if="sr.note" class="faint small">{{ sr.note }}</p>
       </div>
@@ -52,6 +53,7 @@ async function loadout() {
         <div v-if="sr.matchup.games" class="num">
           {{ p(sr.matchup.myWinRate) }} sur {{ fmt(sr.matchup.games) }} parties
           <span class="faint">({{ p(sr.matchup.lo) }}–{{ p(sr.matchup.hi) }})</span>
+          <Confidence :winrate="sr.matchup.myWinRate" :games="sr.matchup.games" />
         </div>
         <div class="small" :class="sr.matchup.verdict === 'favorable' ? 'good' : sr.matchup.verdict === 'défavorable' ? 'bad' : 'muted'">{{ VERDICT[sr.matchup.verdict] }}</div>
       </div>

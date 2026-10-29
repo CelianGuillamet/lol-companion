@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { QUEUE_LABEL } from '../../core/modes';
+const BAR: Record<string, string> = { good: 'up', bad: 'down', '': 'mid' };
+const LANE_FR: Record<string, string> = { top: 'haut', jungle: 'jungle', mid: 'milieu', adc: 'tireur', support: 'support' };
 import { computed, ref, watch } from 'vue';
 import { tone, state, championIcon, pct, hideBroken } from '../store';
 import type { GameDetail, HistoryEntry } from '../../core/types';
@@ -205,7 +207,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
           <div class="weeks">
             <div v-for="w in weeks" :key="w.start" class="wk" :title="`Semaine du ${weekLabel(w.start)} : ${w.wins}V ${w.games - w.wins}D`">
               <span class="wr num" :class="tone(w.wins, w.games)">{{ Math.round((w.wins / w.games) * 100) }}</span>
-              <span class="wbar"><span :style="{ height: `${(w.games / maxWeekGames) * 100}%` }" :class="w.wins / w.games >= 0.5 ? 'up' : 'down'" /></span>
+              <span class="wbar"><span :style="{ height: `${(w.games / maxWeekGames) * 100}%` }" :class="BAR[tone(w.wins, w.games)]" /></span>
               <span class="faint tiny">{{ weekLabel(w.start) }}</span>
             </div>
           </div>
@@ -215,7 +217,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
           <h2>Selon la partie de la session</h2>
           <div v-for="b in sessionRank" :key="b.label" class="srow">
             <span class="small">{{ b.label }} partie</span>
-            <span class="sbar"><span :style="{ width: `${(b.wins / b.games) * 100}%` }" :class="b.wins / b.games >= 0.5 ? 'up' : 'down'" /></span>
+            <span class="sbar"><span :style="{ width: `${(b.wins / b.games) * 100}%` }" :class="BAR[tone(b.wins, b.games)]" /></span>
             <span class="num small" :class="tone(b.wins, b.games)">{{ pct(b.wins / b.games, 0) }}</span>
             <span class="faint small num">{{ b.games }}</span>
           </div>
@@ -232,7 +234,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
               <span v-if="g.level" class="lvl">{{ g.level }}</span>
             </div>
             <div class="meta">
-              <div class="res">{{ g.win ? 'Victoire' : 'Défaite' }} <span class="faint">· {{ g.mode === 'mayhem' ? 'Mayhem' : g.mode === 'sr' ? (QUEUE_LABEL[g.queueId] ?? 'Faille') : 'ARAM' }}</span><span v-if="g.headliner" class="hl">{{ g.headliner }}</span></div>
+              <div class="res">{{ g.win ? 'Victoire' : 'Défaite' }} <span class="faint">· {{ g.mode === 'mayhem' ? 'Mayhem' : g.mode === 'sr' ? (QUEUE_LABEL[g.queueId] ?? 'Faille') : 'ARAM' }}<template v-if="g.position"> · {{ LANE_FR[g.position] }}</template></span><span v-if="g.headliner" class="hl">{{ g.headliner }}</span></div>
               <div class="faint small">{{ when(g.createdAt) }} · {{ dur(g.durationSec) }}</div>
             </div>
             <div class="kda">
@@ -333,7 +335,8 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
 .lvl { position: absolute; right: -4px; bottom: -4px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); font-size: 10px; padding: 0 4px; }
 .kda { font-size: 13px; }
 .multi { font-size: 11px; color: var(--gold); font-weight: 650; }
-.items { display: flex; gap: 3px; flex-wrap: wrap; }
+.items { display: grid; grid-template-columns: repeat(4, 26px); gap: 3px; align-content: center; }
+.items .faint { grid-column: 1 / -1; }
 .ic { border-radius: var(--radius); background: var(--panel-2); }
 .augs { display: flex; gap: 3px; }
 .augs img { border-radius: var(--radius); }
@@ -364,6 +367,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
 .wk .wbar span { display: block; width: 100%; border-radius: var(--radius) 4px 0 0; }
 .up { background: var(--good); }
 .down { background: var(--bad); }
+.mid { background: #5b6b7a; } /* écart pas significatif sur l'échantillon */
 .tiny { font-size: 10px; white-space: nowrap; }
 .srow { display: grid; grid-template-columns: 90px 1fr 44px 28px; gap: 8px; align-items: center; }
 .sbar { height: 10px; background: var(--panel-2); border-radius: var(--radius); overflow: hidden; display: flex; }

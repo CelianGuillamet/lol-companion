@@ -23,6 +23,7 @@ const api: Api = {
   championBuild: (id: number, lane?: string) => ipcRenderer.invoke('championBuild', id, lane),
   laneTier: (lane: string) => ipcRenderer.invoke('laneTier', lane),
   currentLane: () => ipcRenderer.invoke('currentLane'),
+  championLanes: (id: number) => ipcRenderer.invoke('championLanes', id),
   listChampions: () => ipcRenderer.invoke('listChampions'),
   balanceChanges: () => ipcRenderer.invoke('balanceChanges'),
   cardReader: (action?: boolean | 'request' | 'settings') => ipcRenderer.invoke('cardReader', action ?? false),

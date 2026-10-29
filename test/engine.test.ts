@@ -49,6 +49,8 @@ describe('moteur contre un faux client League', () => {
     await settle();
     expect(engine.state.connection).toBe('connected');
     expect(engine.state.summonerName).toBe('Celian');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(engine.state.player).toMatchObject({ riotId: 'Celian#EUW', level: 214, ranks: [{ queue: 'Solo/Duo', tier: 'GOLD', division: 'II', lp: 47 }] });
     expect(engine.state.data.patch).toBe('16.21');
     expect(engine.state.stats.total).toBe(2); // la partie classée (420) est ignorée
     expect(engine.state.stats.augments.find((a) => a.id === 1058)?.name).toBe('Poing mystique');

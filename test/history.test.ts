@@ -71,3 +71,14 @@ describe('noms d’augments non traduits', () => {
     expect(g.augmentName(9, 'Power Chord')).toBe('Power Chord');
   });
 });
+
+import { laneOfTimeline } from '../src/core/history';
+describe('rôle Faille dans l’historique', () => {
+  it('lit la timeline du client sans inventer', () => {
+    expect(laneOfTimeline({ lane: 'MIDDLE', role: 'SOLO' })).toBe('mid');
+    expect(laneOfTimeline({ lane: 'BOTTOM', role: 'DUO_SUPPORT' })).toBe('support');
+    expect(laneOfTimeline({ lane: 'BOTTOM', role: 'DUO_CARRY' })).toBe('adc');
+    expect(laneOfTimeline({ lane: 'BOTTOM', role: 'DUO' })).toBeNull();
+    expect(laneOfTimeline(undefined)).toBeNull();
+  });
+});

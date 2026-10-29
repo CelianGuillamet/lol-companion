@@ -17,7 +17,7 @@ export async function explore(id: number | null, lane: string | null = null): Pr
     explored.value = null;
     return;
   }
-  exploring.value = true;
+  exploring.value = true; // la fiche en cours reste affichée (estompée) pendant le chargement d'un autre rôle
   const [augments, build] = lane
     ? [null, await window.api.championBuild(id, lane)]
     : await Promise.all([window.api.championAugments(id), window.api.championBuild(id)]);

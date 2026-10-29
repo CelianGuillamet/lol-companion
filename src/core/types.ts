@@ -146,6 +146,17 @@ export interface BuildPanel {
   skills?: { order: string[]; max: string[] } | null;
   lane?: string | null;
   source?: string;
+  /** Faille : contre qui ce champion gagne / perd le plus dans ce rôle (OP.GG), avec la borne de confiance. */
+  matchups?: { beats: MatchupRow[]; losesTo: MatchupRow[] };
+}
+
+export interface MatchupRow {
+  id: number;
+  name: string;
+  winrate: number;
+  games: number;
+  lo: number;
+  hi: number;
 }
 
 export interface AugmentPanel {
@@ -170,6 +181,8 @@ export interface HistoryGame {
   gameId: number;
   queueId: number;
   mode: Mode;
+  /** Faille : top / jungle / mid / adc / support (timeline du client). */
+  position?: string;
   createdAt: number; // ms epoch
   durationSec: number;
   championId: number;
@@ -287,6 +300,8 @@ export interface Settings {
   phonePort: number;
   phoneToken: string; // jeton de l'URL du téléphone (généré au premier lancement)
   readCards: boolean; // lit les 3 cartes d'augments à l'écran (permission « Enregistrement de l'écran »)
+  /** Panneau par-dessus le jeu : complet (+ menaces d'en face), compact (par défaut) ou minimal (une ligne). */
+  overlayDensity: 'full' | 'compact' | 'minimal';
 }
 
 /** Les 3 cartes d'augments lues à l'écran (de gauche à droite). */
@@ -310,8 +325,17 @@ export interface LogEntry {
   text: string;
 }
 
+/** Ton identité dans le client (Riot ID, icône, niveau, rangs classés) ; null client fermé. */
+export interface PlayerCard {
+  riotId: string;
+  iconUrl: string | null;
+  level: number | null;
+  ranks: { queue: 'Solo/Duo' | 'Flex'; tier: string; division: string; lp: number; wins: number; losses: number }[];
+}
+
 export interface AppState {
   connection: Connection;
+  player?: PlayerCard | null;
   phase: string | null;
   mode: Mode | null;
   queueId: number | null;
@@ -351,6 +375,7 @@ export interface Api {
   championBuild(championId: number, lane?: string): Promise<BuildPanel | null>;
   laneTier(lane: string): Promise<{ id: number; name: string; winrate: number; games: number; tier: number | null; roleRate: number }[]>;
   currentLane(): Promise<string | null>;
+  championLanes(championId: number): Promise<{ lane: string; roleRate: number }[]>;
   balanceChanges(): Promise<{ championId: number; name: string; at: number; text: string; played: number }[]>;
   listChampions(): Promise<{ id: number; name: string; winrate: number | null; games: number; tags: string[] }[]>;
 }

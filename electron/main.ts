@@ -440,6 +440,7 @@ function registerIpc(): void {
   ipcMain.handle('championBuild', (_e, id: number, lane?: string) => engine.championBuild(Number(id), typeof lane === 'string' ? lane : undefined));
   ipcMain.handle('laneTier', (_e, lane: string) => engine.laneTier(String(lane)));
   ipcMain.handle('currentLane', () => engine.currentLane());
+  ipcMain.handle('championLanes', (_e, id: number) => engine.championLanes(Number(id)));
   ipcMain.handle('listChampions', () => engine.listChampions());
   ipcMain.handle('balanceChanges', () => engine.balanceChanges());
   ipcMain.handle('cardReader', async (_e, test: boolean | 'request' | 'settings') => {

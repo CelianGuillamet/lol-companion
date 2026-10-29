@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayDisplay: 'auto',
   panelMode: 'window',
   notifications: true, autoAccept: false, augmentNotify: false, secondOnTop: false, autoLaunch: 'off', phone: false, phonePort: 8787, phoneToken: '',
+  overlayDensity: 'compact',
   readCards: true, // validé par Celian (discovery 2026-10-28) : rien n'est gardé ni envoyé
 };
 

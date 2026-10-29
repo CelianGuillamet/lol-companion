@@ -1,5 +1,22 @@
 # Journal des versions
 
+## v1.54 — 29 oct. 2026 — navigation, fiche champion, fiabilité
+- **Carte joueur** dans la barre latérale : Riot ID, icône, niveau, rang solo et flex (LP), lus dans ton client ;
+  mise à jour après chaque partie.
+- **Recherche ⌘K** : un champion ouvre sa fiche (Mayhem, ou Faille sur son rôle principal si tu joues la Faille),
+  ou un écran. Raccourcis **⌘1 à ⌘4** pour les écrans (rappelés au survol). Transitions d'écran courtes,
+  coupées par « Réduire les animations ».
+- **Fiche champion** : bascule Mayhem / rôles Faille sans revenir à la liste (seulement les rôles où le
+  champion est joué) ; en Faille, « Il bat » / « Il perd contre » avec la fiabilité de chaque matchup.
+- **Indicateur de fiabilité** (3 crans : fiable, indicatif, échantillon faible) sur les builds, objets,
+  bottes, matchups et ton champion au champ select, d'après l'intervalle de confiance à 95 %.
+- **Panneau par-dessus le jeu : densité au choix** (Réglages) : complet (+ menaces d'en face), compact,
+  minimal (une seule ligne : la carte à prendre, sinon l'achat).
+- Historique : rôle affiché pour les parties de Faille (d'après le client), objets sur 2 lignes maximum, barres
+  « par semaine » / « par partie de session » grises quand l'écart n'est pas significatif.
+- Noms de champions, objets et runes d'OP.GG affichés quand le client est fermé (plus de « #18 »).
+- Palier OP.GG affiché en lettre (S, A, B…) comme dans la tier list.
+
 ## v1.53 — 29 oct. 2026 — audit des écrans
 - **Tier list Faille par rôle** (Préparer → Faille) : champions de chaque rôle, palier OP.GG, winrate, parties
   et part de jeu dans le rôle ; s'ouvre sur ton rôle en cours. Un clic ouvre le build du rôle (runes, sorts,

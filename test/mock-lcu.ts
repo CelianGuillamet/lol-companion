@@ -78,7 +78,9 @@ export async function startMockLcu(token = 'secret') {
         case route === 'GET /lol-gameflow/v1/session':
           return send(200, { gameData: { gameId: (state as unknown as { gameId?: number }).gameId, queue: state.queue, playerChampionSelections: state.selections, ...(state as unknown as { teams?: object }).teams } });
         case route === 'GET /lol-summoner/v1/current-summoner':
-          return send(200, { puuid: PUUID, gameName: 'Celian', summonerId: 42 });
+          return send(200, { puuid: PUUID, gameName: 'Celian', tagLine: 'EUW', summonerId: 42, profileIconId: 4568, summonerLevel: 214 });
+        case route === 'GET /lol-ranked/v1/current-ranked-stats':
+          return send(200, { queues: [{ queueType: 'RANKED_SOLO_5x5', tier: 'GOLD', division: 'II', leaguePoints: 47, wins: 31, losses: 28 }, { queueType: 'RANKED_FLEX_SR', tier: '', division: 'NA' }] });
         case route === 'GET /lol-game-data/assets/v1/champion-summary.json':
           return send(200, [
             { id: -1, name: 'Aucun', alias: 'None' },

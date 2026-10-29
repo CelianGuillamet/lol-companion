@@ -34,12 +34,27 @@ const cards = computed(() => {
 });
 const buy = computed(() => state.value?.nextBuy?.rows[0] ?? null);
 // Faille : pas d'augments, le panneau montre ton adversaire de lane et le prochain achat
+const density = computed(() => state.value?.settings.overlayDensity ?? 'compact');
+const threats = computed(() => (state.value?.counters?.threats ?? []).slice(0, 2));
+/** Mode minimal : la seule chose à faire maintenant (meilleure carte lue, sinon prochain achat). */
+const one = computed(() => {
+  const o = offered.value;
+  const c = cards.value[0];
+  if (o && !o.unsure && c) return { what: `Prends ${c.name}`, num: c.a ? pct(wrAt(c.a, round.value) + (o.fit?.[c.id]?.delta ?? 0), 0) : '', good: true };
+  const b = buy.value;
+  if (b) return { what: `Achète ${b.item.name}`, num: b.missing ? `−${b.missing}` : 'OK', good: !b.missing };
+  return null;
+});
 const sr = computed(() => (state.value?.mode === 'sr' && !panel.value ? { lane: state.value.counters?.lane ?? null, build: state.value.build } : null));
 const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t.id)));
 </script>
 
 <template>
-  <div v-if="sr" class="ov">
+  <div v-if="density === 'minimal' && (sr || panel)" class="ov mini" aria-live="polite">
+    <span class="name">{{ one?.what ?? (sr?.lane ? `contre ${sr.lane.opponent.name}` : 'En attente…') }}</span>
+    <span v-if="one" class="num" :class="one.good ? 'good' : 'bad'">{{ one.num }}</span>
+  </div>
+  <div v-else-if="sr" class="ov">
     <div class="title">
       <strong>{{ sr.build?.championName ?? 'Faille' }}</strong>
       <span class="faint">{{ sr.build?.lane ?? '' }}</span>
@@ -59,6 +74,10 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
       </div>
       <div class="why faint">{{ buy.why }}</div>
     </div>
+    <section v-if="density === 'full' && threats.length" class="th">
+      <div class="rar">En face</div>
+      <div v-for="t in threats" :key="t.key" class="why"><b>{{ t.title }}</b> · {{ t.items.slice(0, 2).map((i) => i.name).join(', ') }}</div>
+    </section>
     <div class="hint faint">⌘⇧A masquer</div>
   </div>
   <div v-else-if="panel" class="ov">
@@ -99,6 +118,10 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
       </div>
       <div class="why faint">{{ buy.why }}</div>
     </div>
+    <section v-if="density === 'full' && threats.length" class="th">
+      <div class="rar">En face</div>
+      <div v-for="t in threats" :key="t.key" class="why"><b>{{ t.title }}</b> · {{ t.items.slice(0, 2).map((i) => i.name).join(', ') }}</div>
+    </section>
     <div class="hint faint">⌘⇧A masquer · ⌘⇧R relire les cartes</div>
   </div>
 </template>
@@ -127,4 +150,6 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
 .doubt { margin: 0 0 2px; font-size: 11.5px; color: var(--gold); }
 .why { font-size: 11px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hint { font-size: 10.5px; text-align: right; }
+.mini { flex-direction: row; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 13px; font-weight: 650; }
+.th .why { white-space: normal; }
 </style>

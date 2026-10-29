@@ -33,6 +33,7 @@ function httpApi(): Api {
     listChampions: async () => [],
     laneTier: async () => [],
     currentLane: async () => null,
+    championLanes: async () => [],
     balanceChanges: async () => [],
     pickChampion: readOnly,
     applyLoadout: readOnly,
@@ -89,6 +90,19 @@ export const tone = (wins: number, games: number): string => {
   if (!games) return '';
   const { lo, hi } = wilson(wins / games, games, 1.2816);
   return lo > 0.5 ? 'good' : hi < 0.5 ? 'bad' : '';
+};
+
+/**
+ * Fiabilité d'un winrate selon la demi-largeur de son intervalle à 95 % : ≤ 1,5 point = fiable, ≤ 4 points =
+ * indicatif, au-delà = échantillon faible.
+ */
+export const confidenceOf = (winrate: number, games: number) => {
+  const { lo, hi } = wilson(winrate, games);
+  const half = ((hi - lo) / 2) * 100;
+  const level = !games ? 1 : half <= 1.5 ? 3 : half <= 4 ? 2 : 1;
+  const label = level === 3 ? 'fiable' : level === 2 ? 'indicatif' : 'échantillon faible';
+  const n = games.toLocaleString('fr-FR');
+  return { level, label, title: games ? `± ${half.toFixed(1).replace('.', ',')} points (95 %) sur ${n} parties` : 'aucune partie' };
 };
 
 export const hideBroken = (e: Event) => ((e.target as HTMLImageElement).style.visibility = 'hidden');

@@ -52,6 +52,10 @@ function setAutoLaunch(e: Event) {
   void window.api.setSettings({ autoLaunch: (e.target as HTMLSelectElement).value as Settings['autoLaunch'] });
 }
 
+function setDensity(e: Event) {
+  void window.api.setSettings({ overlayDensity: (e.target as HTMLSelectElement).value as Settings['overlayDensity'] });
+}
+
 function setMode(e: Event) {
   void window.api.setSettings({ panelMode: (e.target as HTMLSelectElement).value as Settings['panelMode'] });
 }
@@ -104,6 +108,14 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2
         <select id="pmode" class="select" :value="s.settings.panelMode" @change="setMode">
           <option value="window">Fenêtre sur un autre écran (recommandé avec plusieurs écrans)</option>
           <option value="overlay">Panneau par-dessus le jeu</option>
+        </select>
+      </div>
+      <div v-if="s.settings.panelMode === 'overlay'" class="row2 mode">
+        <label class="faint small" for="dens">Densité</label>
+        <select id="dens" class="select" :value="s.settings.overlayDensity" @change="setDensity">
+          <option value="full">Complet : cartes ou augments, achat, menaces d’en face</option>
+          <option value="compact">Compact : cartes ou augments et achat</option>
+          <option value="minimal">Minimal : une seule ligne (meilleure carte, sinon prochain achat)</option>
         </select>
       </div>
       <div class="row2">

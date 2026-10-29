@@ -63,7 +63,7 @@ const phoneOff = computed(() => state.value && !state.value.settings.phone);
         <div class="pips">
           <span v-for="g in form" :key="g.gameId" class="pip" :class="g.win ? 'w' : 'l'" role="img" :aria-label="g.win ? 'victoire' : 'défaite'" :title="`${g.championName} · ${g.win ? 'victoire' : 'défaite'}`" />
         </div>
-        <div class="big num" :class="last10 != null && last10 >= 0.5 ? 'good' : 'bad'">{{ pct(last10, 0) }}</div>
+        <div class="big num" :class="last10 != null ? tone(Math.round(last10 * form.length), form.length) : ''">{{ pct(last10, 0) }}</div>
         <div class="faint small">sur tes {{ Math.min(10, games.length) }} dernières parties</div>
         <div v-if="today" class="small today">
           Aujourd’hui : <strong :class="tone(today.w, today.n)">{{ today.w }}V {{ today.n - today.w }}D</strong>

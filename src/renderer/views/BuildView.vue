@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { state, championIcon, pct, hideBroken } from '../store';
 import ChampionPicker from '../ChampionPicker.vue';
+import Confidence from '../ui/Confidence.vue';
 import { explored } from '../explore';
 import type { BuildPanel } from '../../core/types';
 
@@ -129,12 +130,14 @@ const ROLE = { ad: 'build AD', ap: 'build AP', tank: 'build tank' } as const;
           <div v-for="o in c.options" :key="o.id" class="opt" :title="`${o.name} · ${pct(o.winrate)} sur ${o.games} parties`">
             <img @error="hideBroken" :src="o.icon ?? ''" width="34" height="34" class="ic" alt="" />
             <span class="num small" :class="o.winrate >= c.winrate ? 'good' : 'muted'">{{ pct(o.winrate, 0) }}</span>
+            <Confidence :winrate="o.winrate" :games="o.games" compact />
           </div>
         </div>
         <div class="meta">
           <div class="cname">{{ c.core.map((x) => x.name).join(' + ') }}</div>
           <div class="faint small">{{ c.name }}</div>
           <div class="num"><strong>{{ pct(c.winrate) }}</strong> <span class="faint small">· {{ c.games.toLocaleString('fr-FR') }} parties</span></div>
+          <Confidence :winrate="c.winrate" :games="c.games" />
         </div>
       </div>
     </section>
@@ -147,6 +150,7 @@ const ROLE = { ad: 'build AD', ap: 'build AP', tank: 'build tank' } as const;
           <div>
             <div class="small">{{ o.name }}</div>
             <div class="num faint small">{{ pct(o.winrate) }} · {{ o.games.toLocaleString('fr-FR') }}</div>
+            <Confidence :winrate="o.winrate" :games="o.games" />
           </div>
         </div>
       </div>
@@ -160,6 +164,7 @@ const ROLE = { ad: 'build AD', ap: 'build AP', tank: 'build tank' } as const;
           <div>
             <div class="small">{{ o.name }}</div>
             <div class="num faint small">{{ pct(o.winrate) }} · {{ o.games.toLocaleString('fr-FR') }}</div>
+            <Confidence :winrate="o.winrate" :games="o.games" />
           </div>
         </div>
       </div>
