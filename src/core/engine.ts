@@ -19,6 +19,7 @@ import { buildRole, championTags, compFromItems, counterItemsFor, damageKind, en
 import type { BalanceBadge } from './balance';
 import type { CardCandidate, CardRead } from './cardmatch';
 import { Usage, followStat } from './usage';
+import { headlinerFromCards, historyHeadliner, type HeadlinerInfo } from './headliner';
 import { AugmentInfo, buildProfile, fitOf } from './augfit';
 import { OpggClient, OpggData, buildArgs, laneOf, LANE_LABEL, matchupFrom, counterPicksFrom, type Lane, type OpggAnalysis } from './opgg';
 import type { MatchupView, SrSelect, AppState, CounterPanel, NextBuyPanel, AugmentPanel, AugmentRow, BuildPanel, ChampSelectView, GameDetail, HistoryEntry, HistoryGame, LogEntry, Mode, Rarity, Settings, StatItem } from './types';
@@ -355,7 +356,7 @@ export class Engine extends EventEmitter {
       ...g,
       championName: this.champName(g.championId),
       championWr: this.meta.champion(g.championId)?.wr ?? null,
-      headliner: this.headlinerOf(g.augments),
+      headliner: historyHeadliner(g, this.headlinerOf(g.augments)),
       augmentIcons: g.augments.filter((id) => !this.game.isHeadlinerMarker(id)).map((id) => ({ id, name: this.augName(id), icon: this.game.augmentIcon(id) ?? this.meta.augmentIconUrl(id) })),
       itemIcons: (g.items ?? []).map((id) => this.game.item(id)),
     }));
@@ -484,6 +485,7 @@ export class Engine extends EventEmitter {
       this.recordStartedAt = 0;
       this.offersThisGame.clear();
       this.missesThisGame.clear();
+      this.state.headliner = null;
       this.lastBuy = null;
       this.skippedBuys.clear();
       this.probedRounds.clear();
@@ -519,6 +521,7 @@ export class Engine extends EventEmitter {
       this.state.counters = null;
       this.state.nextBuy = null;
       this.state.augRound = null;
+      this.state.headliner = null;
       this.myChampionId = 0;
       this.lane = null;
       this.loadoutDoneFor = 0;
@@ -1389,6 +1392,7 @@ export class Engine extends EventEmitter {
     const detail = await lcu.get<Parameters<typeof parseGame>[0]>(`/lol-match-history/v1/games/${gameId}`);
     const game = detail ? parseGame(detail, this.puuid) : null;
     if (!game) return false;
+    if (this.state.headliner && game.mode === 'mayhem') game.headliner = this.state.headliner.key;
     await this.history.add(game);
     this.recordPicks(gameId, game.augments, game.win);
     this.log('success', `Partie enregistrée : ${this.champName(game.championId)} (${game.win ? 'victoire' : 'défaite'}, ${game.augments.length} augments)`);
@@ -1535,7 +1539,18 @@ export class Engine extends EventEmitter {
     // Un même niveau peut proposer 2 choix (augment normal puis carte headliner, ex. Pentakill HEAVY / POWER / THRASH) :
     // on les garde séparément, sinon le 2e écrasait le 1er (vu en vraie partie le 28 oct.)
     const kind = read.ids.every((id) => id >= 3170 && id < 3200) ? 'headliner' : 'augment';
+    const hl = read.unsure ? null : headlinerFromCards(read.ids);
+    if (hl) this.setHeadliner(hl, 'cartes');
     if (!read.unsure) this.offersThisGame.set(`${round ?? 0}:${kind}`, { round, ids: read.ids, best });
+    this.emitIfChanged();
+  }
+
+  /** Headliner reconnu en partie (bannière lue à l'écran, ou cartes propres au headliner). Le premier reconnu reste. */
+  setHeadliner(h: HeadlinerInfo, source: 'écran' | 'cartes', text?: string): void {
+    if (this.state.headliner) return;
+    this.state.headliner = { key: h.key, name: h.name, source, tips: h.tips };
+    this.persistLog('jeu', `Headliner : ${h.name} (${source === 'écran' ? `lu à l'écran : « ${text ?? h.name} »` : 'd’après les cartes'})`);
+    this.usage.add({ type: 'headliner_seen', at: Date.now(), key: h.key, source, ...(text ? { text } : {}) });
     this.emitIfChanged();
   }
 

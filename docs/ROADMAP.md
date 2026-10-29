@@ -6,12 +6,12 @@ Les fonctions pensées pour la Faille (jungle, wards, lanes, ranked) n'entrent p
 Prendre le premier item non coché de la priorité la plus haute, sauf s'il est bloqué. Chaque item a sa
 « preuve de fini ». Ajouter en bas ce qu'on découvre.
 
-## Ce qui existe (v1.37)
+## Ce qui existe (v1.55)
 
 Champ select (cartes + banc classés, compo, synergies, stats perso, prendre en un clic) · import runes / sorts /
 item set · onglet Build avec icônes (runes, sorts, 3 builds à 2 items + 3e item, bottes) · augments par rareté avec
 tes stats perso · fenêtre second écran / overlay · notifications champ select · Mes stats · Historique (filtres,
-KPI, forme, détail des 10 joueurs) · items contre l'équipe adverse · badges d'équilibrage ARAM · acceptation auto · stats adversaires / alliés / duos · winrate par semaine et par rang dans la session · export de l'historique · pièges d'augments, types d'augments, autres items gagnants · pool complet d'augments avec recherche · rechargement au changement de patch · ⌘⇧S · prochain achat (or + items via Live Client, composant achetable) · page champion perso · bilan de la dernière partie.
+KPI, forme, détail des 10 joueurs) · items contre l'équipe adverse · badges d'équilibrage ARAM · acceptation auto · stats adversaires / alliés / duos · winrate par semaine et par rang dans la session · export de l'historique · pièges d'augments, types d'augments, autres items gagnants · pool complet d'augments avec recherche · rechargement au changement de patch · ⌘⇧S · prochain achat (or + items via Live Client, composant achetable) · page champion perso · bilan de la dernière partie · headliner Mayhem reconnu en partie (bannière / cartes) avec conseils.
 
 ## Priorité 0 — valider sur les vraies parties (avant toute nouvelle fonction)
 
@@ -29,7 +29,8 @@ Beaucoup de fonctions v1.10 → v1.23 n'ont été testées que contre le faux cl
   (seul state vu : INVALID).
 - [ ] À chaque session : relire `usage.json` (`ocr_miss`, `cards_seen.unsure`). Au 29 oct. : 58 lectures
   incomplètes sur 173. Restent non reconnus : « Stats on Stats on Stats! », « Anti-Magic », « Magical Opus »,
-  « it and Safe », « Good Aga », « G Invulnerability » → vérifier s'ils sont dans la liste d'augments du client
+  « it and Safe », « Good Aga », « G Invulnerability » (29 oct. 10 h : aucune partie depuis, mêmes chiffres ;
+  « rox): Heavy Hitter », « … is unstoppable! » = chat / annonces, à ignorer) → vérifier s'ils sont dans la liste d'augments du client
   / arammeta (réseau du conteneur et du Mac fermés au wiki et à arammeta le 29 oct. : pas pu vérifier).
 
 ### Constats sur l'historique réel (28 oct., 108 parties Mayhem, 55 détaillées)
@@ -95,6 +96,15 @@ champ select). Ne pas l'utiliser ailleurs.
   rien faire. **Étape 1 faite (v1.53) : aucun champ dans le client ni la Live API.** Reste : lire le headliner à
   l'écran (bannière de début de partie / cartes HEAVY-POWER-THRASH via l'OCR existant), ou au minimum l'afficher
   après coup dans l'historique (marqueur 3176 = Pentakill ; 5 augments = K/DA probable).
+  **Étape 2, 1re tranche faite (v1.55)** : `src/core/headliner.ts` — nom lu à l'écran (ligne exacte, sans « ! »),
+  cartes Pentakill 3170-3173, conseils dans `InGameView` (bandeau), enregistré dans `HistoryGame.headliner` ;
+  « K/DA (probable) » = 5 augments depuis le 21 oct.
+- [ ] **Headliner : vérifier en vraie partie** que la bannière est lue (journal « Headliner : … lu à l'écran »,
+  `usage.json` → `headliner_seen`). Si rien en 5 parties Mayhem : la bannière est hors de `cardsArea()` ou
+  disparaît avant la 1re lecture → capturer le haut de l'écran les 20 premières secondes. Vérifier aussi qu'aucun
+  faux headliner n'apparaît (texte du chat). Confirmer K/DA = 5 augments sur une partie où la bannière est lue.
+- [ ] Headliner, tranche suivante : conseils propres au headliner dans le classement (Command Line : signaler la
+  carte à reroller ; HEARTSTEEL : bonus des augments) — seulement une fois la lecture validée.
 - [x] (v1.13) **Augments nouveaux du 26.21** (35 ajouts) : peu de parties dans arammeta. Les signaler « nouveau, peu de
   données » (g < 300) plutôt que les classer comme les autres.
 

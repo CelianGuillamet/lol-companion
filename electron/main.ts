@@ -12,6 +12,7 @@ import { recap } from '../src/renderer/insights';
 import { randomBytes } from 'node:crypto';
 import { Arammeta } from '../src/core/arammeta';
 import { matchCards } from '../src/core/cardmatch';
+import { headlinerFromText } from '../src/core/headliner';
 import { CardReader, permission as screenPermission } from './cardreader';
 import { displayOfApp, displayLabel, windowBounds, GAME_BUNDLE, CLIENT_BUNDLE } from './displays';
 import type { AppState, Settings } from '../src/core/types';
@@ -530,6 +531,12 @@ async function smokeTest(): Promise<void> {
     const pool = engine.cardPool() ?? [];
     const lines = names.map((text, i) => ({ text, conf: 0.9, x: 0.08 + i * 0.3, y: 0.3, w: 0.2, h: 0.04 }));
     engine.setOffered(matchCards(lines, pool));
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  if (process.env.ARAM_SMOKE_HEADLINER) {
+    // Bannière de headliner « lue » simulée (même correspondance stricte qu'en vrai)
+    const h = headlinerFromText([process.env.ARAM_SMOKE_HEADLINER]);
+    if (h) engine.setHeadliner(h.info, 'écran', h.text);
     await new Promise((r) => setTimeout(r, 600));
   }
   const tab = process.env.ARAM_SMOKE_TAB;

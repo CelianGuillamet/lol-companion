@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { matchCards, dropCovered, type CardRead, type OcrLine } from '../src/core/cardmatch';
 import type { Engine } from '../src/core/engine';
+import { headlinerFromText, type HeadlinerInfo } from '../src/core/headliner';
 import { windowBounds, GAME_BUNDLE } from './displays';
 
 const VISION_JXA = `
@@ -72,6 +73,8 @@ export interface ScanResult {
   lines: number;
   sample: string[];
   error: string | null;
+  /** Headliner nommé à l'écran (bannière du début de partie). */
+  headliner?: { info: HeadlinerInfo; text: string } | null;
 }
 
 export class CardReader {
@@ -124,6 +127,7 @@ export class CardReader {
       return;
     }
     const r = await this.scan();
+    if (r.headliner) this.engine.setHeadliner(r.headliner.info, 'écran', r.headliner.text);
     // Un seul nom reconnu n'est pas un écran de cartes : c'est un texte du jeu qui ressemble à un augment (vraies
     // parties du 28 oct. : « Vulnerability — 1 carte sur 3 » en plein combat). On l'ignore.
     if (r.read && r.read.ids.length >= 2) {
@@ -148,7 +152,7 @@ export class CardReader {
       // Le texte lu sur nos propres fenêtres (panneau par-dessus le jeu…) ne compte pas
       const ours = BrowserWindow.getAllWindows().filter((b) => !b.isDestroyed() && b.isVisible() && !b.isMinimized()).map((b) => b.getBounds());
       const lines = lastArea ? dropCovered(raw, lastArea, ours) : raw;
-      return { read: matchCards(lines, pool), lines: lines.length, sample: lines.slice(0, 6).map((l) => l.text), error: null };
+      return { read: matchCards(lines, pool), lines: lines.length, sample: lines.slice(0, 6).map((l) => l.text), error: null, headliner: headlinerFromText(lines.map((l) => l.text)) };
     } finally {
       await unlink(file).catch(() => undefined); // l'image ne reste jamais sur le disque
       this.busy = false;
