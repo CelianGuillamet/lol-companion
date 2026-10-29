@@ -65,8 +65,9 @@ export interface NextBuyRow {
 }
 
 /**
- * Composant le plus cher achetable maintenant pour avancer vers `target` (en descendant l'arbre, en sautant
- * ceux que tu as déjà).
+ * Composant de plus grande valeur achetable maintenant pour avancer vers `target` (en descendant l'arbre,
+ * en sautant ceux que tu as déjà). `price` dans le résultat est le montant à payer après déduction des
+ * sous-composants possédés, pas le prix total de l'item.
  */
 export function bestComponent(target: number, gold: number, owned: number[], price: (id: number) => number | null, components: (id: number) => number[]): { id: number; price: number } | null {
   const have = [...owned];
@@ -84,9 +85,16 @@ export function bestComponent(target: number, gold: number, owned: number[], pri
   };
   walk(target, 0);
   let best: { id: number; price: number } | null = null;
+  let bestValue = -1;
   for (const id of pool) {
-    const p = price(id);
-    if (p != null && p <= gold && (!best || p > best.price)) best = { id, price: p };
+    const value = price(id);
+    // Chaque candidat est un achat alternatif : il peut utiliser les composants physiques disponibles,
+    // chacun une seule fois dans sa propre recette (remainingCost), sans déplier les items déjà finis.
+    const p = remainingCost(id, owned, price, components);
+    if (value != null && p != null && p <= gold && value > bestValue) {
+      best = { id, price: p };
+      bestValue = value;
+    }
   }
   return best;
 }

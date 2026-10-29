@@ -1,5 +1,17 @@
 # Journal des versions
 
+## v1.56 — 29 oct. 2026 — acheter le bon composant maintenant
+- **Améliorations de composants** : le prochain achat tient compte des sous-composants déjà possédés pour
+  proposer une amélioration achetable. Exemple : un composant de 900 or issu d’un composant possédé de 400 or
+  peut être conseillé dès 500 or disponibles ; le montant affiché est bien 500 or.
+- **Achat immédiat distinct de l’objectif** : fenêtre, second écran et téléphone montrent d’abord le
+  composant achetable, son coût restant et l’or après achat ; l’objet final reste indiqué comme objectif.
+- **Overlay cohérent**, y compris minimal : conseille le composant disponible, demande d’économiser si aucun
+  achat n’est possible et ne transforme plus un prix inconnu en « OK ». L’objet final reprend la priorité dès
+  qu’il devient achetable. Les choix d’augments gardent leur priorité lorsqu’ils sont reconnus.
+- Recettes, décision d’affichage et parcours du moteur couverts par des régressions ; scénario Electron de
+  recette synthétique pour les vérifications visuelles. Validation native macOS restant à effectuer sur Mac.
+
 ## v1.55 — 29 oct. 2026 — choisir ses augments d’un coup d’œil
 - **Tes cartes avant les filtres** : la lecture complète affiche d’abord la carte à prendre, puis les deux
   alternatives. Chaque carte conserve sa position dans le jeu (gauche, milieu, droite) malgré le classement.

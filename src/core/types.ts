@@ -101,6 +101,7 @@ export interface NextBuyPanel {
   buildName: string | null; // build suivi (celui qui recoupe tes items)
   /** D'où vient le build : winrate et parties (arammeta, Mayhem), nombre de builds fréquents pour ce champion. */
   buildInfo?: { winrate: number; games: number; count: number; adapted: string[] } | null;
+  // step.price = dépense immédiate, après déduction des sous-composants possédés.
   rows: { item: IconItem; why: string; price: number | null; remaining?: number | null; missing: number; step?: { item: IconItem; price: number } }[];
   /** Ton parcours sur 6 places : items finis déjà achetés, puis la suite prévue. */
   plan?: { item: IconItem; owned: boolean; why?: string }[];

@@ -80,6 +80,9 @@ champ select). Ne pas l'utiliser ailleurs.
   en vraie partie : correspondance `riotId` entre activeplayer et playerlist, prix (`priceTotal` de items.json du client).
 - [x] (v1.11) **Composants** : quand l'item conseillé n'est pas achetable, proposer le composant le plus cher achetable
   (items.json du client : champ `from` = composants). Preuve : test sur un arbre d'items simulé.
+- [x] (v1.56) J2 : les améliorations de composants déduisent les sous-composants possédés. Le conseil affiche
+  l’achat immédiat et son coût de combinaison, distincts de l’objectif final, sur fenêtre / téléphone / overlay
+  (dont minimal). Régressions moteur et recettes ; scénario Electron `test/purchase-smoke.cjs`.
 - [x] (v1.11) **Bilan de fin de partie** : à la fin, comparer la partie à ta moyenne sur ce champion (dégâts/min, morts,
   KP) et afficher 2-3 constats dans Mes stats (« 40 % de dégâts en moins que d'habitude sur Jinx »).
 - [x] (v1.11, comparaison arammeta en v1.21) **Page champion perso** : clic sur un champion dans Mes stats → tes parties dessus, tes augments et items avec
@@ -122,6 +125,9 @@ champ select). Ne pas l'utiliser ailleurs.
 
 ## Priorité 3 — confort
 
+- [ ] Fiabilité des transitions : invalider une lecture OCR terminée après un changement de partie / champion
+  et empêcher une boucle du moteur de repartir après `stop()` pendant un tick en cours. Problèmes identifiés
+  en revue, distincts du chantier achats v1.56 ; à couvrir par des tests de promesses différées.
 - [ ] Empaqueter l'app (⚠ modifier l'Info.plist d'Electron casse sa signature : sur Mac Apple Silicon il faut re-signer avec `codesign --force --deep -s -`, ce qu'on ne peut faire que dans un Terminal du Mac, pas depuis le shell Linux. Nécessite Celian ou la commande à distance de l'ordinateur) (nom « ARAM Companion » dans le Dock au lieu d'« Electron », icône) avec electron-builder,
   sans signature (usage perso). Garder le lanceur actuel tant que ce n'est pas validé.
 - [x] (v1.9) Mise à jour des données arammeta automatique au changement de patch (comparer la version du client).

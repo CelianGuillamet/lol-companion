@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 
 export interface MockState {
+  /** Catalogue facultatif pour les scénarios de recettes synthétiques. */
+  itemData?: unknown[];
   phase: string;
   queue: { id: number; gameMode: string };
   session: Record<string, unknown> | null;
@@ -97,6 +99,7 @@ export async function startMockLcu(token = 'secret') {
         case route === 'GET /lol-game-data/assets/v1/cherry-augments.json':
           return send(200, [{ id: 1058, nameTRA: 'Poing mystique', augmentSmallIconPath: '/lol-game-data/assets/ASSETS/UX/Cherry/Augments/Icons/MysticPunch_small.png' }]);
         case route === 'GET /lol-game-data/assets/v1/items.json':
+          if (state.itemData) return send(200, state.itemData);
           return send(200, [{ id: 6333, name: 'Danse de la mort', iconPath: '/lol-game-data/assets/ASSETS/Items/Icons2D/6333_DeathsDance.png' }, { id: 3075, name: 'Cotte épineuse', iconPath: '/lol-game-data/assets/ASSETS/Items/Icons2D/3075_Thornmail.png' },
             { id: 3084, name: 'Heartsteel', priceTotal: 3000, categories: ['Health'] },
             { id: 2502, name: 'Unending Despair', priceTotal: 2800, categories: ['Health', 'Armor', 'AbilityHaste'] },

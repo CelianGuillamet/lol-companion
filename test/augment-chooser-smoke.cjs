@@ -75,7 +75,10 @@ process.env.ARAM_SMOKE_JS = `
     tabs[1].click(); await wait();
     assert(tabs[1].getAttribute('aria-pressed') === 'true' && tabs[0].getAttribute('aria-pressed') === 'false', 'État accessible des onglets incorrect');
     assert(!document.querySelector('.chooser') && document.querySelector('.buy'), 'Onglet Achat incorrect');
-    assert(document.querySelectorAll('.buy .reco').length === 1, 'Achat sans mise en avant dans son onglet');
+    assert(document.querySelector('.buy .next'), 'Conseil achat absent dans son onglet');
+    // Dans ce scénario, 2140 or ne financent pas l’objet à 2800 et le catalogue ne fournit pas de composants.
+    assert(document.querySelectorAll('.buy .reco').length === 0, 'Un achat inaccessible ne doit pas être mis en avant');
+    assert(document.querySelector('.buy .action-label').textContent === 'À économiser', 'Le manque d’or doit être explicite');
     tabs[0].click(); await wait();
     assert(document.querySelector('.chooser'), 'Retour aux augments impossible');
   } else {

@@ -6,6 +6,8 @@ import { computed } from 'vue';
 import { state, pct, hideBroken, wrAt, ROUND_LABEL } from './store';
 import type { AugmentRow, Rarity } from '../core/types';
 import { presentOfferedCards } from './offered-cards';
+import { purchaseOf } from './purchase';
+import PurchaseLine from './ui/PurchaseLine.vue';
 
 const panel = computed(() => state.value?.augments ?? null);
 const round = computed(() => state.value?.augRound ?? null);
@@ -28,7 +30,7 @@ const byId = computed(() => {
 });
 const presentation = computed(() => presentOfferedCards(offered.value, byId.value, round.value));
 const cards = computed(() => presentation.value.cards);
-const buy = computed(() => state.value?.nextBuy?.rows[0] ?? null);
+const buy = computed(() => purchaseOf(state.value?.nextBuy));
 // Faille : pas d'augments, le panneau montre ton adversaire de lane et le prochain achat
 const density = computed(() => state.value?.settings.overlayDensity ?? 'compact');
 const threats = computed(() => (state.value?.counters?.threats ?? []).slice(0, 2));
@@ -37,7 +39,11 @@ const one = computed(() => {
   const c = cards.value[0];
   if (presentation.value.sure && c) return { what: `Prends ${c.name} · ${c.position}`, num: c.adjusted ? `${(c.score! * 100).toFixed(0)} pts` : pct(c.score, 0), good: true };
   const b = buy.value;
-  if (b) return { what: `Achète ${b.item.name}`, num: b.missing ? `−${b.missing}` : 'OK', good: !b.missing };
+  if (b) return {
+    what: b.title,
+    num: b.canBuy && b.cost != null ? `${b.cost.toLocaleString('fr-FR')} or` : b.missing != null ? `manque ${b.missing.toLocaleString('fr-FR')} or` : 'prix inconnu',
+    good: b.canBuy,
+  };
   return null;
 });
 const sr = computed(() => (state.value?.mode === 'sr' && !panel.value ? { lane: state.value.counters?.lane ?? null, build: state.value.build } : null));
@@ -46,8 +52,8 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
 
 <template>
   <div v-if="density === 'minimal' && (sr || panel)" class="ov mini" aria-live="polite">
-    <span class="name">{{ one?.what ?? (sr?.lane ? `contre ${sr.lane.opponent.name}` : 'En attente…') }}</span>
-    <span v-if="one" class="num" :class="one.good ? 'good' : 'bad'">{{ one.num }}</span>
+    <span class="name" :title="one?.what">{{ one?.what ?? (sr?.lane ? `contre ${sr.lane.opponent.name}` : 'En attente…') }}</span>
+    <span v-if="one" class="num" :class="one.good ? 'good' : 'faint'">{{ one.num }}</span>
   </div>
   <div v-else-if="sr" class="ov">
     <div class="title">
@@ -59,16 +65,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
       <span class="name">contre {{ sr.lane.opponent.name }}</span>
       <span class="num" :class="sr.lane.verdict === 'favorable' ? 'good' : sr.lane.verdict === 'défavorable' ? 'bad' : ''">{{ sr.lane.games ? pct(sr.lane.myWinRate, 0) : '—' }}</span>
     </div>
-    <div v-if="buy" class="buy">
-      <div class="rar">Achat</div>
-      <div class="row">
-        <img v-if="buy.item.icon" @error="hideBroken" :src="buy.item.icon" width="22" height="22" alt="" />
-        <span v-else />
-        <span class="name">{{ buy.item.name }}</span>
-        <span class="num" :class="buy.missing ? 'bad' : 'good'">{{ buy.missing ? `−${buy.missing}` : 'OK' }}</span>
-      </div>
-      <div class="why faint">{{ buy.why }}</div>
-    </div>
+    <PurchaseLine v-if="buy" :purchase="buy" />
     <section v-if="density === 'full' && threats.length" class="th">
       <div class="rar">En face</div>
       <div v-for="t in threats" :key="t.key" class="why"><b>{{ t.title }}</b> · {{ t.items.slice(0, 2).map((i) => i.name).join(', ') }}</div>
@@ -103,16 +100,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
         </div>
       </section>
     </template>
-    <div v-if="buy" class="buy">
-      <div class="rar">Achat</div>
-      <div class="row">
-        <img v-if="buy.item.icon" @error="hideBroken" :src="buy.item.icon" width="22" height="22" alt="" />
-        <span v-else />
-        <span class="name">{{ buy.item.name }}</span>
-        <span class="num" :class="buy.missing ? 'bad' : 'good'">{{ buy.missing ? `−${buy.missing}` : 'OK' }}</span>
-      </div>
-      <div class="why faint">{{ buy.why }}</div>
-    </div>
+    <PurchaseLine v-if="buy" :purchase="buy" />
     <section v-if="density === 'full' && threats.length" class="th">
       <div class="rar">En face</div>
       <div v-for="t in threats" :key="t.key" class="why"><b>{{ t.title }}</b> · {{ t.items.slice(0, 2).map((i) => i.name).join(', ') }}</div>
@@ -147,5 +135,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
 .why { font-size: 11px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hint { font-size: 10.5px; text-align: right; }
 .mini { flex-direction: row; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: 13px; font-weight: 650; }
+.mini .name { min-width: 0; }
+.mini .num { flex-shrink: 0; white-space: nowrap; font-size: 12px; }
 .th .why { white-space: normal; }
 </style>

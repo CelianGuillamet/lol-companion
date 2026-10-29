@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nextBuys } from '../src/core/nextbuy';
+import { bestComponent, nextBuys } from '../src/core/nextbuy';
 
 const PRICES: Record<number, number> = { 1: 3000, 2: 3100, 3: 2800, 4: 2900, 9: 1100, 3047: 1200, 3075: 2450 };
 const base = {
@@ -43,8 +43,7 @@ describe('composants', () => {
   const tree: Record<number, number[]> = { 1: [10, 11], 10: [20, 20], 11: [] };
   const price = (id: number) => ({ 1: 3000, 10: 1300, 11: 900, 20: 400 } as Record<number, number>)[id] ?? null;
   const comps = (id: number) => tree[id] ?? [];
-  it('propose le composant le plus cher achetable', async () => {
-    const { bestComponent } = await import('../src/core/nextbuy');
+  it('propose le composant le plus cher achetable', () => {
     expect(bestComponent(1, 1000, [], price, comps)).toEqual({ id: 11, price: 900 });
     expect(bestComponent(1, 1500, [], price, comps)).toEqual({ id: 10, price: 1300 });
     expect(bestComponent(1, 1500, [10], price, comps)).toEqual({ id: 11, price: 900 }); // 10 déjà acheté
@@ -105,6 +104,39 @@ describe('or restant', () => {
   it('l’or manquant se calcule sur ce qu’il reste à payer', () => {
     const r = nextBuys({ owned: [1057], gold: 1500, cores: [{ core: [4401], options: [] }], boots: [], counters: [], allBoots: new Set(), price, components: comps });
     expect(r.rows[0]).toMatchObject({ id: 4401, price: 2800, remaining: 1900, missing: 400 });
+  });
+  it('propose de finir Negatron avec la cape déjà possédée, au prix réellement payé', () => {
+    expect(bestComponent(4401, 500, [1033], price, comps)).toEqual({ id: 1057, price: 500 });
+    const r = nextBuys({ owned: [1033], gold: 500, cores: [{ core: [4401], options: [] }], boots: [], counters: [], allBoots: new Set(), price, components: comps });
+    expect(r.rows[0]).toMatchObject({ remaining: 2400, missing: 1900, step: { id: 1057, price: 500 } });
+  });
+  it('ne propose pas une amélioration au-delà du budget restant', () => {
+    expect(bestComponent(4401, 499, [1033], price, comps)).toBeNull();
+  });
+});
+
+describe('amélioration des composants : inventaire physique et recettes partagées', () => {
+  const prices: Record<number, number> = { 1: 3000, 10: 1000, 11: 900, 20: 400 };
+  const price = (id: number) => prices[id] ?? null;
+  it('ne crédite un exemplaire qu’une fois dans une recette qui en demande deux', () => {
+    const components = (id: number) => ({ 1: [10], 10: [20, 20] } as Record<number, number[]>)[id] ?? [];
+    expect(bestComponent(1, 500, [20], price, components)).toEqual({ id: 20, price: 400 });
+    expect(bestComponent(1, 600, [20], price, components)).toEqual({ id: 10, price: 600 });
+    // Finir le composant de 1000 pour 200 est préféré au rachat d'une autre base de 400.
+    expect(bestComponent(1, 400, [20, 20], price, components)).toEqual({ id: 10, price: 200 });
+  });
+  it('n’invente pas les sous-composants d’un item déjà fini', () => {
+    const components = (id: number) => ({ 1: [10, 11], 10: [20], 11: [20] } as Record<number, number[]>)[id] ?? [];
+    expect(bestComponent(1, 500, [10], price, components)).toEqual({ id: 20, price: 400 });
+    expect(bestComponent(1, 500, [10, 20], price, components)).toEqual({ id: 11, price: 500 });
+  });
+  it('compare les achats alternatifs sans réserver le composant à la première branche', () => {
+    const components = (id: number) => ({ 1: [11, 10], 10: [20], 11: [20] } as Record<number, number[]>)[id] ?? [];
+    expect(bestComponent(1, 600, [20], price, components)).toEqual({ id: 10, price: 600 });
+  });
+  it('ne propose pas deux fois un composant déjà possédé quand la recette contient deux branches identiques', () => {
+    const components = (id: number) => ({ 1: [10, 10], 10: [20, 20] } as Record<number, number[]>)[id] ?? [];
+    expect(bestComponent(1, 600, [10, 20], price, components)).toEqual({ id: 10, price: 600 });
   });
 });
 

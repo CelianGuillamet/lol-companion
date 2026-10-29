@@ -5,12 +5,14 @@
 // 3. les deux équipes en direct : dégâts, rôle, score et items de chacun, et ce que ça change pour toi.
 import { computed } from 'vue';
 import { state, championIcon, hideBroken } from '../store';
+import { purchaseOf } from '../purchase';
 
 withDefaults(defineProps<{ emphasize?: boolean }>(), { emphasize: true });
 
 const nb = computed(() => state.value?.nextBuy ?? null);
 const ct = computed(() => (state.value?.counters?.enemies.length ? state.value.counters : null));
 const next = computed(() => nb.value?.rows[0] ?? null);
+const purchase = computed(() => purchaseOf(nb.value));
 const later = computed(() => nb.value?.rows.slice(1) ?? []);
 const plan = computed(() => {
   const p = nb.value?.plan ?? [];
@@ -34,24 +36,26 @@ const DMG: Record<string, string> = { AD: 'physique', AP: 'magique', mixte: 'mix
     <p v-if="!nb" class="faint small">L’or et tes items s’affichent dès que la partie a commencé.</p>
 
     <template v-else>
-      <article v-if="next" class="next" :class="{ reco: emphasize }">
-        <img @error="hideBroken" :src="next.item.icon ?? ''" width="56" height="56" class="ic big" alt="" />
+      <article v-if="purchase && next" class="next" :class="{ reco: emphasize && purchase.canBuy }">
+        <img @error="hideBroken" :src="purchase.item.icon ?? ''" width="48" height="48" class="ic big" alt="" />
         <div class="what">
-          <div class="name">{{ next.item.name }}</div>
+          <div class="action-label">{{ purchase.canBuy ? 'Acheter maintenant' : purchase.kind === 'saving' ? 'À économiser' : 'Prix indisponible' }}</div>
+          <div class="name">{{ purchase.item.name }}</div>
           <div class="why">{{ next.why }}</div>
-          <div v-if="next.step" class="step">
-            <img @error="hideBroken" :src="next.step.item.icon ?? ''" width="20" height="20" class="ic" alt="" />
-            Achète déjà {{ next.step.item.name }} ({{ fmt(next.step.price) }})
-          </div>
+          <div v-if="purchase.kind === 'component'" class="goal">Composant pour {{ purchase.target.name }}</div>
+          <div v-if="purchase.kind === 'unknown'" class="goal">Vérifie le coût dans la boutique.</div>
         </div>
-        <div v-if="next.price != null" class="price num">
-          <div v-if="next.remaining != null && next.remaining < next.price" :title="`Prix total ${fmt(next.price)} : tes composants déjà achetés sont déduits`">
-            reste {{ fmt(next.remaining) }} <s class="faint">{{ fmt(next.price) }}</s>
-          </div>
-          <div v-else>{{ fmt(next.price) }}</div>
-          <div :class="next.missing ? 'bad' : 'good'">{{ next.missing ? `il manque ${fmt(next.missing)}` : 'achetable' }}</div>
+        <div v-if="purchase.cost != null" class="price num">
+          <div>{{ fmt(purchase.cost) }} or</div>
+          <div v-if="purchase.canBuy" class="good">achetable</div>
+          <div v-else-if="purchase.missing != null" class="faint">manque {{ fmt(purchase.missing) }} or</div>
+          <div v-if="purchase.goldAfter != null" class="faint">reste {{ fmt(purchase.goldAfter) }} or après achat</div>
         </div>
       </article>
+      <p v-if="purchase?.kind === 'component' && purchase.missing != null" class="goal-note">
+        Objectif : {{ purchase.target.name }} · encore {{ fmt(purchase.missing) }} or à économiser pour le terminer.
+      </p>
+      <p v-else-if="!next" class="faint small">Aucun achat conseillé pour cet inventaire. Le build complet reste consultable ci-dessous.</p>
 
       <div class="path" aria-label="Ton build : achetés puis à venir">
         <div v-for="(s, i) in plan" :key="i" class="slot" :class="{ owned: s?.owned, now: i === nextIndex, empty: !s }" :title="s ? `${s.item.name}${s.owned ? ' (acheté)' : s.why ? ` — ${s.why}` : ''}` : ''">
@@ -132,8 +136,11 @@ h3 { margin: 8px 0 0; }
 .next { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 12px 12px 18px; background: linear-gradient(110deg, rgba(200, 170, 110, 0.14), var(--panel-2) 55%); }
 .big { border-radius: var(--radius); }
 .next .name { font-weight: 700; font-size: 17px; }
+.what { min-width: 0; overflow-wrap: anywhere; }
+.action-label { font-size: 11px; color: var(--gold); margin-bottom: 4px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
 .next .why { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-.step { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--good); margin-top: 4px; }
+.goal { font-size: 12px; color: var(--text); margin-top: 5px; }
+.goal-note { margin: 0; color: var(--muted); font-size: 12px; }
 .price { text-align: right; font-size: 14px; font-weight: 700; }
 .price s { font-weight: 500; font-size: 11.5px; }
 .price div + div { font-size: 11.5px; font-weight: 600; }
@@ -169,4 +176,9 @@ h3 { margin: 8px 0 0; }
 .lane .t { font-size: 12px; color: var(--muted); }
 .lane.favorable { box-shadow: inset 3px 0 0 var(--good); }
 .lane.défavorable { box-shadow: inset 3px 0 0 var(--bad); }
+@media (max-width: 520px) {
+  .next { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .big { width: 40px; height: 40px; }
+  .price { grid-column: 2; text-align: left; display: flex; flex-wrap: wrap; gap: 3px 10px; align-items: baseline; }
+}
 </style>
