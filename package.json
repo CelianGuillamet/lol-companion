@@ -1,0 +1,39 @@
+{
+  "name": "aram-companion",
+  "productName": "ARAM Companion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Compagnon perso ARAM / ARAM: Mayhem pour League of Legends sur macOS",
+  "main": "dist/electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node build/build-electron.mjs",
+    "start": "npm run build && electron .",
+    "app": "electron .",
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "probe": "node scripts/probe.mjs",
+    "mayhem": "node scripts/mayhem-stats.mjs"
+  },
+  "devDependencies": {
+    "@fontsource-variable/archivo": "5.3.0",
+    "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-vue": "6.0.10",
+    "electron": "44.9.3",
+    "esbuild": "0.28.2",
+    "qrcode": "1.5.4",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "vue": "3.5.44",
+    "vue-tsc": "3.3.13"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/marcellus": "^5.3.0"
+  }
+}

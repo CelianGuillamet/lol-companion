@@ -1,0 +1,185 @@
+/*
+ * Identité « Atelier Hextech » (v1.50) : un instrument Hextech posé sur le pont de l'Abîme hurlant.
+ * Encre abyssale, cadres d'or patiné, texte parchemin ; le bleu Hextech est réservé au « vivant » (en partie,
+ * focus clavier). Un seul élément audacieux : le cadre de la recommandation (or + cristal Hextech, voir .reco).
+ * Polices libres proches de l'esprit du client (aucune police ni aucun logo de Riot) :
+ * Marcellus pour les titres et les grands chiffres, Barlow pour l'interface.
+ */
+:root {
+  --bg: #050d16; /* encre de l'Abîme */
+  --panel: #0a1520;
+  --panel-2: #0f1d2a;
+  --line: #1f2c37; /* séparateurs froids */
+  --rule: #4a3b20; /* or patiné sombre : cadres */
+  --gold: #c8aa6e; /* or patiné : actions, titres */
+  --gold-hi: #f0e6d2; /* parchemin éclairé */
+  --gold-lo: #785a28;
+  --gold-soft: rgba(200, 170, 110, 0.12);
+  --text: #e6dfcf; /* parchemin */
+  --muted: #a39c8c;
+  --faint: #85817a; /* AA sur les panneaux */
+  --blue: #0ac8b9; /* cristal Hextech : en direct, focus */
+  --blue-deep: #0a323c;
+  --good: #3fd0b5;
+  --bad: #f0566b;
+  --prismatic: #c9a7ff;
+  --goldr: #e2c27a;
+  --silver: #c4ccd4;
+  /* Cadre de LA recommandation : or éclairé → or patiné → cristal */
+  --prism: linear-gradient(135deg, #f0e6d2 0%, #c8aa6e 30%, #785a28 62%, #0ac8b9 100%);
+  --rarity-prism: linear-gradient(115deg, #b98cff 0%, #6fd3ff 50%, #ffd27a 100%);
+  --frame: linear-gradient(180deg, #785a28 0%, #3a2e18 100%);
+  --radius: 2px;
+  --display: 'Marcellus', 'Iowan Old Style', Georgia, serif;
+  font-family: 'Barlow', -apple-system, system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.42;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; height: 100%; }
+body {
+  background:
+    radial-gradient(1200px 520px at 100% -10%, rgba(10, 200, 185, 0.07), transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, rgba(200, 170, 110, 0.05), transparent 60%),
+    var(--bg);
+  overflow: hidden;
+  user-select: none;
+}
+button { font: inherit; color: inherit; }
+img { display: block; }
+
+.num { font-variant-numeric: tabular-nums lining-nums; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+
+/* Boutons du client : fond sombre, filet d'or, texte or clair ; le principal est « chargé » d'Hextech */
+.btn {
+  border: 1px solid transparent;
+  border-image: linear-gradient(180deg, #c8aa6e, #785a28) 1;
+  background: linear-gradient(180deg, #1a232b, #11181f);
+  padding: 7px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #cdbe91;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: color 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+.btn:hover { color: var(--gold-hi); box-shadow: inset 0 0 12px rgba(200, 170, 110, 0.18); }
+.btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+.btn.primary {
+  border-image: linear-gradient(180deg, #f0e6d2, #c8aa6e 40%, #785a28) 1;
+  background: linear-gradient(180deg, #0d3f48, #08222b);
+  color: #cdfafa;
+  font-family: var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+.btn.primary:hover { box-shadow: inset 0 0 16px rgba(10, 200, 185, 0.35), 0 0 12px rgba(10, 200, 185, 0.15); }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chip.warn { color: #e2c27a; border-color: rgba(226, 194, 122, 0.35); background: rgba(226, 194, 122, 0.07); }
+
+/* Cadre de panneau : filet d'or patiné, coins vifs (pas de carte arrondie générique) */
+.card {
+  background: linear-gradient(180deg, rgba(15, 29, 42, 0.92), rgba(9, 19, 29, 0.92));
+  border: 1px solid transparent;
+  border-image: var(--frame) 1;
+  border-radius: 0;
+}
+
+.icon { border-radius: var(--radius); background: var(--panel-2); object-fit: cover; box-shadow: 0 0 0 1px rgba(120, 90, 40, 0.55); }
+
+.empty {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 40px;
+}
+.empty h2 { color: var(--gold-hi); font-size: 18px; margin: 0; }
+.empty p { margin: 0; max-width: 420px; line-height: 1.5; }
+
+h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 400; color: var(--gold-hi); }
+/* Titres de page en capitales espacées, à la manière des écrans du client */
+h1, .display { letter-spacing: 0.06em; text-transform: uppercase; }
+h1 { font-size: 26px; line-height: 1.15; }
+h2 { font-size: 16px; letter-spacing: 0.03em; color: var(--gold); }
+h3 { font-size: 15px; letter-spacing: 0.02em; color: var(--gold); }
+/* Grands chiffres : même voix que les titres */
+.wide { font-family: var(--display); letter-spacing: 0.02em; }
+
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.rarity-kPrismatic { --r: var(--prismatic); }
+.rarity-kGold { --r: var(--goldr); }
+.rarity-kSilver { --r: var(--silver); }
+
+/*
+ * LA recommandation (meilleur augment, champion à prendre, prochain achat) : double filet or → cristal, coins
+ * coupés, et un cristal Hextech serti dans l'angle. Le seul élément qui brille de toute l'app.
+ */
+.reco {
+  position: relative;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.reco::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  background: var(--prism);
+  clip-path: inherit;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.reco::after {
+  content: '';
+  position: absolute;
+  top: 4.5px;
+  left: 4.5px;
+  width: 7px;
+  height: 7px;
+  background: radial-gradient(circle at 35% 35%, #cdfafa 0%, #0ac8b9 45%, #0a323c 100%);
+  transform: rotate(45deg);
+  box-shadow: 0 0 8px rgba(10, 200, 185, 0.7);
+  pointer-events: none;
+}
+
+/* Overlay : fond transparent, panneau sombre lisible par-dessus le jeu */
+body.overlay { background: transparent; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2416; border: 1px solid var(--rule); }
+
+input[type='checkbox'], input[type='radio'] { accent-color: var(--gold); }
+select, input[type='text'], input:not([type]) { color-scheme: dark; }
+
+/* Forme (série de parties) : victoire = plein, défaite = creux. La forme porte l'info, pas seulement la couleur
+   (lisible pour un daltonien rouge-vert). */
+.pip { width: 13px; height: 13px; border-radius: 3px; flex: none; }
+.pip.w { background: var(--good); }
+.pip.l { background: transparent; box-shadow: inset 0 0 0 2px var(--bad); }

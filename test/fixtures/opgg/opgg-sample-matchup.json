@@ -1,0 +1,665 @@
+{
+ "args": {
+  "lang": "en_US",
+  "position": "mid",
+  "my_champion": "Ahri",
+  "opponent_champion": "Ahri"
+ },
+ "result": {
+  "lang": "en_US",
+  "position": "mid",
+  "my_champion": "Ahri",
+  "opponent_champion": "Ahri",
+  "data": {
+   "summary": {
+    "id": 103,
+    "is_rotation": false,
+    "is_rip": false,
+    "average_stats": {
+     "play": 150370,
+     "win_rate": 0.511831,
+     "pick_rate": 0.10531,
+     "ban_rate": 0.0320411,
+     "kda": 2.539427,
+     "tier": 1,
+     "rank": 6,
+     "tier_data": {
+      "tier": 1,
+      "rank": 6,
+      "rank_prev": 6,
+      "rank_prev_patch": 8
+     }
+    },
+    "positions": [
+     {
+      "name": "MID",
+      "stats": {
+       "play": 142656,
+       "win_rate": 0.512197,
+       "pick_rate": 0.0993844,
+       "role_rate": 0.9487,
+       "ban_rate": 0.0320198,
+       "kda": 2.559161,
+       "tier_data": {
+        "tier": 1,
+        "rank": 1,
+        "rank_prev": 1,
+        "rank_prev_patch": 1
+       }
+      },
+      "roles": [
+       {
+        "name": "MAGE",
+        "stats": {
+         "win_rate": 0.51322,
+         "role_rate": 0.99849,
+         "play": 122310,
+         "win": 62772
+        }
+       }
+      ],
+      "counters": [
+       {
+        "champion_id": 99,
+        "champion_name": "Lux",
+        "play": 2515,
+        "win": 1189
+       },
+       {
+        "champion_id": 887,
+        "champion_name": "Gwen",
+        "play": 292,
+        "win": 139
+       },
+       {
+        "champion_id": 893,
+        "champion_name": "Aurora",
+        "play": 1568,
+        "win": 751
+       }
+      ]
+     }
+    ],
+    "roles": []
+   },
+   "summoner_spells": [],
+   "core_items": [],
+   "mythic_items": [],
+   "boots": [],
+   "starter_items": [],
+   "last_items": [],
+   "rune_pages": [],
+   "runes": [],
+   "skill_masteries": [],
+   "skills": [],
+   "skill_evolves": [],
+   "trends": {
+    "total_rank": 254,
+    "total_position_rank": 57,
+    "win": [
+     {
+      "version": "16.21",
+      "rate": 0.5122,
+      "rank": 11,
+      "created_at": "2026-10-28T23:06:51+09:00"
+     },
+     {
+      "version": "16.20",
+      "rate": 0.5123,
+      "rank": 6,
+      "created_at": "2026-10-20T23:07:35+09:00"
+     },
+     {
+      "version": "16.19",
+      "rate": 0.5077,
+      "rank": 15,
+      "created_at": "2026-10-05T23:08:26+09:00"
+     },
+     {
+      "version": "16.18",
+      "rate": 0.5114,
+      "rank": 10,
+      "created_at": "2026-09-17T23:16:20+09:00"
+     },
+     {
+      "version": "16.17",
+      "rate": 0.5091,
+      "rank": 13,
+      "created_at": "2026-09-08T23:06:59+09:00"
+     },
+     {
+      "version": "16.16",
+      "rate": 0.512,
+      "rank": 8,
+      "created_at": "2026-08-21T22:40:36+09:00"
+     },
+     {
+      "version": "16.15",
+      "rate": 0.5145,
+      "rank": 8,
+      "created_at": "2026-08-10T22:45:28+09:00"
+     },
+     {
+      "version": "16.14",
+      "rate": 0.5134,
+      "rank": 9,
+      "created_at": "2026-07-27T22:38:14+09:00"
+     },
+     {
+      "version": "16.13",
+      "rate": 0.51,
+      "rank": 12,
+      "created_at": "2026-07-13T22:37:18+09:00"
+     },
+     {
+      "version": "16.12",
+      "rate": 0.5078,
+      "rank": 18,
+      "created_at": "2026-06-22T22:37:02+09:00"
+     }
+    ],
+    "pick": [
+     {
+      "version": "16.21",
+      "rate": 0.0994,
+      "rank": 1,
+      "created_at": "2026-10-28T23:06:51+09:00"
+     },
+     {
+      "version": "16.20",
+      "rate": 0.0941,
+      "rank": 1,
+      "created_at": "2026-10-20T23:07:35+09:00"
+     },
+     {
+      "version": "16.19",
+      "rate": 0.0904,
+      "rank": 3,
+      "created_at": "2026-10-05T23:08:26+09:00"
+     },
+     {
+      "version": "16.18",
+      "rate": 0.0921,
+      "rank": 2,
+      "created_at": "2026-09-17T23:16:20+09:00"
+     },
+     {
+      "version": "16.17",
+      "rate": 0.0942,
+      "rank": 1,
+      "created_at": "2026-09-08T23:06:59+09:00"
+     },
+     {
+      "version": "16.16",
+      "rate": 0.0969,
+      "rank": 1,
+      "created_at": "2026-08-21T22:40:36+09:00"
+     },
+     {
+      "version": "16.15",
+      "rate": 0.0955,
+      "rank": 1,
+      "created_at": "2026-08-10T22:45:28+09:00"
+     },
+     {
+      "version": "16.14",
+      "rate": 0.0931,
+      "rank": 1,
+      "created_at": "2026-07-27T22:38:14+09:00"
+     },
+     {
+      "version": "16.13",
+      "rate": 0.0903,
+      "rank": 2,
+      "created_at": "2026-07-13T22:37:18+09:00"
+     },
+     {
+      "version": "16.12",
+      "rate": 0.1007,
+      "rank": 1,
+      "created_at": "2026-06-22T22:37:02+09:00"
+     }
+    ],
+    "ban": [
+     {
+      "version": "16.21",
+      "rate": 0.032,
+      "rank": 31,
+      "created_at": "2026-10-28T23:06:51+09:00"
+     },
+     {
+      "version": "16.20",
+      "rate": 0.0297,
+      "rank": 30,
+      "created_at": "2026-10-20T23:07:35+09:00"
+     },
+     {
+      "version": "16.19",
+      "rate": 0.0292,
+      "rank": 30,
+      "created_at": "2026-10-05T23:08:26+09:00"
+     },
+     {
+      "version": "16.18",
+      "rate": 0.0311,
+      "rank": 32,
+      "created_at": "2026-09-17T23:16:20+09:00"
+     },
+     {
+      "version": "16.17",
+      "rate": 0.0309,
+      "rank": 32,
+      "created_at": "2026-09-08T23:06:59+09:00"
+     },
+     {
+      "version": "16.16",
+      "rate": 0.0326,
+      "rank": 29,
+      "created_at": "2026-08-21T22:40:36+09:00"
+     },
+     {
+      "version": "16.15",
+      "rate": 0.0294,
+      "rank": 31,
+      "created_at": "2026-08-10T22:45:28+09:00"
+     },
+     {
+      "version": "16.14",
+      "rate": 0.0291,
+      "rank": 30,
+      "created_at": "2026-07-27T22:38:14+09:00"
+     },
+     {
+      "version": "16.13",
+      "rate": 0.0313,
+      "rank": 28,
+      "created_at": "2026-07-13T22:37:18+09:00"
+     },
+     {
+      "version": "16.12",
+      "rate": 0.0392,
+      "rank": 24,
+      "created_at": "2026-06-22T22:37:02+09:00"
+     }
+    ]
+   },
+   "game_lengths": [
+    {
+     "game_length": 0,
+     "rate": 0.500874,
+     "average": 0.5,
+     "rank": 27
+    },
+    {
+     "game_length": 25,
+     "rate": 0.519404,
+     "average": 0.5,
+     "rank": 9
+    },
+    {
+     "game_length": 30,
+     "rate": 0.517071,
+     "average": 0.5,
+     "rank": 12
+    },
+    {
+     "game_length": 35,
+     "rate": 0.509831,
+     "average": 0.5,
+     "rank": 17
+    },
+    {
+     "game_length": 40,
+     "rate": 0.498225,
+     "average": 0.5,
+     "rank": 30
+    }
+   ],
+   "counters": [
+    {
+     "champion_id": 134,
+     "champion_name": "Syndra",
+     "play": 5259,
+     "win": 2616
+    },
+    {
+     "champion_id": 517,
+     "champion_name": "Sylas",
+     "play": 5236,
+     "win": 2761
+    },
+    {
+     "champion_id": 157,
+     "champion_name": "Yasuo",
+     "play": 4368,
+     "win": 2171
+    },
+    {
+     "champion_id": 238,
+     "champion_name": "Zed",
+     "play": 4287,
+     "win": 2118
+    },
+    {
+     "champion_id": 777,
+     "champion_name": "Yone",
+     "play": 4081,
+     "win": 2229
+    },
+    {
+     "champion_id": 84,
+     "champion_name": "Akali",
+     "play": 3810,
+     "win": 2049
+    },
+    {
+     "champion_id": 112,
+     "champion_name": "Viktor",
+     "play": 3644,
+     "win": 1941
+    },
+    {
+     "champion_id": 805,
+     "champion_name": "Locke",
+     "play": 3589,
+     "win": 1830
+    },
+    {
+     "champion_id": 55,
+     "champion_name": "Katarina",
+     "play": 3381,
+     "win": 1653
+    },
+    {
+     "champion_id": 7,
+     "champion_name": "LeBlanc",
+     "play": 3068,
+     "win": 1583
+    },
+    {
+     "champion_id": 245,
+     "champion_name": "Ekko",
+     "play": 2865,
+     "win": 1453
+    },
+    {
+     "champion_id": 127,
+     "champion_name": "Lissandra",
+     "play": 2793,
+     "win": 1403
+    },
+    {
+     "champion_id": 4,
+     "champion_name": "Twisted Fate",
+     "play": 2615,
+     "win": 1304
+    },
+    {
+     "champion_id": 90,
+     "champion_name": "Malzahar",
+     "play": 2605,
+     "win": 1365
+    },
+    {
+     "champion_id": 99,
+     "champion_name": "Lux",
+     "play": 2515,
+     "win": 1189
+    },
+    {
+     "champion_id": 61,
+     "champion_name": "Orianna",
+     "play": 2362,
+     "win": 1279
+    },
+    {
+     "champion_id": 105,
+     "champion_name": "Fizz",
+     "play": 2322,
+     "win": 1176
+    },
+    {
+     "champion_id": 8,
+     "champion_name": "Vladimir",
+     "play": 2240,
+     "win": 1106
+    },
+    {
+     "champion_id": 101,
+     "champion_name": "Xerath",
+     "play": 2102,
+     "win": 1074
+    },
+    {
+     "champion_id": 800,
+     "champion_name": "Mel",
+     "play": 2068,
+     "win": 1022
+    },
+    {
+     "champion_id": 3,
+     "champion_name": "Galio",
+     "play": 2054,
+     "win": 1165
+    },
+    {
+     "champion_id": 910,
+     "champion_name": "Hwei",
+     "play": 1846,
+     "win": 966
+    },
+    {
+     "champion_id": 45,
+     "champion_name": "Veigar",
+     "play": 1786,
+     "win": 902
+    },
+    {
+     "champion_id": 142,
+     "champion_name": "Zoe",
+     "play": 1743,
+     "win": 890
+    },
+    {
+     "champion_id": 131,
+     "champion_name": "Diana",
+     "play": 1660,
+     "win": 850
+    },
+    {
+     "champion_id": 38,
+     "champion_name": "Kassadin",
+     "play": 1609,
+     "win": 808
+    },
+    {
+     "champion_id": 893,
+     "champion_name": "Aurora",
+     "play": 1568,
+     "win": 751
+    },
+    {
+     "champion_id": 711,
+     "champion_name": "Vex",
+     "play": 1409,
+     "win": 710
+    },
+    {
+     "champion_id": 246,
+     "champion_name": "Qiyana",
+     "play": 1361,
+     "win": 687
+    },
+    {
+     "champion_id": 166,
+     "champion_name": "Akshan",
+     "play": 1339,
+     "win": 662
+    },
+    {
+     "champion_id": 39,
+     "champion_name": "Irelia",
+     "play": 1320,
+     "win": 677
+    },
+    {
+     "champion_id": 34,
+     "champion_name": "Anivia",
+     "play": 1285,
+     "win": 671
+    },
+    {
+     "champion_id": 1,
+     "champion_name": "Annie",
+     "play": 1192,
+     "win": 581
+    },
+    {
+     "champion_id": 163,
+     "champion_name": "Taliyah",
+     "play": 1190,
+     "win": 600
+    },
+    {
+     "champion_id": 13,
+     "champion_name": "Ryze",
+     "play": 1187,
+     "win": 634
+    },
+    {
+     "champion_id": 268,
+     "champion_name": "Azir",
+     "play": 1057,
+     "win": 558
+    },
+    {
+     "champion_id": 91,
+     "champion_name": "Talon",
+     "play": 900,
+     "win": 469
+    },
+    {
+     "champion_id": 136,
+     "champion_name": "Aurelion Sol",
+     "play": 754,
+     "win": 392
+    },
+    {
+     "champion_id": 161,
+     "champion_name": "Vel'Koz",
+     "play": 635,
+     "win": 312
+    },
+    {
+     "champion_id": 69,
+     "champion_name": "Cassiopeia",
+     "play": 605,
+     "win": 335
+    },
+    {
+     "champion_id": 96,
+     "champion_name": "Kog'Maw",
+     "play": 386,
+     "win": 194
+    },
+    {
+     "champion_id": 126,
+     "champion_name": "Jayce",
+     "play": 383,
+     "win": 208
+    },
+    {
+     "champion_id": 50,
+     "champion_name": "Swain",
+     "play": 375,
+     "win": 184
+    },
+    {
+     "champion_id": 950,
+     "champion_name": "Naafiri",
+     "play": 363,
+     "win": 186
+    },
+    {
+     "champion_id": 18,
+     "champion_name": "Tristana",
+     "play": 315,
+     "win": 194
+    },
+    {
+     "champion_id": 80,
+     "champion_name": "Pantheon",
+     "play": 315,
+     "win": 165
+    },
+    {
+     "champion_id": 63,
+     "champion_name": "Brand",
+     "play": 311,
+     "win": 164
+    },
+    {
+     "champion_id": 115,
+     "champion_name": "Ziggs",
+     "play": 307,
+     "win": 157
+    },
+    {
+     "champion_id": 887,
+     "champion_name": "Gwen",
+     "play": 292,
+     "win": 139
+    },
+    {
+     "champion_id": 10,
+     "champion_name": "Kayle",
+     "play": 286,
+     "win": 145
+    },
+    {
+     "champion_id": 14,
+     "champion_name": "Sion",
+     "play": 257,
+     "win": 132
+    },
+    {
+     "champion_id": 75,
+     "champion_name": "Nasus",
+     "play": 244,
+     "win": 128
+    },
+    {
+     "champion_id": 79,
+     "champion_name": "Gragas",
+     "play": 243,
+     "win": 131
+    },
+    {
+     "champion_id": 54,
+     "champion_name": "Malphite",
+     "play": 230,
+     "win": 128
+    },
+    {
+     "champion_id": 86,
+     "champion_name": "Garen",
+     "play": 184,
+     "win": 92
+    },
+    {
+     "champion_id": 901,
+     "champion_name": "Smolder",
+     "play": 178,
+     "win": 111
+    }
+   ],
+   "single_items": [],
+   "combination_items": [],
+   "single_runes": [],
+   "opponent_champion_tip": null,
+   "lane_solo_kill_advantage_champion": null,
+   "lane_advantage_champion": null,
+   "recommended_play_style": null
+  }
+ }
+}
