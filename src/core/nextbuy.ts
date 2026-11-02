@@ -24,6 +24,8 @@ export interface NextBuyInput {
   skipped?: Set<number>;
   /** Item de base d'un item transformé (items.json du client : specialRecipe). */
   specialRecipe?: (id: number) => number | null;
+  /** Conseil précédent, à garder en tête tant que l'inventaire ne change pas (pas de va-et-vient pendant une attente). */
+  keep?: number | null;
   /** Libellés selon la source du build (Faille / OP.GG : cœur le plus joué, puis 4e item). */
   labels?: { core: string; option: string };
 }
@@ -175,6 +177,10 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
     const keep = seq.filter((x) => !i.skipped!.has(x.id));
     const later = seq.filter((x) => i.skipped!.has(x.id)).map((x) => ({ ...x, why: `${x.why} · passé 2 fois, gardé pour plus tard` }));
     seq.splice(0, seq.length, ...keep, ...later);
+  }
+  if (i.keep != null) {
+    const k = seq.findIndex((x) => x.id === i.keep);
+    if (k > 0) seq.unshift(...seq.splice(k, 1));
   }
   // Ton parcours : items finis déjà achetés (dans l'ordre de ton inventaire), puis la suite prévue, 6 places
   const known = new Set([...i.cores.flatMap((x) => [...x.core, ...x.options.map((o) => o.id)]), ...i.boots, ...i.counters.flatMap((t) => t.items)]);

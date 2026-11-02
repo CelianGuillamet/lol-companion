@@ -20,6 +20,7 @@ export interface Candidate {
   personal: { games: number; wins: number } | null;
   reasons: Reason[];
   actionable: boolean; // un clic peut le sélectionner maintenant
+  parts?: { synergy: number; comp: number }; // points avant plafond, pour mesurer leur poids réel
   fills?: string[]; // ce que ce champion apporte à l'équipe qui lui manquait
   balance?: { label: string; good: boolean }[]; // modificateurs ARAM du wiki (affichage seulement)
   balanceChange?: string; // ex. « modifié le 28/10 : dégâts −5 % → −10 % »

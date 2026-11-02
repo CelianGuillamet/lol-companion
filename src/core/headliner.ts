@@ -79,6 +79,15 @@ export function headlinerFromText(lines: string[], opts: HeadlinerTextOptions = 
 }
 
 /**
+ * Le texte lu n'est-il que le début du nom de skin d'un joueur (« Space Groove » pour « Space Groove Rell ») ? Le
+ * nom d'un skin à l'écran ne dit rien du headliner (2 nov. : « HEARTSTEEL Sett » lu dans une partie notée Disco).
+ */
+export function isSkinText(text: string, skins: string[]): boolean {
+  const t = normText(text);
+  return !!t && skins.some((s) => normText(s).startsWith(`${t} `));
+}
+
+/**
  * Textes lus qui ressemblent à un nom de headliner sans être reconnus (pour régler la lecture de la bannière depuis
  * `usage.json`). Lignes courtes seulement (pas de phrases du chat), 5 au plus.
  */

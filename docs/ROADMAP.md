@@ -6,7 +6,7 @@ L'app couvre l'ARAM, ARAM: Mayhem et la Faille de l'invocateur (classée, normal
 Prendre le premier item non coché de la priorité la plus haute, sauf s'il est bloqué. Chaque item a sa
 « preuve de fini ». Ajouter en bas ce qu'on découvre.
 
-## Ce qui existe (v1.61)
+## Ce qui existe (v1.62)
 
 Champ select (cartes + banc classés, compo, synergies, stats perso, prendre en un clic) · import runes / sorts /
 item set · onglet Build avec icônes (runes, sorts, 3 builds à 2 items + 3e item, bottes) · augments par rareté avec
@@ -63,6 +63,10 @@ champ select). Ne pas l'utiliser ailleurs.
   stats globales, ne juge jamais une carte estimée. Limite : ça mesure l'écart aux stats, pas la meilleure décision réelle.
 - [ ] À relire après 10 parties : la part de « coûteux » est-elle crédible ? Si presque tout est « proche », revoir
   `MIN_LOST` / `CONFIDENCE_Z` (review.ts).
+- [ ] Résistances urgentes (v1.61) : pas encore déclenchées, aucune des 3 parties du 2 nov. n'avait 60 % de dégâts d'un type.
+- [ ] Synergie + compo plafonnées à 5 points (v1.62, choix prudent, pas une mesure). Après 100 événements `champ_scored`
+  dans `usage.json`, comparer le winrate selon synergie + compo et ajuster `TEAM_BONUS_CAP` (advisor.ts).
+- [x] (v1.62) Conseil d'achat gardé tant que l'inventaire ne change pas (option `keep` de `nextBuys`).
 - [ ] Revue des achats : `item_bought` garde le conseil mais pas sa valeur en winrate, à enregistrer d'abord.
 - [ ] **Conseiller de reroll** : espérance de gain de relancer une carte. Étape 1 : mesurer les vraies règles et
   probabilités de tirage ; ne pas inventer de chiffre. Aucun concurrent ne l'annonce (comparatif Hexgate, 2 nov.).
@@ -129,6 +133,9 @@ champ select). Ne pas l'utiliser ailleurs.
   faux headliner n'apparaît (texte du chat). Confirmer K/DA = 5 augments sur une partie où la bannière est lue.
 - [ ] Headliner : compter dans « Mes parties » le taux de lecture (headliner_seen / parties Mayhem depuis v1.55)
   une fois 10 parties avec `headliner_miss` possible — pour savoir s'il faut agrandir la zone lue.
+- [ ] Faux headliner possible (2 nov.) : « Space Groove » lu 90 s après le début d'une partie où Vision a aussi lu
+  « HEARTSTEEL Sett » : ce sont peut-être des noms de skins. v1.62 : retiré si le `skinName` d'un joueur commence par ce
+  texte. À relire dans le journal (« Headliner … retiré ») avant d'utiliser le headliner dans le classement.
 - [ ] Headliner, tranche suivante : conseils propres au headliner dans le classement (Command Line : signaler la
   carte à reroller ; HEARTSTEEL : bonus des augments) — seulement une fois la lecture validée.
 - [x] (v1.13) **Augments nouveaux du 26.21** (35 ajouts) : peu de parties dans arammeta. Les signaler « nouveau, peu de

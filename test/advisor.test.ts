@@ -127,3 +127,26 @@ describe('fillAdvice', () => {
     expect(fillAdvice([])).toBeNull();
   });
 });
+
+describe('plafond synergie + compo', () => {
+  const meta = {
+    champs: {
+      1: { name_en: 'A', alias: 'A', tags: [], wr: 0.52, g: 9000, pairs: [2, 3, 4, 5].map((id) => ({ id, g: 5000, wr: 0.6, expected: 0.5, lift: 0.03, z: 5 })) },
+      2: { name_en: 'B', alias: 'B', tags: [], wr: 0.5, g: 9000 },
+      3: { name_en: 'C', alias: 'C', tags: [], wr: 0.5, g: 9000 },
+      4: { name_en: 'D', alias: 'D', tags: [], wr: 0.5, g: 9000 },
+      5: { name_en: 'E', alias: 'E', tags: [], wr: 0.5, g: 9000 },
+    },
+    augs: {},
+  } as unknown as TierList;
+
+  it('ne laisse pas 4 synergies additionnées écraser le winrate', () => {
+    const [c] = scoreCandidates(
+      { mode: 'mayhem', allies: [2, 3, 4, 5], candidates: [{ championId: 1, source: 'card', actionable: true }], personal: new Map(), names: String },
+      meta,
+    );
+    expect(c.parts?.synergy).toBe(12);
+    expect(c.score).toBe(7); // 2 de winrate + 5 de plafond
+    expect(c.reasons.at(-1)?.label).toContain('Plafond');
+  });
+});

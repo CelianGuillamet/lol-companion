@@ -1,5 +1,13 @@
 # Journal des versions
 
+## v1.62 — 2 nov. 2026 — conseils plus stables, synergie plafonnée
+- **Achat stable** : tant que ton inventaire ne change pas, le conseil ne change plus. Une nouvelle menace passe
+  après ton prochain achat. Vraie partie du 2 nov. : Thornmail, Iceborn, puis Thornmail en 90 secondes.
+- **Synergie + compo plafonnées à 5 points** : elles s'additionnaient sur tes 4 alliés (Tahm Kench à 52 % noté +10).
+  Choix prudent, pas une mesure : le score du champion joué et son détail sont maintenant enregistrés pour le vérifier.
+- **Headliner** : un texte qui n'est que le début du nom de skin d'un joueur est retiré. Limite : un vrai headliner
+  du même nom qu'un skin en jeu sera retiré aussi. Rien ne confirme encore que c'était la cause de « Space Groove ».
+
 ## v1.61 — 2 nov. 2026 — leur équipe compte plus tôt, et « il manque » est relié au conseil
 - **Résistances plus tôt** : 3 ennemis ou plus qui font surtout le même type de dégâts rendent l'armure ou la
   résistance magique urgentes, dès que ce type dépasse 60 % de leurs dégâts. L'item passe après ton 1er item de build. Vraie
