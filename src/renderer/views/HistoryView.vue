@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ReviewPanel from '../ui/ReviewPanel.vue';
+import { choiceText, points, reviewSummary } from '../../core/review';
 import Notice from '../ui/Notice.vue';
 import { QUEUE_LABEL } from '../../core/modes';
 const BAR: Record<string, string> = { good: 'up', bad: 'down', '': 'mid' };
@@ -15,7 +17,7 @@ async function load() {
   loading.value = false;
 }
 // recharge quand une partie est ajoutée ou complétée
-watch(() => `${state.value?.stats.total}-${state.value?.log[0]?.at}-${state.value?.connection}-${state.value?.data.patch}`, load, { immediate: true });
+watch(() => `${state.value?.stats.total}-${state.value?.log[0]?.at}-${state.value?.connection}-${state.value?.data.patch}-${state.value?.reviews ?? 0}`, load, { immediate: true });
 
 const mode = ref<'all' | 'aram' | 'mayhem' | 'sr'>('all');
 const result = ref<'all' | 'win' | 'loss'>('all');
@@ -110,6 +112,7 @@ const sessionRank = computed(() => {
 const weekLabel = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
 // ---------------------------------------------------------------- détail
+const reviewed = computed(() => reviewSummary(filtered.value.map((g) => g.review)));
 const open = ref<number | null>(null);
 const details = ref<Record<number, GameDetail | null | 'loading'>>({});
 
@@ -222,6 +225,16 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
         </section>
       </div>
 
+      <section v-if="reviewed" class="card reviewsum" aria-label="Bilan de tes choix d’augments">
+        <h2>Tes choix d’augments</h2>
+        <div class="small num">
+          {{ reviewed.solid }} choix solides sur {{ reviewed.analysed }}, sur {{ reviewed.games }} partie{{ reviewed.games > 1 ? 's' : '' }}
+          · environ {{ points(reviewed.lostPerGame) }} pts perdus par partie
+        </div>
+        <div v-if="reviewed.worst" class="small">Choix le plus coûteux : {{ choiceText(reviewed.worst) }}</div>
+        <div class="faint small">D’après les stats globales : ça note tes décisions, pas tes résultats. Ouvre une partie pour voir le détail.</div>
+      </section>
+
       <section class="card list">
         <div v-if="!filtered.length" class="faint pad">Aucune partie pour ces filtres{{ mode === 'sr' ? ' : tes parties de Faille s’ajoutent à la fin de chaque partie classée, normale ou Swiftplay' : '' }}.</div>
         <template v-for="g in filtered.slice(0, shown)" :key="g.gameId">
@@ -258,6 +271,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
           </button>
 
           <div v-if="open === g.gameId" class="detail">
+            <ReviewPanel v-if="g.review" class="wide" :review="g.review" />
             <div v-if="details[g.gameId] === 'loading'" class="faint small pad">Lecture de la partie dans le client…</div>
             <div v-else-if="!details[g.gameId]" class="faint small pad">
               Le client n’a plus le détail de cette partie (il ne garde que les plus récentes, et il doit être ouvert).
@@ -337,7 +351,8 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
 .augs img { border-radius: var(--radius); }
 .dmg { text-align: right; font-size: 13px; }
 .detail { padding: 6px 14px 14px 17px; background: var(--panel-2); display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.detail > .pad { grid-column: 1 / -1; }
+.detail > .pad, .detail > .wide { grid-column: 1 / -1; }
+.reviewsum { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
 .team { display: flex; flex-direction: column; gap: 4px; }
 .thead { display: flex; justify-content: space-between; font-weight: 650; padding: 4px 2px; border-bottom: 1px solid var(--line); }
 .p { display: grid; grid-template-columns: 28px 1fr auto 62px 90px; grid-template-rows: auto auto; gap: 2px 8px; align-items: center; padding: 4px; border-radius: var(--radius); font-size: 13px; }

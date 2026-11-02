@@ -6,11 +6,12 @@ import { tone, state, championIcon, pct, hideBroken } from './store';
 import { recap } from './insights';
 import PageHeader from './ui/PageHeader.vue';
 import Notice from './ui/Notice.vue';
+import ReviewPanel from './ui/ReviewPanel.vue';
 import type { HistoryEntry } from '../core/types';
 
 const games = ref<HistoryEntry[]>([]);
 // recharge aussi quand le client et les données arrivent (noms des champions, winrates globaux)
-watch(() => `${state.value?.stats.total}-${state.value?.connection}-${state.value?.data.patch}`, async () => (games.value = await window.api.getHistory()), { immediate: true });
+watch(() => `${state.value?.stats.total}-${state.value?.connection}-${state.value?.data.patch}-${state.value?.reviews ?? 0}`, async () => (games.value = await window.api.getHistory()), { immediate: true });
 
 const form = computed(() => games.value.slice(0, 10).reverse());
 // Session du jour (depuis 6 h du matin, pour garder la soirée qui déborde après minuit sur la même journée)
@@ -118,6 +119,7 @@ const winsOf = (x: { n: number; wr: number }) => Math.round(x.wr * x.n);
           <ul v-else class="lines">
             <li v-for="l in last.lines" :key="l.text" class="sm" :class="l.good ? 'good' : 'bad'"><span aria-hidden="true">{{ l.good ? '▲' : '▼' }}</span> {{ l.text }}</li>
           </ul>
+          <ReviewPanel v-if="last.game.review" :review="last.game.review" />
           <button class="btn ghost self-start" @click="go('games')">Voir l’historique</button>
         </section>
       </div>

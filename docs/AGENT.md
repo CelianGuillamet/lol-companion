@@ -139,3 +139,10 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - v1.59 : une lettre d'écart tolérée pour les noms ≥ 9 lettres ; « Bees » seul accepté pendant `BANNER_MS` (90 s,
   cardreader.ts) hors écran de cartes. Bannière ratée → `Engine.headlinerMissed` (journal + `usage.json`
   `headliner_miss` : lectures, textes approchants via `headlinerNearMisses`).
+
+## Revue des choix (v1.60)
+- `src/core/review.ts` est pur et testé. `Engine.reviewCards` garde au moment du tirage la valeur affichée en partie
+  (même calcul que `bestOffered`), `reviewOfGame` la range dans `HistoryGame.review` à la fin de partie.
+- `Engine.backfillReviews` note les anciennes parties depuis `usage.json` (`approx: true`), au démarrage et au
+  rechargement des stats. Sans détail arammeta pour un champion, la partie reste sans revue.
+

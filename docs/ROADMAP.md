@@ -6,7 +6,7 @@ L'app couvre l'ARAM, ARAM: Mayhem et la Faille de l'invocateur (classée, normal
 Prendre le premier item non coché de la priorité la plus haute, sauf s'il est bloqué. Chaque item a sa
 « preuve de fini ». Ajouter en bas ce qu'on découvre.
 
-## Ce qui existe (v1.59)
+## Ce qui existe (v1.60)
 
 Champ select (cartes + banc classés, compo, synergies, stats perso, prendre en un clic) · import runes / sorts /
 item set · onglet Build avec icônes (runes, sorts, 3 builds à 2 items + 3e item, bottes) · augments par rareté avec
@@ -58,6 +58,18 @@ Règle visuelle : le liseré prismatique (`--prism`) est réservé à LA recomma
 champ select). Ne pas l'utiliser ailleurs.
 
 ## Priorité 1 — ce que les concurrents font et qui manque
+
+- [x] (v1.60) **Revue des choix d'augments** (`src/core/review.ts`, `ui/ReviewPanel.vue`) : note chaque décision avec les
+  stats globales, ne juge jamais une carte estimée. Limite : ça mesure l'écart aux stats, pas la meilleure décision réelle.
+- [ ] À relire après 10 parties : la part de « coûteux » est-elle crédible ? Si presque tout est « proche », revoir
+  `MIN_LOST` / `CONFIDENCE_Z` (review.ts).
+- [ ] Revue des achats : `item_bought` garde le conseil mais pas sa valeur en winrate, à enregistrer d'abord.
+- [ ] **Conseiller de reroll** : espérance de gain de relancer une carte. Étape 1 : mesurer les vraies règles et
+  probabilités de tirage ; ne pas inventer de chiffre. Aucun concurrent ne l'annonce (comparatif Hexgate, 2 nov.).
+- [ ] Augments nouveaux au patch : LLM local (Ollama) sur description + kit. À faire seulement si un test à stats
+  cachées bat les mots-clés d'`augfit.ts`.
+- [ ] Simulateur de dégâts sur les 3 cartes : limiter aux augments chiffrés ; gros coût de maintenance, à décider avec Celian.
+- Pas de payant pour l'instant, décision de Celian (2 nov.) : pas d'API LLM facturée.
 
 - [x] **Items situationnels selon l'équipe adverse** (v1.6, via `/lol-gameflow/v1/session` teamOne/teamTwo plutôt que la Live API ; seuils calibrés sur 173 champions : anti-soins ~35 % des parties) (Hexgate le fait). En partie, la Live Client Data API
   (`https://127.0.0.1:2999/liveclientdata/allgamedata` → `allPlayers`) donne les 10 champions. Calculer le profil

@@ -176,6 +176,11 @@ describe('moteur contre un faux client League', () => {
     engine.headlinerMissed(4, ['HARTSTEL']);
     const miss = engine.usage.events.filter((e) => e.type === 'headliner_miss');
     expect(miss.at(-1)).toMatchObject({ type: 'headliner_miss', championId: 54, scans: 4, near: ['HARTSTEL'] });
+    // un choix d'augment complet lu à l'écran : sa valeur est gardée pour la revue d'après-partie
+    const panelRows = Object.values(engine.state.augments?.all ?? {}).flat().filter((a) => !a.estimated).slice(0, 3);
+    expect(panelRows).toHaveLength(3);
+    const reviewIds = panelRows.map((a) => a.id);
+    expect(engine.setOffered({ ids: reviewIds, names: panelRows.map((a) => a.name), rarity: null, unsure: null, misses: [] }, ctx)).toBe(true);
     // cartes Pentakill lues à l'écran → headliner de la partie, noté avec la partie
     expect(engine.setOffered({ ids: [3170, 3171, 3172], names: ['A', 'B', 'C'], rarity: null, unsure: null, misses: [] }, ctx)).toBe(true);
     expect(engine.state.headliner).toMatchObject({ key: 'pentakill', name: 'Pentakill', source: 'cartes' });
@@ -185,7 +190,7 @@ describe('moteur contre un faux client League', () => {
     engine.setOffered(null);
     mock.state.phase = 'EndOfGame';
     mock.state.eogGameId = 77;
-    mock.state.games[77] = game(77, 2400, 54, true, [1058]);
+    mock.state.games[77] = game(77, 2400, 54, true, [1058, reviewIds[2]]);
     await engine.tick();
     // une lecture commencée pendant la partie et terminée après sa fin est jetée (ni cartes, ni télémétrie)
     expect(engine.isCurrentRead(ctx)).toBe(false);
@@ -198,6 +203,23 @@ describe('moteur contre un faux client League', () => {
     expect(existsSync(join(dataDir, 'history.json'))).toBe(true);
     expect(engine.rawHistory().find((g) => g.gameId === 77)?.headliner).toBe('pentakill');
     expect(engine.getHistory().find((g) => g.gameId === 77)?.headliner).toBe('Pentakill');
+    // revue : seul le choix d'augment est noté (les cartes du headliner n'ont pas de stats), et elle reste avec la partie
+    const review = engine.getHistory().find((g) => g.gameId === 77)?.review;
+    expect(review?.choices).toHaveLength(1);
+    expect(review?.choices[0]).toMatchObject({ picked: reviewIds[2] });
+    expect(review?.choices[0].verdict).not.toBe('unknown');
+    expect(review?.approx).toBeUndefined();
+    expect(JSON.parse(readFileSync(join(dataDir, 'history.json'), 'utf8')).games.find((g: { gameId: number }) => g.gameId === 77).review.analysed).toBe(1);
+    // ancienne partie (avant la revue) : notée après coup depuis usage.json, une seule fois
+    const panel3 = await engine.championAugments(157);
+    const old = Object.values(panel3?.all ?? {}).flat().slice(0, 3).map((a) => a.id);
+    expect(old).toHaveLength(3);
+    engine.usage.add({ type: 'card_picked', at: 1, gameId: 3, round: 2, ids: old, best: old[0], picked: old[1], followed: false, win: false });
+    await expect(engine.backfillReviews()).resolves.toBe(1);
+    const backfilled = engine.getHistory().find((g) => g.gameId === 3)?.review;
+    expect(backfilled).toMatchObject({ approx: true, analysed: 1 });
+    expect(engine.state.reviews).toBe(1);
+    await expect(engine.backfillReviews()).resolves.toBe(0);
     const callsBefore = mock.calls.length;
     await engine.tick(); // pas de double enregistrement
     expect(mock.calls.slice(callsBefore).some((c) => c.path.includes('/games/77'))).toBe(false);
