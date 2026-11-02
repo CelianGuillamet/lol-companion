@@ -96,6 +96,8 @@ const open = ref<number | null>(null);
 
     <p v-if="toast" class="toast" :class="toast.ok ? 'good' : 'bad'">{{ toast.text }}</p>
 
+    <p v-if="cs.fillAdvice" class="fill">{{ cs.fillAdvice }}</p>
+
     <!-- Ton équipe en une ligne -->
     <section class="team" aria-label="Ton équipe">
       <span class="eyebrow">Ton équipe</span>
@@ -108,7 +110,7 @@ const open = ref<number | null>(null);
         <div class="bar"><div class="ad" :style="{ width: `${cs.needs.adShare * 100}%` }" /></div>
         <span class="lbl">AP</span>
       </div>
-      <span v-for="l in cs.needs.lacks" :key="l" class="need">Il manque {{ l }}</span>
+      <span v-for="l in cs.needs.lacks" :key="l" class="need">{{ cs.myChampionId ? 'Il manque encore' : 'Il manque' }} {{ l }}</span>
       <span v-if="!cs.needs.lacks.length && cs.allies.length" class="faint">Compo équilibrée</span>
       <span v-if="cs.mates?.length" class="mates">
         Déjà joué avec
@@ -165,6 +167,7 @@ const open = ref<number | null>(null);
 </template>
 
 <style scoped>
+.fill { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
 .wrap { max-width: 980px; }
 .small { font-size: 12px; }
 .decision {

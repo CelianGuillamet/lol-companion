@@ -134,6 +134,27 @@ export function needsOf(allies: number[], meta: TierList | null): TeamNeeds {
   return { adShare: comp.adShare, lacks, frontliners: comp.frontCount };
 }
 
+/** Ce que l'équipe n'avait pas et qu'elle a avec ce champion. */
+function fillsOf(before: TeamComposition, after: TeamComposition): string[] {
+  const filled = DIMS.filter((d) => before.lacks[d] && !after.lacks[d]).map((d) => DIM_LABEL[d]);
+  if (before.frontCount === 0 && after.frontCount > 0 && !filled.includes(DIM_LABEL.front)) filled.unshift(DIM_LABEL.front);
+  return filled;
+}
+
+/**
+ * Relie « il manque » au conseil : le meilleur choix comble-t-il un manque, et sinon qui le ferait, à quel prix ?
+ * Le classement reste le score total : combler un manque ne vaut pas toujours un champion nettement plus fort.
+ */
+export function fillAdvice(candidates: Candidate[]): string | null {
+  const best = candidates[0];
+  if (!best) return null;
+  if (best.fills?.length) return `${best.name} apporte ${best.fills.join(', ')}.`;
+  const other = candidates.find((c) => c.championId !== best.championId && c.actionable && c.fills?.length);
+  if (!other) return null;
+  const gap = fr(Math.max(0, best.score - other.score));
+  return `${other.name} apporterait ${other.fills!.join(', ')}, mais reste ${gap} pts derrière ${best.name} : son winrate et ses synergies comptent plus.`;
+}
+
 export function scoreCandidates(input: AdviceInput, meta: TierList | null): Candidate[] {
   const allies = input.allies.filter((id) => id > 0);
   // En ARAM classique, les winrates arammeta (Mayhem) ne sont qu'indicatifs : poids réduit.
@@ -150,6 +171,7 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
     const reasons: Reason[] = [];
     const m: MetaChampion | null = meta?.champs[String(cand.championId)] ?? null;
     let score = 0;
+    let fills: string[] = [];
 
     if (m) {
       const p = pts((m.wr - 0.5) * wrWeight);
@@ -175,13 +197,13 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
       }
 
       const withMe = compositionScore([...team, cand.championId], meta!);
+      fills = fillsOf(teamComposition(team, meta!), teamComposition([...team, cand.championId], meta!));
       const p3 = pts(withMe - baseComp);
       if (Math.abs(p3) >= 0.1) {
         score += p3;
         const before = teamComposition(team, meta!);
         const after = teamComposition([...team, cand.championId], meta!);
-        const filled = DIMS.filter((d) => before.lacks[d] && !after.lacks[d]).map((d) => DIM_LABEL[d]);
-        if (before.frontCount === 0 && after.frontCount > 0 && !filled.includes(DIM_LABEL.front)) filled.unshift('frontline');
+        const filled = fillsOf(before, after);
         const adShift = after.adShare - before.adShare;
         const balance = Math.abs(before.adShare - 0.5) > 0.15 && Math.abs(after.adShare - 0.5) < Math.abs(before.adShare - 0.5) ? (adShift < 0 ? 'dégâts magiques' : 'dégâts physiques') : null;
         const parts = [...filled, ...(balance ? [balance] : [])];
@@ -211,6 +233,7 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
       personal: perso,
       reasons,
       actionable: cand.actionable,
+      ...(fills.length ? { fills } : {}),
     });
   }
   return out.sort((a, b) => b.score - a.score);

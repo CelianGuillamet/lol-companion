@@ -20,6 +20,7 @@ export interface Candidate {
   personal: { games: number; wins: number } | null;
   reasons: Reason[];
   actionable: boolean; // un clic peut le sélectionner maintenant
+  fills?: string[]; // ce que ce champion apporte à l'équipe qui lui manquait
   balance?: { label: string; good: boolean }[]; // modificateurs ARAM du wiki (affichage seulement)
   balanceChange?: string; // ex. « modifié le 28/10 : dégâts −5 % → −10 % »
   mastery?: { level: number; points: number } | null; // ta maîtrise (tous modes), affichage seulement
@@ -40,6 +41,8 @@ export interface ChampSelectView {
   candidates: Candidate[];
   cardsOpen: boolean; // fenêtre de choix des cartes ouverte
   needs: TeamNeeds;
+  /** Phrase qui relie les manques de l'équipe au conseil. */
+  fillAdvice?: string | null;
   dataNote: string | null; // avertissement sur la fiabilité des données
   /** Coéquipiers déjà croisés (d'après ton historique) : Riot ID, parties ensemble, victoires. */
   mates?: { name: string; games: number; wins: number }[];

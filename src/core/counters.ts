@@ -99,8 +99,16 @@ export function enemyThreats(enemies: EnemyInput[], role: BuildRole): Threat[] {
   const physShare = phys / all;
   const magicShare = magic / all;
   const mainly = (k: 'phys' | 'magic') => known.filter((e) => e.comp[k] / TOTAL(e.comp) >= 0.6).map((e) => e.id);
-  if (physShare >= 0.6) add('armor', 'Armure', `${Math.round(physShare * 100)} % de leurs dégâts sont physiques`, mainly('phys'), physShare >= 0.7);
-  if (magicShare >= 0.6) add('mr', 'Résistance magique', `${Math.round(magicShare * 100)} % de leurs dégâts sont magiques`, mainly('magic'), magicShare >= 0.7);
+  // Compter les champions, pas seulement la part de dégâts : vraie partie du 2 nov., Xerath, Cassiopeia, Morgana et
+  // Brand en face restaient sous les 70 %, et la résistance magique arrivait après le 2e item de dégâts.
+  const dmgThreat = (k: 'phys' | 'magic', key: 'armor' | 'mr', title: string, share: number, word: string) => {
+    const who = mainly(k);
+    if (share < 0.6) return;
+    const why = who.length >= 3 ? `${who.length} ennemis font surtout des dégâts ${word}s` : `${Math.round(share * 100)} % de leurs dégâts sont ${word}s`;
+    add(key, title, why, who, share >= 0.7 || who.length >= 3);
+  };
+  dmgThreat('phys', 'armor', 'Armure', physShare, 'physique');
+  dmgThreat('magic', 'mr', 'Résistance magique', magicShare, 'magique');
 
   const tanks = known.filter((e) => e.comp.front >= 2);
   if (tanks.length >= 3) add('pen', 'Pénétration', `${tanks.length} lignes de front en face`, tanks.map((e) => e.id));
@@ -218,8 +226,9 @@ export function readTeams(
 
   // Ce qu'ils construisent vraiment (tableau des scores) : critiques, vitesse d'attaque, vol de vie
   const critN = count('CriticalStrike');
-  // 3 items à critiques au moins (une Jinx seule avec 2 items ne justifie pas de changer ton build)
-  if (critN >= 3 && !has('crit')) {
+  // 3 items à critiques sur au moins 2 ennemis, ou 4 sur un seul (vraie partie du 2 nov. : Frozen Heart conseillé
+  // à cause de Quinn seule)
+  if ((critN >= 4 || (critN >= 3 && holders('CriticalStrike').length >= 2)) && !has('crit')) {
     extra.push({ key: 'crit', title: 'Coups critiques', why: `${critN} items à critiques en face`, champions: holders('CriticalStrike'), items: ITEMS.crit[role], urgent: critN >= 4 });
   }
   const asN = count('AttackSpeed');

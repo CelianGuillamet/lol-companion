@@ -6,7 +6,7 @@ L'app couvre l'ARAM, ARAM: Mayhem et la Faille de l'invocateur (classée, normal
 Prendre le premier item non coché de la priorité la plus haute, sauf s'il est bloqué. Chaque item a sa
 « preuve de fini ». Ajouter en bas ce qu'on découvre.
 
-## Ce qui existe (v1.60)
+## Ce qui existe (v1.61)
 
 Champ select (cartes + banc classés, compo, synergies, stats perso, prendre en un clic) · import runes / sorts /
 item set · onglet Build avec icônes (runes, sorts, 3 builds à 2 items + 3e item, bottes) · augments par rareté avec
