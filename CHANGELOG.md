@@ -1,5 +1,15 @@
 # Journal des versions
 
+## v1.61 — 2 nov. 2026 — leur équipe compte plus tôt, et « il manque » est relié au conseil
+- **Résistances plus tôt** : 3 ennemis ou plus qui font surtout le même type de dégâts rendent l'armure ou la
+  résistance magique urgentes, dès que ce type dépasse 60 % de leurs dégâts. L'item passe après ton 1er item de build. Vraie
+  partie du 2 nov. : contre Xerath, Cassiopeia, Morgana et Brand, la résistance magique arrivait après Manamune.
+- **Moins de faux conseils contre les critiques** : un seul ennemi à 3 items critiques ne change plus ton build
+  (il en faut 2 ennemis, ou 4 items sur un seul).
+- **Champ select** : une fois ton champion choisi, « Il manque encore » ne cite plus ce qu'il apporte. Une phrase dit
+  ce qu'apporte le meilleur choix, ou qui comblerait le manque et à combien de points.
+- **Builds les plus gagnants** : indiqué clairement qu'ils ne tiennent pas compte de leur équipe (le prochain achat, si).
+
 ## v1.60 — 2 nov. 2026 — revue de tes choix d'augments
 - **Chaque choix d'augment est noté après la partie**, comme la revue d'une partie d'échecs : meilleure carte,
   choix proche, choix coûteux (avec les points de winrate estimés perdus) ou non noté. Visible dans « Ta dernière

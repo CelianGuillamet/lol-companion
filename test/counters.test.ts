@@ -46,6 +46,19 @@ describe('ennemis en avance', () => {
     expect(fedWeight(1, 5)).toBe(1);
     expect(fedWeight(30, 0)).toBe(2.5);
   });
+
+  it('trois mages ou plus rendent la résistance magique urgente, même sous 70 % des dégâts', () => {
+    // Vraie partie du 2 nov. : Xerath, Cassiopeia, Morgana et Brand plus une Quinn physique
+    const mage = () => comp({ phys: 100, magic: 1000 });
+    const team = [mage(), mage(), mage(), mage(), comp({ phys: 1500, magic: 100 })].map((c, i) => ({ id: i + 1, comp: c }));
+    const mr = enemyThreats(team, 'ad').find((t) => t.key === 'mr');
+    expect(mr).toMatchObject({ urgent: true, champions: [1, 2, 3, 4], why: '4 ennemis font surtout des dégâts magiques' });
+  });
+
+  it('une équipe mixte n’impose pas de résistance en urgence', () => {
+    const mix = [comp({ phys: 1400, magic: 100 }), comp({ phys: 1400, magic: 100 }), comp({ phys: 100, magic: 1400 }), comp({}), comp({})].map((c, i) => ({ id: i + 1, comp: c }));
+    expect(enemyThreats(mix, 'ad').some((t) => t.urgent)).toBe(false);
+  });
 });
 
 import { readTeams } from '../src/core/counters';
@@ -74,9 +87,15 @@ describe('readTeams : items achetés en face', () => {
   const comp = () => ({ phys: 1, magic: 1, true: 0, front: 1, sustain: 1, cc: 1, damage: 1 }) as never;
   const cat = (id: number) => (id === 1 ? ['CriticalStrike', 'Damage'] : id === 2 ? ['LifeSteal'] : []);
   it('critiques et vol de vie vus au tableau des scores', () => {
-    const r = readTeams('tank', [], [{ id: 1, name: 'Quinn', comp: comp(), items: [1, 1, 1, 2] }, { id: 2, name: 'Yi', comp: comp(), items: [2] }], [], cat, () => '');
+    const r = readTeams('tank', [], [{ id: 1, name: 'Quinn', comp: comp(), items: [1, 1, 2] }, { id: 2, name: 'Yi', comp: comp(), items: [1, 2] }], [], cat, () => '');
     expect(r.extra.map((t) => t.key)).toEqual(['crit', 'antiheal']);
     expect(r.extra[0].items[0]).toBe(3143);
+  });
+
+  it('un seul ennemi à 3 items critiques ne change pas ton build, à 4 si', () => {
+    const one = (n: number) => readTeams('tank', [], [{ id: 1, name: 'Quinn', comp: comp(), items: Array(n).fill(1) }], [], cat, () => '');
+    expect(one(3).extra.map((t) => t.key)).not.toContain('crit');
+    expect(one(4).extra.map((t) => t.key)).toContain('crit');
   });
 });
 

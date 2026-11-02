@@ -139,6 +139,7 @@ const known = (n?: string | null) => (n && !/^#\d+$/.test(n) ? n : null);
     <section v-if="b.cores.length" class="card block">
       <h2 v-if="b.mode === 'sr'">Build <span class="faint">cœur le plus joué → 4e/5e/6e items, classés par fiabilité</span></h2>
       <h2 v-else>Builds les plus gagnants <span class="faint">2 items de base + 3e item conseillé</span></h2>
+      <p v-if="b.mode !== 'sr'" class="faint small">Stats générales du champion, sans tenir compte de leur équipe. En partie, le prochain achat les adapte à leurs dégâts et à leurs items.</p>
       <div v-for="(c, i) in b.cores" :key="i" class="core" :class="{ best: i === 0 }">
         <div class="items">
           <template v-for="(it, j) in c.core" :key="it.id">

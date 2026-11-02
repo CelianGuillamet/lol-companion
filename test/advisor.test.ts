@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { compositionScore, needsOf, pairLift, scoreCandidates, teamComposition } from '../src/core/advisor';
+import { compositionScore, fillAdvice, needsOf, pairLift, scoreCandidates, teamComposition } from '../src/core/advisor';
+import type { Candidate } from '../src/core/types';
 import { parseLockfile, parseProcessArgs } from '../src/core/lcu';
 import { modeOf } from '../src/core/modes';
 import type { TierList } from '../src/core/arammeta';
@@ -103,5 +104,26 @@ describe('classement des candidats', () => {
     const out = scoreCandidates({ mode: 'aram', allies, candidates: [{ championId: 89, source: 'bench', actionable: true }], personal: new Map(), names }, null);
     expect(out[0].score).toBe(0);
     expect(out[0].reasons[0].label).toMatch(/Pas de données/);
+  });
+});
+
+describe('fillAdvice', () => {
+  const c = (championId: number, name: string, score: number, fills?: string[], actionable = true): Candidate =>
+    ({ championId, name, source: 'bench', score, winrate: 0.5, games: 1000, personal: null, reasons: [], actionable, ...(fills ? { fills } : {}) });
+
+  it('dit ce qu’apporte le meilleur choix', () => {
+    expect(fillAdvice([c(1, 'Sett', 5, ['frontline'])])).toBe('Sett apporte frontline.');
+  });
+
+  it('nomme l’alternative qui comble le manque et ce qu’elle coûte', () => {
+    expect(fillAdvice([c(1, 'Jax', 6.4), c(2, 'Sett', 4.1, ['frontline'])])).toBe(
+      'Sett apporterait frontline, mais reste 2,3 pts derrière Jax : son winrate et ses synergies comptent plus.',
+    );
+  });
+
+  it('ne propose pas un champion qu’on ne peut pas prendre, et se tait sans manque comblé', () => {
+    expect(fillAdvice([c(1, 'Jax', 6), c(2, 'Sett', 4, ['frontline'], false)])).toBeNull();
+    expect(fillAdvice([c(1, 'Jax', 6), c(2, 'Fizz', 4)])).toBeNull();
+    expect(fillAdvice([])).toBeNull();
   });
 });

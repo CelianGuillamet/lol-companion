@@ -7,7 +7,7 @@ import { LcuClient, discoverCredentials, liveClient, type Credentials } from './
 import { Arammeta, type ChampionDetail, type DetailRow } from './arammeta';
 import { GameData } from './gamedata';
 import { History, parseGame, participantStats, hasFullDetail, type RawGame } from './history';
-import { scoreCandidates, needsOf } from './advisor';
+import { scoreCandidates, needsOf, fillAdvice } from './advisor';
 import { parseSession, readSubset, pickCard, takeFromBench, requestTradeDetailed, type ParsedChampSelect, type RawSession } from './champselect';
 import { applyRunes, applySpells, applyItemSet, bestSpells, recommendedPage } from './loadout';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './settings';
@@ -720,7 +720,9 @@ export class Engine extends EventEmitter {
       allies: parsed.allies.map((id) => ({ championId: id, name: this.champName(id) })),
       candidates,
       cardsOpen: parsed.cards.length > 0,
-      needs: needsOf(parsed.allies, tier),
+      // Avec ton champion : « il manque » ne doit plus citer ce qu'il apporte
+      needs: needsOf(parsed.myChampionId ? [...parsed.allies, parsed.myChampionId] : parsed.allies, tier),
+      fillAdvice: fillAdvice(candidates),
       sr: mode === 'sr' ? await this.srSelect(session, parsed.myChampionId) : null,
       dataNote: mode === 'sr' ? null : !tier
         ? 'Données globales indisponibles : classement basé uniquement sur tes stats perso.'
