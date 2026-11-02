@@ -1,5 +1,28 @@
 # Journal des versions
 
+## v1.59 — 29 oct. 2026 — headliner mieux lu, et mesuré
+- **Bannière du headliner plus tolérante** : une lettre mal lue ne fait plus rater les noms longs
+  (« HEARTSTEE1 », « Command Lime », « Space Gr0ove »). Les noms courts (Disco, K/DA) restent exacts.
+- **Bees reconnu** : « Bees » seul est accepté pendant la bannière du début (90 premières secondes), hors écran
+  de cartes (l'augment « BEES! » ne déclenche toujours rien). Avant, il fallait « Headliner : Bees ».
+- **Lecture ratée notée** : si aucun headliner n'est reconnu au début d'une partie Mayhem, le journal l'écrit
+  (« Headliner non reconnu au début de partie (N lectures) ; textes approchants : … ») et `usage.json` garde un
+  `headliner_miss` (lectures faites, 5 textes courts proches d'un nom au plus). Sert à régler la lecture : sur
+  tes 2 parties de ce soir, Space Groove a été lu (Nasus) mais rien pour Hwei.
+- Tests : tolérance d'une lettre, « Bees » seul, textes approchants, événement `headliner_miss` dans le
+  scénario moteur.
+
+## v1.58 — 29 oct. 2026 — lectures d'écran et boucle fiables aux transitions
+- **Plus de cartes collées à la mauvaise situation** : une lecture d'écran (capture + reconnaissance, plusieurs
+  secondes) est jetée si, entre-temps, la partie s'est terminée, le champion a changé ou un nouveau choix
+  d'augment (niveau 7 / 11 / 15) est arrivé. Avant, un résultat tardif pouvait s'afficher après la fin de partie,
+  compter dans « Reco d'augment suivie » ou donner un faux headliner. Même contrôle pour ⌘⇧R et la bannière du
+  headliner. Le journal note « Lecture des cartes ignorée » quand ça arrive.
+- **Arrêt propre du moteur** : un arrêt (ou redémarrage) pendant une lecture du client ne relance plus la boucle
+  en double ; la lecture d'écran s'arrête aussi net à la fermeture.
+- Tests : promesses différées (arrêt pendant un tick, redémarrage sans double boucle) et lectures périmées
+  (fin de partie, changement de choix) dans le scénario moteur.
+
 ## v1.57 — 29 oct. 2026 — refonte de l'interface (fondations, parcours, états)
 - **Fondations partagées** : surfaces à 3 niveaux et filets froids (l'or n'encadre plus chaque panneau : il est
   réservé à la navigation active, à l'action principale et à LA recommandation), échelle typographique,

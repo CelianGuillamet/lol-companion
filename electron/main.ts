@@ -609,7 +609,7 @@ app.whenReady().then(async () => {
     updateOverlay(engine.state);
   });
   // Lire les cartes d'augments maintenant (si la lecture automatique les a ratées)
-  globalShortcut.register('CommandOrControl+Shift+R', () => void cardReader.scanNow().then((r) => r.read && engine.setOffered(r.read)));
+  globalShortcut.register('CommandOrControl+Shift+R', () => void cardReader.scanNow().then((r) => r.read && engine.setOffered(r.read, r.context)));
   globalShortcut.register('CommandOrControl+Shift+M', cycleOverlayDisplay); // panneau sur l'écran suivant
   // Fenêtre second écran : l'afficher / la masquer à tout moment
   globalShortcut.register('CommandOrControl+Shift+S', async () => {

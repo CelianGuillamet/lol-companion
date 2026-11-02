@@ -10,6 +10,8 @@ export type UsageEvent =
   | { type: 'ocr_miss'; at: number; text: string }
   /** Headliner reconnu en partie (pour vérifier la lecture : texte lu à l'écran, ou cartes). */
   | { type: 'headliner_seen'; at: number; key: string; source: 'écran' | 'cartes'; text?: string }
+  /** Aucun headliner reconnu pendant la bannière du début de partie : lectures faites et textes approchants. */
+  | { type: 'headliner_miss'; at: number; championId: number; scans: number; near: string[] }
   /** Item fini acheté en partie, et ce que l'app conseillait juste avant (followed = c'était le même). */
   | { type: 'item_bought'; at: number; championId: number; id: number; reco: number | null; plan: number[]; followed: boolean };
 

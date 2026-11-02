@@ -1,12 +1,12 @@
 # Feuille de route
 
-Critère unique pour ajouter une fonction : **est-ce que ça fait gagner des parties ARAM / Mayhem à Celian, sur Mac ?**
-Les fonctions pensées pour la Faille (jungle, wards, lanes, ranked) n'entrent pas.
+Critère unique pour ajouter une fonction : **est-ce que ça fait gagner des parties à Celian, sur Mac, dans un mode 5v5 ?**
+L'app couvre l'ARAM, ARAM: Mayhem et la Faille de l'invocateur (classée, normale, Swiftplay), à la demande de Celian.
 
 Prendre le premier item non coché de la priorité la plus haute, sauf s'il est bloqué. Chaque item a sa
 « preuve de fini ». Ajouter en bas ce qu'on découvre.
 
-## Ce qui existe (v1.55)
+## Ce qui existe (v1.59)
 
 Champ select (cartes + banc classés, compo, synergies, stats perso, prendre en un clic) · import runes / sorts /
 item set · onglet Build avec icônes (runes, sorts, 3 builds à 2 items + 3e item, bottes) · augments par rareté avec
@@ -27,11 +27,16 @@ Beaucoup de fonctions v1.10 → v1.23 n'ont été testées que contre le faux cl
   (augment en plus) — à confirmer avec une partie où le headliner est noté.
 - [x] (v1.53) `champselect-*.json` : `myTeam[].gameName/tagLine` présents ; `trades[]` = `{cellId, id, state}`
   (seul state vu : INVALID).
-- [ ] À chaque session : relire `usage.json` (`ocr_miss`, `cards_seen.unsure`). Au 29 oct. : 58 lectures
-  incomplètes sur 173. Restent non reconnus : « Stats on Stats on Stats! », « Anti-Magic », « Magical Opus »,
-  « it and Safe », « Good Aga », « G Invulnerability » (29 oct. 10 h : aucune partie depuis, mêmes chiffres ;
-  « rox): Heavy Hitter », « … is unstoppable! » = chat / annonces, à ignorer) → vérifier s'ils sont dans la liste d'augments du client
-  / arammeta (réseau du conteneur et du Mac fermés au wiki et à arammeta le 29 oct. : pas pu vérifier).
+- [x] (2 nov.) **Lecture des cartes mesurée sur les vrais choix, pas sur les captures** : 47 des 51 augments réellement
+  pris (13 parties Mayhem depuis la v1.39) ont eu une lecture complète ; sur 53 tirages, 48 ont fini complets, délai
+  médian 2 s. Les « 58 sur 173 » comptaient chaque capture, dont celles prises pendant l'animation des cartes et les
+  lectures d'une seule carte en plein combat (filtrées depuis). **Ne pas relancer de chantier OCR sur ce chiffre.**
+  Reste 4 choix non couverts : 2 sur la 1re partie (`championId` 44 dans `usage.json`), 2 sur des
+  parties à 5 augments (l'augment en plus n'a sans doute pas son propre `round`, voir `offersThisGame`).
+- [ ] Noms jamais reconnus : « Stats on Stats on Stats! », « Anti-Magic », « Magical Opus » (absents de la page
+  ARAM: Mayhem/Augments du wiki le 2 nov. : sans doute pas de vrais augments Mayhem à chaque fois, à confirmer avec
+  `cherry-augments.json` sur le client). Priorité basse : 3 textes sur 195 lectures.
+- [ ] Parties à 5 augments : enregistrer aussi le choix en plus dans `card_picked`.
 
 ### Constats sur l'historique réel (28 oct., 108 parties Mayhem, 55 détaillées)
 - **Headliner visible après coup** : les parties Pentakill ont un augment marqueur **3176** (nom client
@@ -89,7 +94,7 @@ champ select). Ne pas l'utiliser ailleurs.
 - [x] (v1.11, comparaison arammeta en v1.21) **Page champion perso** : clic sur un champion dans Mes stats → tes parties dessus, tes augments et items avec
   leur winrate perso, comparés aux stats globales arammeta.
 
-- [ ] **Headliners Mayhem (patch 26.21, « Journey to Stardom »)** : un headliner par partie (K/DA : cartes → augment
+- [x] (étapes 1 et 2 faites, v1.53 / v1.55 ; la suite est dans les items ci-dessous) **Headliners Mayhem (patch 26.21, « Journey to Stardom »)** : un headliner par partie (K/DA : cartes → augment
   en plus ; HEARTSTEEL : augments avec modificateurs ; True Damage : enclumes ; Pentakill : sort renforcé au début
   et niveau 18 ; Disco / Space Groove : or sous la boule disco ; Cafe Cuties : reliques de soin renforcées ; Bees ;
   Command Line : le 1er reroll de chaque choix monte la rareté). Étape 1 : lire les fichiers
@@ -102,10 +107,16 @@ champ select). Ne pas l'utiliser ailleurs.
   **Étape 2, 1re tranche faite (v1.55)** : `src/core/headliner.ts` — nom lu à l'écran (ligne exacte, sans « ! »),
   cartes Pentakill 3170-3173, conseils dans `InGameView` (bandeau), enregistré dans `HistoryGame.headliner` ;
   « K/DA (probable) » = 5 augments depuis le 21 oct.
-- [ ] **Headliner : vérifier en vraie partie** que la bannière est lue (journal « Headliner : … lu à l'écran »,
+- [ ] **Headliner : vérifier en vraie partie** (29 oct. soir : 1 sur 2 — « Space Groove » lu 5 s après la
+  détection de la fenêtre, partie Nasus ; rien sur la partie Hwei, aucun faux headliner. v1.59 : tolérance d'une
+  lettre (noms ≥ 9 lettres), « Bees » seul pendant les 90 premières secondes hors écran de cartes, et événement
+  `headliner_miss` (lectures + textes approchants) dans `usage.json` / journal → à relire : si les ratés n'ont
+  aucun texte approchant, la bannière est hors de `cardsArea()` ou finie avant la 1re lecture.) Critère : bannière lue (journal « Headliner : … lu à l'écran »,
   `usage.json` → `headliner_seen`). Si rien en 5 parties Mayhem : la bannière est hors de `cardsArea()` ou
   disparaît avant la 1re lecture → capturer le haut de l'écran les 20 premières secondes. Vérifier aussi qu'aucun
   faux headliner n'apparaît (texte du chat). Confirmer K/DA = 5 augments sur une partie où la bannière est lue.
+- [ ] Headliner : compter dans « Mes parties » le taux de lecture (headliner_seen / parties Mayhem depuis v1.55)
+  une fois 10 parties avec `headliner_miss` possible — pour savoir s'il faut agrandir la zone lue.
 - [ ] Headliner, tranche suivante : conseils propres au headliner dans le classement (Command Line : signaler la
   carte à reroller ; HEARTSTEEL : bonus des augments) — seulement une fois la lecture validée.
 - [x] (v1.13) **Augments nouveaux du 26.21** (35 ajouts) : peu de parties dans arammeta. Les signaler « nouveau, peu de
@@ -127,7 +138,10 @@ champ select). Ne pas l'utiliser ailleurs.
   Nécessite d'enregistrer les noms des alliés (déjà dans le détail des 10 joueurs) dans `HistoryGame`.
 - [x] (v1.7, sans l'heure de jeu) Courbe de winrate dans le temps (par semaine) et winrate par **heure de jeu** / longueur de session (tilt).
 - [ ] « Tes meilleurs champions Mayhem » utilisés comme bonus dans le classement du champ select (déjà partiel via
-  `personal`) : vérifier le poids sur les vraies données.
+  `personal`) : vérifier le poids sur les vraies données. **29 oct. (119 parties Mayhem, 75 champions)** : les
+  champions reviennent rarement (cartes aléatoires) ; seules 8 parties avaient ≥ 3 parties antérieures sur le
+  champion (seuil du bonus), 44 en avaient ≥ 1 (bilan perso ≥ 50 % : 16V/30 ; < 50 % : 6V/14). Impossible de
+  conclure : garder le poids actuel (0,5, lissage 5 parties) et refaire vers 300 parties.
 - [x] (v1.7) Export / sauvegarde de `history.json` (bouton) — les données perso n'existent que là.
 
 - [ ] **Poids de la maîtrise** : quand l'historique local aura assez de parties (≥ 150), mesurer si ton winrate
@@ -135,9 +149,11 @@ champ select). Ne pas l'utiliser ailleurs.
 
 ## Priorité 3 — confort
 
-- [ ] Fiabilité des transitions : invalider une lecture OCR terminée après un changement de partie / champion
-  et empêcher une boucle du moteur de repartir après `stop()` pendant un tick en cours. Problèmes identifiés
-  en revue, distincts du chantier achats v1.56 ; à couvrir par des tests de promesses différées.
+- [x] (v1.58) Fiabilité des transitions : `Engine.readContext()` (n° de situation + champion + choix) pris avant
+  chaque capture, lecture jetée si périmée (`isCurrentRead`, setOffered / setHeadliner) ; boucle du moteur
+  numérotée (`loopGen`), plus de reprise après `stop()`. Tests : `test/engine-loop.test.ts` + scénario moteur.
+  À surveiller en vraie partie : « Lecture des cartes ignorée » dans le journal ne doit apparaître qu'aux
+  transitions (si elle apparaît à chaque choix, le contexte change trop souvent → retirer le choix du contexte).
 - [ ] Empaqueter l'app (⚠ modifier l'Info.plist d'Electron casse sa signature : sur Mac Apple Silicon il faut re-signer avec `codesign --force --deep -s -`, ce qu'on ne peut faire que dans un Terminal du Mac, pas depuis le shell Linux. Nécessite Celian ou la commande à distance de l'ordinateur) (nom « ARAM Companion » dans le Dock au lieu d'« Electron », icône) avec electron-builder,
   sans signature (usage perso). Garder le lanceur actuel tant que ce n'est pas validé.
 - [x] (v1.9) Mise à jour des données arammeta automatique au changement de patch (comparer la version du client).

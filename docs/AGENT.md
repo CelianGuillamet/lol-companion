@@ -5,10 +5,11 @@ sessions précédentes : tout ce qu'il faut savoir est ici, dans `docs/ROADMAP.m
 
 ## Le projet
 
-App compagnon ARAM / ARAM: Mayhem pour League of Legends, **macOS uniquement**, usage perso de Celian (dev Vue/TS).
+App compagnon League of Legends pour tous les modes 5v5 (ARAM, ARAM: Mayhem, Faille), **macOS uniquement**, usage perso de Celian (dev Vue/TS).
 Electron 44 + Vue 3 + Vite + TypeScript, tests vitest. Source de vérité : ce dossier sur le Mac de Celian
-(`~/Documents/aram-companion`). Il n'y a pas de dépôt git (le dossier connecté interdit les suppressions, ce qui
-casse git) : l'historique, ce sont les archives `.install/aram-companion-vX.Y.tgz` et `CHANGELOG.md`.
+(`~/Documents/aram-companion`). Pas de git dans ce dossier (le dossier connecté interdit les suppressions, ce qui
+casse git) : l'historique, ce sont les archives `.install/aram-companion-vX.Y.tgz` et `CHANGELOG.md`. Le code est
+publié sur le dépôt public GitHub `CelianGuillamet/lol-companion` : ne jamais y mettre `probe-output/`.
 
 Code :
 - `src/core/` : logique sans Electron (LCU, arammeta, conseiller, champ select, runes/sorts, historique, moteur).
@@ -46,7 +47,7 @@ Plusieurs sessions peuvent tourner (tâche planifiée toutes les 4 h + session i
 ## Procédure d'une session
 
 Le Mac est accessible par les outils `mcp__remote-devices__*` (shell Linux sur les dossiers connectés : le projet est
-dans `$HOME/mnt/Documents/aram-companion`). Les `node_modules` du Mac sont des binaires macOS : **on build et on teste
+dans `$HOME/mnt/Documents/aram-companion` ou `$HOME/mnt/aram-companion` selon le dossier connecté). Les `node_modules` du Mac sont des binaires macOS : **on build et on teste
 dans le conteneur cloud**, pas sur le Mac.
 
 1. Lire `docs/AGENT.md`, `docs/ROADMAP.md`, `CHANGELOG.md`.
@@ -135,3 +136,6 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
   `cardsArea()`, lignes avec « ! » ignorées) ou par les cartes Pentakill 3170-3173 (`Engine.setOffered`) →
   `state.headliner`, remis à zéro au champ select, noté dans `HistoryGame.headliner` (clé). Capture de test :
   `ARAM_SMOKE_HEADLINER="Command Line"`.
+- v1.59 : une lettre d'écart tolérée pour les noms ≥ 9 lettres ; « Bees » seul accepté pendant `BANNER_MS` (90 s,
+  cardreader.ts) hors écran de cartes. Bannière ratée → `Engine.headlinerMissed` (journal + `usage.json`
+  `headliner_miss` : lectures, textes approchants via `headlinerNearMisses`).
