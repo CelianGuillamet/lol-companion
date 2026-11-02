@@ -1,5 +1,20 @@
 # Journal des versions
 
+## v1.60 — 2 nov. 2026 — revue de tes choix d'augments
+- **Chaque choix d'augment est noté après la partie**, comme la revue d'une partie d'échecs : meilleure carte,
+  choix proche, choix coûteux (avec les points de winrate estimés perdus) ou non noté. Visible dans « Ta dernière
+  partie » à l'accueil et en ouvrant une partie dans Mes parties → Toutes les parties.
+- **Bilan sur plusieurs parties** dans Toutes les parties, selon les filtres : choix solides, points perdus par
+  partie, choix le plus coûteux.
+- **Pourquoi ça compte** : il faudrait environ 1 500 parties par groupe pour voir un écart de 5 points sur ton
+  winrate. La revue juge la décision avec les stats globales, donc elle sert dès la première partie.
+- **Prudente par construction** : « coûteux » seulement si l'écart dépasse 1 point et tient sur l'échantillon.
+  Carte estimée ou non lue : choix non noté, jamais une fausse erreur.
+- **Tes anciennes parties** sont notées au lancement à partir de `usage.json`, avec les stats actuelles et sans ton
+  build du moment (indiqué sur la revue).
+- 100 % local, gratuit, sans LLM. Les achats ne sont pas encore notés. Tests : `test/review.test.ts` et scénario
+  moteur. Rendu vérifié sous Linux avec des données d'exemple ; pas encore vu sur une vraie partie.
+
 ## v1.59 — 29 oct. 2026 — headliner mieux lu, et mesuré
 - **Bannière du headliner plus tolérante** : une lettre mal lue ne fait plus rater les noms longs
   (« HEARTSTEE1 », « Command Lime », « Space Gr0ove »). Les noms courts (Disco, K/DA) restent exacts.

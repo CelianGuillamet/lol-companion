@@ -1,3 +1,4 @@
+import type { GameReview } from './review';
 // Types partagés entre le processus principal (Electron) et l'interface (Vue).
 
 export type Mode = 'aram' | 'mayhem' | 'sr';
@@ -206,6 +207,8 @@ export interface HistoryGame {
   allies?: number[];
   enemies?: number[];
   allyNames?: string[]; // Riot ID des 4 coéquipiers (même ordre que allies)
+  /** Revue des choix d'augments (core/review.ts), absente si aucune carte n'a été lue à l'écran. */
+  review?: GameReview;
   noDetail?: boolean; // détail introuvable dans le client
   /** Headliner Mayhem noté en direct (clé de headliner.ts, ex. « commandline ») : lu à l'écran ou d'après les cartes. */
   headliner?: string;
@@ -344,6 +347,8 @@ export interface PlayerCard {
 }
 
 export interface AppState {
+  /** Nombre d'anciennes parties notées par la revue depuis le lancement (recharge l'historique affiché). */
+  reviews?: number;
   connection: Connection;
   player?: PlayerCard | null;
   phase: string | null;

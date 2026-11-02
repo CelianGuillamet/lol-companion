@@ -16,9 +16,10 @@ import { wilson, verdictOf } from './stats';
 import { Balance, badges } from './balance';
 import { nextBuys, TRANSFORMS } from './nextbuy';
 import { buildRole, championTags, compFromItems, counterItemsFor, damageKind, enemiesFromSession, enemyThreats, fedWeight, readTeams } from './counters';
+import { reviewChoice, reviewGame, type GameReview, type ReviewCard } from './review';
 import type { BalanceBadge } from './balance';
 import type { CardCandidate, CardRead } from './cardmatch';
-import { Usage, followStat } from './usage';
+import { Usage, followStat, type UsageEvent } from './usage';
 import { headlinerFromCards, historyHeadliner, type HeadlinerInfo } from './headliner';
 import { AugmentInfo, buildProfile, fitOf } from './augfit';
 import { OpggClient, OpggData, buildArgs, laneOf, LANE_LABEL, matchupFrom, counterPicksFrom, type Lane, type OpggAnalysis } from './opgg';
@@ -70,8 +71,9 @@ export class Engine extends EventEmitter {
   /** Ton build en cours : profil (critiques, AP…) et nombre d'items pris en compte. */
   private buildFit: { profile: ReturnType<typeof buildProfile>; seen: number } | null = null;
   /** Dernières cartes lues par choix d'augment pendant la partie en cours (pour savoir si tu as suivi la reco). */
-  private offersThisGame = new Map<string, { round: number | null; ids: number[]; best: number | null }>();
+  private offersThisGame = new Map<string, { round: number | null; ids: number[]; best: number | null; cards: ReviewCard[] }>();
   private missesThisGame = new Set<string>();
+  private backfilling = false;
   /** Achats : inventaire et conseil au tick précédent (pour savoir si tu as suivi le conseil d'achat). */
   private lastBuy: { owned: number[]; reco: number | null; plan: number[] } | null = null;
   /** Conseils d'achat que tu as passés dans cette partie (nombre de fois). */
@@ -233,6 +235,7 @@ export class Engine extends EventEmitter {
       this.state.data = { patch: t.patch_prefix, loadedAt: this.meta.loadedAt, error: null, clientPatch: this.state.data.clientPatch };
       if (t.ddv) this.game.ddragonVersion = t.ddv;
       this.panelCache.clear();
+      void this.backfillReviews();
       this.buildCache.clear();
       this.refreshStats(); // noms des champions / augments (client fermé : seule source = arammeta)
     } catch (e) {
@@ -571,7 +574,7 @@ export class Engine extends EventEmitter {
     this.state.summonerName = me?.gameName || me?.displayName || null;
     void this.refreshPlayer();
     this.refreshStats();
-    void this.importHistory();
+    void this.importHistory().finally(() => this.backfillReviews());
     void this.checkPatch();
   }
 
@@ -1414,6 +1417,8 @@ export class Engine extends EventEmitter {
     const game = detail ? parseGame(detail, this.puuid) : null;
     if (!game) return false;
     if (this.state.headliner && game.mode === 'mayhem') game.headliner = this.state.headliner.key;
+    const review = this.reviewOfGame(game.augments);
+    if (review) game.review = review;
     await this.history.add(game);
     this.recordPicks(gameId, game.augments, game.win);
     this.log('success', `Partie enregistrée : ${this.champName(game.championId)} (${game.win ? 'victoire' : 'défaite'}, ${game.augments.length} augments)`);
@@ -1447,13 +1452,74 @@ export class Engine extends EventEmitter {
     return [...out.values()].filter((c) => !c.name.startsWith('#'));
   }
 
+  private panelRows(p: AugmentPanel): Map<number, AugmentRow> {
+    const rows = new Map<number, AugmentRow>();
+    for (const r of ['kPrismatic', 'kGold', 'kSilver'] as Rarity[]) for (const a of [...(p.all?.[r] ?? []), ...p.top[r], ...p.avoid[r]]) rows.set(a.id, a);
+    return rows;
+  }
+
+  /** Cartes proposées et leur valeur au moment du choix (la même que le conseil en partie), pour la revue. */
+  private reviewCards(p: AugmentPanel, ids: number[], round: number | null, fit?: Record<number, { delta: number }>): ReviewCard[] {
+    const rows = this.panelRows(p);
+    for (const a of this.estimatedRows(ids, p)) if (!rows.has(a.id)) rows.set(a.id, a);
+    return ids.flatMap((id) => {
+      const a = rows.get(id);
+      if (!a) return [];
+      const value = ((round ? a.rounds?.[round - 1] : null) ?? a.winrate) + (fit?.[id]?.delta ?? 0);
+      return [{ id, name: a.name, value, games: a.games, estimated: !!a.estimated }];
+    });
+  }
+
+  /** Revue des choix de la partie qui vient de finir (cartes lues à l'écran), à garder avec la partie. */
+  private reviewOfGame(augments: number[]): GameReview | null {
+    const choices = [...this.offersThisGame.values()]
+      .filter((o) => o.cards.length)
+      .map((o) => reviewChoice(o.round, o.cards, o.ids.find((id) => augments.includes(id)) ?? null));
+    return reviewGame(choices);
+  }
+
+  /**
+   * Parties jouées avant la revue : `usage.json` garde les cartes proposées et la carte prise, mais pas leur valeur.
+   * On les note avec les stats actuelles (marqué `approx`). Sans stats pour un champion, la partie reste sans revue.
+   */
+  async backfillReviews(): Promise<number> {
+    if (this.backfilling || !this.meta.tierList) return 0;
+    this.backfilling = true;
+    try {
+      const picks = new Map<number, Extract<UsageEvent, { type: 'card_picked' }>[]>();
+      for (const e of this.usage.events) if (e.type === 'card_picked') picks.set(e.gameId, [...(picks.get(e.gameId) ?? []), e]);
+      const found = new Map<number, GameReview>();
+      for (const g of this.history.games) {
+        const list = picks.get(g.gameId);
+        if (g.review || g.mode !== 'mayhem' || !list) continue;
+        const panel = await this.augmentPanel(g.championId);
+        if (!panel) continue;
+        const review = reviewGame(
+          list.filter((e) => !e.ids.every((id) => id >= 3170 && id < 3200)).map((e) => reviewChoice(e.round, this.reviewCards(panel, e.ids, e.round), e.picked)),
+          true,
+        );
+        if (review) found.set(g.gameId, review);
+      }
+      if (!found.size) return 0;
+      await this.history.setReviews(found);
+      this.state.reviews = (this.state.reviews ?? 0) + found.size;
+      this.persistLog('info', `Revue des choix : ${found.size} ancienne${found.size > 1 ? 's' : ''} partie${found.size > 1 ? 's' : ''} notée${found.size > 1 ? 's' : ''}`);
+      this.emitIfChanged();
+      return found.size;
+    } catch (e) {
+      this.persistLog('warning', `Revue des anciennes parties impossible : ${(e as Error).message}`);
+      return 0;
+    } finally {
+      this.backfilling = false;
+    }
+  }
+
   /** Meilleure carte parmi celles lues, d'après le winrate au moment du choix (comme l'affichage). */
   bestOffered(ids: number[]): number | null {
     const p = this.state.augments;
     if (!p) return null;
     const round = this.state.augRound;
-    const rows = new Map<number, AugmentRow>();
-    for (const r of ['kPrismatic', 'kGold', 'kSilver'] as Rarity[]) for (const a of [...(p.all?.[r] ?? []), ...p.top[r], ...p.avoid[r]]) rows.set(a.id, a);
+    const rows = this.panelRows(p);
     const at = (a: AugmentRow) => (round ? a.rounds?.[round - 1] : null) ?? a.winrate;
     for (const a of this.state.offered?.extra ?? []) if (!rows.has(a.id)) rows.set(a.id, a);
     const known = ids.map((id) => rows.get(id)).filter((a): a is AugmentRow => !!a);
@@ -1508,8 +1574,7 @@ export class Engine extends EventEmitter {
   }
 
   /** Cartes absentes des données du champion : winrate estimé avec l'effet moyen de l'augment (tous champions). */
-  private estimatedRows(ids: number[]): AugmentRow[] {
-    const p = this.state.augments;
+  private estimatedRows(ids: number[], p: AugmentPanel | null = this.state.augments): AugmentRow[] {
     if (!p) return [];
     const inPanel = new Set<number>();
     for (const r of ['kPrismatic', 'kGold', 'kSilver'] as Rarity[]) for (const a of [...(p.all?.[r] ?? []), ...p.top[r], ...p.avoid[r]]) inPanel.add(a.id);
@@ -1589,7 +1654,11 @@ export class Engine extends EventEmitter {
     const kind = read.ids.every((id) => id >= 3170 && id < 3200) ? 'headliner' : 'augment';
     const hl = read.unsure ? null : headlinerFromCards(read.ids);
     if (hl) this.setHeadliner(hl, 'cartes');
-    if (!read.unsure) this.offersThisGame.set(`${round ?? 0}:${kind}`, { round, ids: read.ids, best });
+    if (!read.unsure) {
+      const panel = this.state.augments;
+      const cards = panel && kind === 'augment' ? this.reviewCards(panel, read.ids, round, this.state.offered.fit) : [];
+      this.offersThisGame.set(`${round ?? 0}:${kind}`, { round, ids: read.ids, best, cards });
+    }
     this.emitIfChanged();
     return true;
   }

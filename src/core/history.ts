@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { LcuClient } from './lcu';
 import type { HistoryGame, Mode, StatsView } from './types';
+import type { GameReview } from './review';
 import { modeOf } from './modes';
 
 export interface RawParticipant {
@@ -157,6 +158,15 @@ export class History {
     this.games.sort((a, b) => b.createdAt - a.createdAt);
     await this.save();
     return true;
+  }
+
+  /** Ajoute la revue des choix à des parties déjà enregistrées. */
+  async setReviews(reviews: Map<number, GameReview>): Promise<void> {
+    for (const g of this.games) {
+      const r = reviews.get(g.gameId);
+      if (r) g.review = r;
+    }
+    await this.save();
   }
 
   /** Récupère les parties ARAM / Mayhem absentes de l'historique local. */
