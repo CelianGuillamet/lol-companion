@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { matchCards, dropCovered, type CardRead, type OcrLine } from '../src/core/cardmatch';
 import type { Engine } from '../src/core/engine';
-import { headlinerFromText, type HeadlinerInfo } from '../src/core/headliner';
+import { headlinerFromText, headlinerNearMisses, type HeadlinerInfo } from '../src/core/headliner';
 import { windowBounds, GAME_BUNDLE } from './displays';
 
 const VISION_JXA = `
@@ -75,6 +75,10 @@ export interface ScanResult {
   error: string | null;
   /** Headliner nommé à l'écran (bannière du début de partie). */
   headliner?: { info: HeadlinerInfo; text: string } | null;
+  /** Textes proches d'un nom de headliner, non reconnus (diagnostic de la bannière). */
+  near?: string[];
+  /** Contexte du moteur pris avant la capture (`Engine.readContext`) : la lecture est jetée s'il a changé. */
+  context?: string | null;
 }
 
 export class CardReader {
@@ -85,15 +89,25 @@ export class CardReader {
   private inGame = false;
   private empty = 0;
   private warned = false;
+  /** Bannière du headliner : début de la partie, lectures faites pendant la bannière, textes approchants. */
+  private gameStart = 0;
+  private bannerScans = 0;
+  private bannerNear: string[] = [];
+  private bannerReported = false;
 
   constructor(private engine: Engine) {}
 
+  private stopped = false;
+
   start(): void {
-    this.timer = setInterval(() => void this.tick(), 1000);
+    this.stopped = false;
+    if (!this.timer) this.timer = setInterval(() => void this.tick(), 1000);
   }
 
   stop(): void {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
+    this.timer = null;
   }
 
   /** Lecture immédiate (raccourci ⌘⇧R, bouton « Tester la lecture »), y compris hors fenêtre d'activité. */
@@ -108,6 +122,7 @@ export class CardReader {
     if (!pool || process.platform !== 'darwin') {
       this.inGame = false;
       this.lastRound = undefined;
+      this.bannerReported = false;
       this.engine.setOffered(null);
       return;
     }
@@ -115,6 +130,15 @@ export class CardReader {
     if (!this.inGame) {
       this.inGame = true;
       this.activeUntil = now + 150_000; // cartes du début de partie
+      this.gameStart = now;
+      this.bannerScans = 0;
+      this.bannerNear = [];
+      this.bannerReported = false;
+    }
+    // Bannière passée sans headliner reconnu : on le note une fois (taux de lecture, textes lus à la place)
+    if (!this.bannerReported && now - this.gameStart > BANNER_MS) {
+      this.bannerReported = true;
+      if (!s.headliner && this.bannerScans > 0) this.engine.headlinerMissed(this.bannerScans, this.bannerNear);
     }
     if (s.augRound !== this.lastRound) {
       if (this.lastRound !== undefined) this.activeUntil = now + 180_000; // niveau 7 / 11 / 15
@@ -126,23 +150,32 @@ export class CardReader {
       this.warned = true;
       return;
     }
-    const r = await this.scan();
-    if (r.headliner) this.engine.setHeadliner(r.headliner.info, 'écran', r.headliner.text);
+    const r = await this.scan(false, now - this.gameStart <= BANNER_MS);
+    if (this.stopped) return;
+    // La partie a changé pendant la capture (fin, autre champion, niveau 7 / 11 / 15) : lecture périmée, on la jette
+    // sans toucher au compteur « plus de cartes » ; la lecture suivante repart du bon contexte.
+    if (!this.engine.isCurrentRead(r.context)) return;
+    if (!r.error && now - this.gameStart <= BANNER_MS) {
+      this.bannerScans++;
+      for (const t of r.near ?? []) if (this.bannerNear.length < 5 && !this.bannerNear.includes(t)) this.bannerNear.push(t);
+    }
+    if (r.headliner) this.engine.setHeadliner(r.headliner.info, 'écran', r.headliner.text, r.context);
     // Un seul nom reconnu n'est pas un écran de cartes : c'est un texte du jeu qui ressemble à un augment (vraies
     // parties du 28 oct. : « Vulnerability — 1 carte sur 3 » en plein combat). On l'ignore.
     if (r.read && r.read.ids.length >= 2) {
       this.empty = 0;
-      this.engine.setOffered(r.read);
+      this.engine.setOffered(r.read, r.context);
       this.activeUntil = Math.max(this.activeUntil, now + 30_000); // reroll possible : on continue à lire
     } else if (++this.empty >= 3) this.engine.setOffered(null); // cartes choisies ou fermées
   }
 
   /** test : hors partie, on lit quand même l'écran et on compare à tous les augments connus. */
-  private async scan(test = false): Promise<ScanResult> {
+  private async scan(test = false, banner = false): Promise<ScanResult> {
     const pool = this.engine.cardPool() ?? (test ? this.engine.allAugmentsPool() : null);
     if (!pool) return { read: null, lines: 0, sample: [], error: 'pas de partie Mayhem en cours (rien à reconnaître)' };
     if (this.busy) return { read: null, lines: 0, sample: [], error: 'lecture déjà en cours' };
     this.busy = true;
+    const context = this.engine.readContext();
     const file = join(tmpdir(), `aram-cards-${process.pid}.png`);
     try {
       const capErr = await captureGameArea(file);
@@ -152,7 +185,11 @@ export class CardReader {
       // Le texte lu sur nos propres fenêtres (panneau par-dessus le jeu…) ne compte pas
       const ours = BrowserWindow.getAllWindows().filter((b) => !b.isDestroyed() && b.isVisible() && !b.isMinimized()).map((b) => b.getBounds());
       const lines = lastArea ? dropCovered(raw, lastArea, ours) : raw;
-      return { read: matchCards(lines, pool), lines: lines.length, sample: lines.slice(0, 6).map((l) => l.text), error: null, headliner: headlinerFromText(lines.map((l) => l.text)) };
+      const read = matchCards(lines, pool);
+      const texts = lines.map((l) => l.text);
+      const cardsShown = !!read && read.ids.length >= 2;
+      const headliner = headlinerFromText(texts, { bareBees: banner && !cardsShown });
+      return { read, lines: lines.length, sample: texts.slice(0, 6), error: null, headliner, near: headliner ? [] : headlinerNearMisses(texts), context };
     } finally {
       await unlink(file).catch(() => undefined); // l'image ne reste jamais sur le disque
       this.busy = false;
@@ -161,6 +198,9 @@ export class CardReader {
 }
 
 let lastArea: Rectangle | null = null;
+
+/** Durée de la bannière du headliner au début de la partie (au-delà, « Bees » seul n'est plus accepté). */
+const BANNER_MS = 90_000;
 
 /**
  * Capture de la zone des cartes dans la fenêtre du jeu (ou du centre de l'écran principal si le jeu n'est pas

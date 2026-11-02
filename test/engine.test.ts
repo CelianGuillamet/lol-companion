@@ -161,15 +161,38 @@ describe('moteur contre un faux client League', () => {
     mock.state.phase = 'InProgress';
     await engine.tick();
     expect(engine.state.augments?.championId).toBe(54);
+    // contexte pris avant la capture : toujours valable tant que rien n'a changé
+    const ctx = engine.readContext();
+    expect(ctx).not.toBeNull();
+    expect(engine.isCurrentRead(ctx)).toBe(true);
+    // passage au choix suivant (niveau 7 / 11 / 15) pendant la lecture : périmée aussi
+    const round = engine.state.augRound;
+    engine.state.augRound = (round ?? 0) + 1;
+    expect(engine.isCurrentRead(ctx)).toBe(false);
+    engine.state.augRound = round;
+    expect(engine.isCurrentRead(undefined)).toBe(true); // appel sans contrôle (tests, simulations)
+    expect(engine.isCurrentRead(null)).toBe(false); // rien n'était lisible au départ
+    // bannière passée sans headliner reconnu : noté une fois avec les textes approchants
+    engine.headlinerMissed(4, ['HARTSTEL']);
+    const miss = engine.usage.events.filter((e) => e.type === 'headliner_miss');
+    expect(miss.at(-1)).toMatchObject({ type: 'headliner_miss', championId: 54, scans: 4, near: ['HARTSTEL'] });
     // cartes Pentakill lues à l'écran → headliner de la partie, noté avec la partie
-    engine.setOffered({ ids: [3170, 3171, 3172], names: ['A', 'B', 'C'], rarity: null, unsure: null, misses: [] });
+    expect(engine.setOffered({ ids: [3170, 3171, 3172], names: ['A', 'B', 'C'], rarity: null, unsure: null, misses: [] }, ctx)).toBe(true);
     expect(engine.state.headliner).toMatchObject({ key: 'pentakill', name: 'Pentakill', source: 'cartes' });
     expect(engine.state.headliner?.tips.length).toBeGreaterThan(0);
+    engine.headlinerMissed(2, []); // headliner déjà connu : rien de noté
+    expect(engine.usage.events.filter((e) => e.type === 'headliner_miss')).toHaveLength(miss.length);
     engine.setOffered(null);
     mock.state.phase = 'EndOfGame';
     mock.state.eogGameId = 77;
     mock.state.games[77] = game(77, 2400, 54, true, [1058]);
     await engine.tick();
+    // une lecture commencée pendant la partie et terminée après sa fin est jetée (ni cartes, ni télémétrie)
+    expect(engine.isCurrentRead(ctx)).toBe(false);
+    const seen = engine.usage.events.filter((e) => e.type === 'cards_seen').length;
+    expect(engine.setOffered({ ids: [1058, 3078, 3170], names: ['A', 'B', 'C'], rarity: null, unsure: null, misses: [] }, ctx)).toBe(false);
+    expect(engine.state.offered).toBeFalsy();
+    expect(engine.usage.events.filter((e) => e.type === 'cards_seen').length).toBe(seen);
     expect(engine.state.stats.total).toBe(3);
     expect(engine.state.stats.recent[0].gameId).toBe(77);
     expect(existsSync(join(dataDir, 'history.json'))).toBe(true);

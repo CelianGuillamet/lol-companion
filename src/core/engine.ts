@@ -143,16 +143,33 @@ export class Engine extends EventEmitter {
     this.refreshStats();
     void this.refreshData(false);
     if (this.opts.probeDir) void this.probeOpgg();
+    this.runLoop();
+  }
+
+  /**
+   * Boucle de lecture du client. Chaque démarrage a son numéro : un tick encore en cours au moment de `stop()` (ou
+   * d'un redémarrage) ne reprogramme rien en se terminant, sinon la boucle repartait après l'arrêt.
+   */
+  private loopGen = 0;
+  private runLoop(): void {
+    const gen = ++this.loopGen;
     const loop = async () => {
       await this.tick();
+      if (gen !== this.loopGen) return; // arrêtée (ou relancée) pendant le tick
       this.timer = setTimeout(loop, this.opts.pollMs ?? 1000);
     };
     void loop();
   }
 
   stop(): void {
+    this.loopGen++;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+  }
+
+  /** La boucle tourne-t-elle (démarrée et pas arrêtée) ? Pour les tests et le diagnostic. */
+  get looping(): boolean {
+    return this.timer !== null;
   }
 
   /** Message dans le journal (utilisé aussi par la fenêtre Electron). */
@@ -500,7 +517,10 @@ export class Engine extends EventEmitter {
       await this.handleInGame();
     }
 
-    if (phase !== 'InProgress' && phase !== 'Reconnect' && this.state.offered) this.state.offered = null;
+    if (phase !== 'InProgress' && phase !== 'Reconnect') {
+      this.readSeq++; // une lecture d'écran commencée avant ne concerne plus rien
+      if (this.state.offered) this.state.offered = null;
+    }
 
     // Fin de partie : le détail (avec les augments) peut mettre du temps à être dispo → on réessaie pendant 45 s.
     const endPhase = phase === 'EndOfGame' || phase === 'PreEndOfGame' || phase === 'WaitingForStats';
@@ -530,6 +550,7 @@ export class Engine extends EventEmitter {
   }
 
   private setDisconnected(): void {
+    this.readSeq++;
     this.state.player = null;
     if (this.state.connection === 'connected') this.log('info', 'Client League fermé');
     this.state.connection = 'searching';
@@ -1514,13 +1535,40 @@ export class Engine extends EventEmitter {
     return out;
   }
 
-  /** Résultat d'une lecture d'écran (null = plus de cartes à l'écran). */
-  setOffered(read: CardRead | null): void {
+  /** Numéro de « situation » : change à chaque sortie de partie, déconnexion. */
+  private readSeq = 0;
+
+  /**
+   * Contexte d'une lecture d'écran, à prendre AVANT la capture : partie, champion et choix d'augment en cours.
+   * Une capture + reconnaissance prend plusieurs secondes ; si le contexte a changé entre-temps (fin de partie,
+   * nouveau champion, passage de niveau 7 / 11 / 15), le résultat est jeté au lieu d'être collé à la mauvaise
+   * situation. null = rien à lire maintenant.
+   */
+  readContext(): string | null {
+    const champ = this.state.augments?.championId ?? 0;
+    if (!champ || this.state.mode !== 'mayhem') return null;
+    return `${this.readSeq}:${champ}:${this.state.augRound ?? 0}`;
+  }
+
+  /** Le contexte pris avant une lecture est-il toujours celui en cours ? (undefined = pas de contrôle) */
+  isCurrentRead(context: string | null | undefined): boolean {
+    return context === undefined || (context !== null && context === this.readContext());
+  }
+
+  /**
+   * Résultat d'une lecture d'écran (null = plus de cartes à l'écran). `context` : valeur de `readContext()` prise
+   * avant la capture ; une lecture devenue périmée est ignorée (renvoie false).
+   */
+  setOffered(read: CardRead | null, context?: string | null): boolean {
+    if (read && !this.isCurrentRead(context)) {
+      this.persistLog('jeu', `Lecture des cartes ignorée : la partie a changé pendant la lecture (${read.names.join(' · ')})`);
+      return false;
+    }
     if (!read) {
-      if (!this.state.offered) return;
+      if (!this.state.offered) return true;
       this.state.offered = null;
       this.emitIfChanged();
-      return;
+      return true;
     }
     for (const text of read.misses)
       if (!this.missesThisGame.has(text) && this.missesThisGame.size < 30) {
@@ -1528,7 +1576,7 @@ export class Engine extends EventEmitter {
         this.usage.add({ type: 'ocr_miss', at: Date.now(), text });
       }
     const prev = this.state.offered;
-    if (prev && prev.ids.join() === read.ids.join() && prev.unsure === read.unsure) return;
+    if (prev && prev.ids.join() === read.ids.join() && prev.unsure === read.unsure) return true;
     const extra = this.estimatedRows(read.ids);
     this.state.offered = { ids: read.ids, names: read.names, rarity: read.rarity, unsure: read.unsure, at: Date.now(), ...(extra.length ? { extra } : {}) };
     this.state.offered.fit = this.fitFor(read.ids, read.names);
@@ -1543,11 +1591,25 @@ export class Engine extends EventEmitter {
     if (hl) this.setHeadliner(hl, 'cartes');
     if (!read.unsure) this.offersThisGame.set(`${round ?? 0}:${kind}`, { round, ids: read.ids, best });
     this.emitIfChanged();
+    return true;
+  }
+
+  /**
+   * Bannière du début de partie passée sans headliner reconnu (appelé une fois par partie par la lecture d'écran) :
+   * noté dans le journal et `usage.json` pour mesurer le taux de lecture et voir ce que Vision a lu à la place.
+   */
+  headlinerMissed(scans: number, near: string[]): void {
+    if (this.state.headliner || this.state.mode !== 'mayhem') return;
+    const championId = this.state.augments?.championId ?? 0;
+    if (!championId) return;
+    const seen = near.length ? ` ; textes approchants : ${near.map((t) => `« ${t} »`).join(', ')}` : '';
+    this.persistLog('jeu', `Headliner non reconnu au début de partie (${scans} lecture${scans > 1 ? 's' : ''})${seen}`);
+    this.usage.add({ type: 'headliner_miss', at: Date.now(), championId, scans, near: near.slice(0, 5) });
   }
 
   /** Headliner reconnu en partie (bannière lue à l'écran, ou cartes propres au headliner). Le premier reconnu reste. */
-  setHeadliner(h: HeadlinerInfo, source: 'écran' | 'cartes', text?: string): void {
-    if (this.state.headliner) return;
+  setHeadliner(h: HeadlinerInfo, source: 'écran' | 'cartes', text?: string, context?: string | null): void {
+    if (this.state.headliner || !this.isCurrentRead(context)) return;
     this.state.headliner = { key: h.key, name: h.name, source, tips: h.tips };
     this.persistLog('jeu', `Headliner : ${h.name} (${source === 'écran' ? `lu à l'écran : « ${text ?? h.name} »` : 'd’après les cartes'})`);
     this.usage.add({ type: 'headliner_seen', at: Date.now(), key: h.key, source, ...(text ? { text } : {}) });

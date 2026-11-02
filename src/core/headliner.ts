@@ -6,7 +6,7 @@
 //    4 cartes ramassées = un augment en plus) — affiché « probable ».
 // Pur et testable.
 
-import { normText } from './cardmatch';
+import { normText, similarity } from './cardmatch';
 
 export interface HeadlinerInfo {
   key: string;
@@ -42,22 +42,58 @@ const SCREEN_FORMS: [string, string][] = [
   ['command line', 'commandline'],
 ];
 
+const lineForm = (raw: string): { t: string; prefixed: boolean } => {
+  let t = normText(raw).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const pre = /^(headliner|tete daffiche)\s*/.exec(t);
+  if (pre) t = t.slice(pre[0].length).trim();
+  return { t, prefixed: !!pre };
+};
+
+/** Noms assez longs pour tolérer une lettre mal lue (« HEARTSTEE1 », « Command Lime ») sans risque de confusion. */
+const FUZZY_MIN = 9;
+
+export interface HeadlinerTextOptions {
+  /**
+   * « Bees » seul accepté : seulement pendant la bannière du début de partie et quand l'écran n'est pas un écran de
+   * cartes (l'augment « BEES! » y figure ; Vision peut perdre les « ! »).
+   */
+  bareBees?: boolean;
+}
+
 /**
- * Headliner nommé dans une ligne lue à l'écran. Strict : la ligne doit être exactement le nom, ou « Headliner : nom »
- * — « BEES!!! » (un augment) ou « Pentakill! » dans le fil des éliminations ne comptent pas.
+ * Headliner nommé dans une ligne lue à l'écran. Strict : la ligne doit être le nom (une lettre d'écart tolérée pour
+ * les noms de 9 lettres et plus), ou « Headliner : nom » — « BEES!!! » (un augment) ou « Pentakill! » dans le fil
+ * des éliminations ne comptent pas.
  */
-export function headlinerFromText(lines: string[]): { info: HeadlinerInfo; text: string } | null {
+export function headlinerFromText(lines: string[], opts: HeadlinerTextOptions = {}): { info: HeadlinerInfo; text: string } | null {
   for (const raw of lines) {
     if (/!/.test(raw)) continue; // annonces du jeu (« … is unstoppable! », « PENTAKILL! »), augments (« BEES!!! »)
-    let t = normText(raw).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const pre = /^(headliner|tete daffiche)\s*/.exec(t);
-    if (pre) t = t.slice(pre[0].length).trim();
-    const hit = SCREEN_FORMS.find(([f]) => t === f);
-    const key = hit?.[1] ?? (pre && t === 'bees' ? 'bees' : null); // « Bees » seul est trop courant : seulement préfixé
+    const { t, prefixed } = lineForm(raw);
+    if (!t) continue;
+    const hit = SCREEN_FORMS.find(([f]) => t === f) ?? SCREEN_FORMS.find(([f]) => f.length >= FUZZY_MIN && similarity(t, f) >= 1 - 1 / f.length - 1e-9);
+    const key = hit?.[1] ?? ((prefixed || opts.bareBees) && t === 'bees' ? 'bees' : null);
     const info = key ? BY_KEY.get(key) : undefined;
     if (info) return { info, text: raw.trim() };
   }
   return null;
+}
+
+/**
+ * Textes lus qui ressemblent à un nom de headliner sans être reconnus (pour régler la lecture de la bannière depuis
+ * `usage.json`). Lignes courtes seulement (pas de phrases du chat), 5 au plus.
+ */
+export function headlinerNearMisses(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of lines) {
+    const text = raw.trim();
+    if (text.length > 32 || out.includes(text)) continue;
+    const { t, prefixed } = lineForm(text);
+    if (!t) continue;
+    const close = prefixed || [...SCREEN_FORMS.map(([f]) => f), 'bees'].some((f) => t !== f && similarity(t, f) >= 0.6);
+    if (close && !headlinerFromText([text])) out.push(text);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 /** Cartes propres à un headliner (vues en vraie partie le 28 oct. : Pentakill 3170 / 3171 / 3172 / 3173). */

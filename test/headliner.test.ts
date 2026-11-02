@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { headlinerFromCards, headlinerFromText, historyHeadliner, HEADLINERS } from '../src/core/headliner';
+import { headlinerFromCards, headlinerFromText, headlinerNearMisses, historyHeadliner, HEADLINERS } from '../src/core/headliner';
 
 describe('headliners Mayhem', () => {
   it('reconnaît le nom du headliner lu à l’écran, strictement', () => {
@@ -14,6 +14,29 @@ describe('headliners Mayhem', () => {
     expect(headlinerFromText(['BEES!!!'])).toBeNull();
     expect(headlinerFromText(['Bees'])).toBeNull();
     expect(headlinerFromText(['Disco Inferno', 'gain a Snowball.', 'Command Line Interface'])).toBeNull();
+  });
+
+  it('tolère une lettre mal lue sur les noms longs, pas sur les courts', () => {
+    expect(headlinerFromText(['HEARTSTEE1'])?.info.key).toBe('heartsteel');
+    expect(headlinerFromText(['Command Lime'])?.info.key).toBe('commandline');
+    expect(headlinerFromText(['Space Gr0ove'])?.info.key).toBe('disco');
+    expect(headlinerFromText(['True Darnage'])).toBeNull(); // 2 lettres d'écart
+    expect(headlinerFromText(['Disko'])).toBeNull(); // nom court : exact seulement
+    expect(headlinerFromText(['KDB'])).toBeNull();
+    expect(headlinerFromText(['Pentakil!'])).toBeNull();
+  });
+
+  it('« Bees » seul : seulement pendant la bannière, hors écran de cartes', () => {
+    expect(headlinerFromText(['Bees'], { bareBees: true })?.info.key).toBe('bees');
+    expect(headlinerFromText(['BEES'], { bareBees: true })?.info.key).toBe('bees');
+    expect(headlinerFromText(['BEES!!!'], { bareBees: true })).toBeNull();
+    expect(headlinerFromText(['Bees'], { bareBees: false })).toBeNull();
+  });
+
+  it('garde les textes proches d’un headliner non reconnus, pour régler la lecture', () => {
+    expect(headlinerNearMisses(['Heartsteal Rising', 'HARTSTEL', 'Bes', 'gain a Snowball.', 'Headliner Bees', 'Command Line'])).toEqual(['HARTSTEL', 'Bes']);
+    expect(headlinerNearMisses(['Headliner: Rockz'])).toEqual(['Headliner: Rockz']);
+    expect(headlinerNearMisses(['x'.repeat(40)])).toEqual([]);
   });
 
   it('déduit Pentakill de ses cartes (3170-3173), pas d’un augment ordinaire', () => {
