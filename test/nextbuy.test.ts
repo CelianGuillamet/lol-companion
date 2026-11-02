@@ -163,3 +163,14 @@ describe('menace déjà couverte', () => {
     expect(r.rows.map((x) => x.id)).toEqual([1]);
   });
 });
+
+describe('conseil stable', () => {
+  it('garde le conseil précédent en tête tant qu’il reste dans la liste', () => {
+    const free = nextBuys({ ...base, owned: [] }, 4);
+    const second = free.rows[1].id;
+    const kept = nextBuys({ ...base, owned: [], keep: second }, 4);
+    expect(kept.rows[0].id).toBe(second);
+    expect(kept.plan.find((p) => !p.owned)?.id).toBe(second);
+    expect(nextBuys({ ...base, owned: [], keep: 999999 }, 4).rows[0].id).toBe(free.rows[0].id);
+  });
+});

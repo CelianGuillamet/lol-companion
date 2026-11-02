@@ -20,10 +20,10 @@ import { reviewChoice, reviewGame, type GameReview, type ReviewCard } from './re
 import type { BalanceBadge } from './balance';
 import type { CardCandidate, CardRead } from './cardmatch';
 import { Usage, followStat, type UsageEvent } from './usage';
-import { headlinerFromCards, historyHeadliner, type HeadlinerInfo } from './headliner';
+import { isSkinText, headlinerFromCards, historyHeadliner, type HeadlinerInfo } from './headliner';
 import { AugmentInfo, buildProfile, fitOf } from './augfit';
 import { OpggClient, OpggData, buildArgs, laneOf, LANE_LABEL, matchupFrom, counterPicksFrom, type Lane, type OpggAnalysis } from './opgg';
-import type { MatchupView, SrSelect, AppState, CounterPanel, NextBuyPanel, AugmentPanel, AugmentRow, BuildPanel, ChampSelectView, GameDetail, HistoryEntry, HistoryGame, LogEntry, Mode, Rarity, Settings, StatItem } from './types';
+import type { Candidate, MatchupView, SrSelect, AppState, CounterPanel, NextBuyPanel, AugmentPanel, AugmentRow, BuildPanel, ChampSelectView, GameDetail, HistoryEntry, HistoryGame, LogEntry, Mode, Rarity, Settings, StatItem } from './types';
 
 export interface EngineOptions {
   dataDir: string;
@@ -74,8 +74,10 @@ export class Engine extends EventEmitter {
   private offersThisGame = new Map<string, { round: number | null; ids: number[]; best: number | null; cards: ReviewCard[] }>();
   private missesThisGame = new Set<string>();
   private backfilling = false;
+  private headlinerText: string | null = null;
   /** Achats : inventaire et conseil au tick précédent (pour savoir si tu as suivi le conseil d'achat). */
   private lastBuy: { owned: number[]; reco: number | null; plan: number[] } | null = null;
+  private lastCandidates: Candidate[] = [];
   /** Conseils d'achat que tu as passés dans cette partie (nombre de fois). */
   private skippedBuys = new Map<number, number>();
   private lastSelectLine = '';
@@ -703,6 +705,7 @@ export class Engine extends EventEmitter {
       { mode, allies: parsed.allies, candidates: parsed.candidates, personal: this.history.personal(null), names: this.champName },
       tier,
     );
+    this.lastCandidates = candidates;
     const mastery = await this.masteries();
     for (const c of candidates) {
       c.balance = this.balanceOf(c.championId, mode);
@@ -872,6 +875,7 @@ export class Engine extends EventEmitter {
       players.find((p) => me.summonerName && p.summonerName === me.summonerName) ??
       (this.myChampionId ? players.find((p) => champOf(p) === this.myChampionId) : undefined) ??
       null;
+    this.dropSkinHeadliner(players.map((p) => p.skinName ?? ''));
     return { me, players, mine, champOf };
   }
 
@@ -910,8 +914,10 @@ export class Engine extends EventEmitter {
     const becomes = new Map<number, string>();
     for (const c of b.cores) for (const x of [...c.core, ...c.options]) if (buyable(x.id) !== x.id) becomes.set(buyable(x.id), x.name);
     const named = (t: { title: string; champions: { name: string }[] }) => (t.champions.length ? `${t.title} (${t.champions.slice(0, 3).map((c) => c.name).join(', ')})` : t.title);
+    const sameInventory = this.lastBuy != null && [...this.lastBuy.owned].sort().join() === [...owned].sort().join();
     const r = nextBuys({
       owned,
+      keep: sameInventory ? this.lastBuy!.reco : null,
       gold: me.currentGold,
       // Items qui se transforment (Muramana, Fimbulwinter, Seraph) : on conseille ce qui s'achète (Manamune…)
       cores: b.cores.map((c) => ({ core: c.core.map((x) => buyable(x.id)), options: c.options.map((o) => ({ id: buyable(o.id), winrate: o.winrate, games: o.games })) })),
@@ -1423,6 +1429,8 @@ export class Engine extends EventEmitter {
     if (review) game.review = review;
     await this.history.add(game);
     this.recordPicks(gameId, game.augments, game.win);
+    const played = this.lastCandidates.find((c) => c.championId === game.championId);
+    if (played) this.usage.add({ type: 'champ_scored', at: Date.now(), gameId, championId: played.championId, score: played.score, winrate: played.winrate, synergy: played.parts?.synergy ?? 0, comp: played.parts?.comp ?? 0, win: game.win });
     this.log('success', `Partie enregistrée : ${this.champName(game.championId)} (${game.win ? 'victoire' : 'défaite'}, ${game.augments.length} augments)`);
     this.refreshStats();
     return true;
@@ -1679,8 +1687,19 @@ export class Engine extends EventEmitter {
   }
 
   /** Headliner reconnu en partie (bannière lue à l'écran, ou cartes propres au headliner). Le premier reconnu reste. */
+  /** La lecture peut arriver avant que le jeu donne la liste des joueurs : on vérifie dès qu'elle est connue. */
+  dropSkinHeadliner(skins: string[]): void {
+    const text = this.headlinerText;
+    if (!text || !this.state.headliner || !isSkinText(text, skins)) return;
+    this.persistLog('jeu', `Headliner ${this.state.headliner.name} retiré : « ${text} » est un nom de skin`);
+    this.state.headliner = null;
+    this.headlinerText = null;
+    this.emitIfChanged();
+  }
+
   setHeadliner(h: HeadlinerInfo, source: 'écran' | 'cartes', text?: string, context?: string | null): void {
     if (this.state.headliner || !this.isCurrentRead(context)) return;
+    this.headlinerText = source === 'écran' ? (text ?? null) : null;
     this.state.headliner = { key: h.key, name: h.name, source, tips: h.tips };
     this.persistLog('jeu', `Headliner : ${h.name} (${source === 'écran' ? `lu à l'écran : « ${text ?? h.name} »` : 'd’après les cartes'})`);
     this.usage.add({ type: 'headliner_seen', at: Date.now(), key: h.key, source, ...(text ? { text } : {}) });
@@ -1720,6 +1739,7 @@ interface LiveMe {
 }
 
 interface LivePlayer {
+  skinName?: string;
   riotId?: string;
   riotIdGameName?: string;
   summonerName?: string;

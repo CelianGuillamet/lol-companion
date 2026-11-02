@@ -122,6 +122,13 @@ export interface AdviceInput {
   names: (id: number) => string;
 }
 
+/**
+ * Plafond de synergie + compo, en points. Les deux lisent en partie le même effet et s'additionnent sur 4 alliés :
+ * le 2 nov., Tahm Kench à 52 % passait à +10. Même ordre de grandeur que le plafond de compo d'arammeta (5 %).
+ * Choix prudent, pas une mesure : `champ_scored` (usage.json) enregistre le détail pour le vérifier.
+ */
+export const TEAM_BONUS_CAP = 5;
+
 const pts = (fraction: number) => Math.round(fraction * 1000) / 10; // 0.0123 -> 1.2
 const fr = (n: number, d = 1) => n.toFixed(d).replace('.', ',');
 
@@ -172,6 +179,7 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
     const m: MetaChampion | null = meta?.champs[String(cand.championId)] ?? null;
     let score = 0;
     let fills: string[] = [];
+    const bonus = { synergy: 0, comp: 0 };
 
     if (m) {
       const p = pts((m.wr - 0.5) * wrWeight);
@@ -192,7 +200,7 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
       }
       if (synNames.length) {
         const p2 = pts(syn);
-        score += p2;
+        bonus.synergy = p2;
         reasons.push({ label: `Synergie : ${synNames.join(', ')}`, points: p2 });
       }
 
@@ -200,7 +208,7 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
       fills = fillsOf(teamComposition(team, meta!), teamComposition([...team, cand.championId], meta!));
       const p3 = pts(withMe - baseComp);
       if (Math.abs(p3) >= 0.1) {
-        score += p3;
+        bonus.comp = p3;
         const before = teamComposition(team, meta!);
         const after = teamComposition([...team, cand.championId], meta!);
         const filled = fillsOf(before, after);
@@ -210,6 +218,10 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
         const label = p3 > 0 ? (parts.length ? `Compo : apporte ${parts.join(', ')}` : 'Compo de l’équipe') : 'Compo : déséquilibre l’équipe';
         reasons.push({ label, points: p3 });
       }
+      const teamBonus = bonus.synergy + bonus.comp;
+      const capped = Math.max(-TEAM_BONUS_CAP, Math.min(TEAM_BONUS_CAP, teamBonus));
+      score += capped;
+      if (capped !== teamBonus) reasons.push({ label: `Plafond synergie + compo (${TEAM_BONUS_CAP} pts)`, points: Math.round((capped - teamBonus) * 10) / 10 });
     } else {
       reasons.push({ label: 'Pas de données globales pour ce champion', points: 0 });
     }
@@ -233,6 +245,7 @@ export function scoreCandidates(input: AdviceInput, meta: TierList | null): Cand
       personal: perso,
       reasons,
       actionable: cand.actionable,
+      parts: bonus,
       ...(fills.length ? { fills } : {}),
     });
   }

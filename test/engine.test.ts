@@ -41,6 +41,22 @@ afterAll(async () => {
 
 const settle = () => new Promise((r) => setTimeout(r, 150));
 
+describe('headliner et skins', () => {
+  it('retire un headliner lu qui n’est qu’un nom de skin', () => {
+    const info = { key: 'disco', name: 'Disco', tips: [] };
+    engine.state.headliner = null;
+    engine.setHeadliner(info, 'écran', 'Space Groove');
+    engine.dropSkinHeadliner(['Ziggs']);
+    expect(engine.state.headliner).toMatchObject({ key: 'disco' });
+    engine.dropSkinHeadliner(['Space Groove Rell']);
+    expect(engine.state.headliner).toBeNull();
+    engine.setHeadliner(info, 'cartes');
+    engine.dropSkinHeadliner(['Space Groove Rell']);
+    expect(engine.state.headliner).toMatchObject({ key: 'disco' });
+    engine.state.headliner = null;
+  });
+});
+
 describe('moteur contre un faux client League', () => {
   it('se connecte et importe l’historique ARAM/Mayhem du client', async () => {
     mock.state.matchList = [game(1, 450, 54, true), game(2, 420, 54, true), game(3, 2400, 157, false, [1058, 3078])];

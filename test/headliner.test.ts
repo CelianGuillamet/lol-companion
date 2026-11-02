@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { headlinerFromCards, headlinerFromText, headlinerNearMisses, historyHeadliner, HEADLINERS } from '../src/core/headliner';
+import { isSkinText, headlinerFromCards, headlinerFromText, headlinerNearMisses, historyHeadliner, HEADLINERS } from '../src/core/headliner';
 
 describe('headliners Mayhem', () => {
   it('reconnaît le nom du headliner lu à l’écran, strictement', () => {
@@ -59,5 +59,14 @@ describe('headliners Mayhem', () => {
   it('chaque headliner a au moins un conseil', () => {
     expect(HEADLINERS).toHaveLength(8);
     for (const h of HEADLINERS) expect(h.tips.length).toBeGreaterThan(0);
+  });
+});
+
+describe('isSkinText', () => {
+  it('reconnaît un nom de skin, pas un headliner', () => {
+    expect(isSkinText('Space Groove', ['Rell', 'Space Groove Rell'])).toBe(true);
+    expect(isSkinText('HEARTSTEEL', ['Heartsteel Sett'])).toBe(true);
+    expect(isSkinText('True Damage', ['Mecha Kingdoms Jax', 'Ziggs'])).toBe(false);
+    expect(isSkinText('', ['Ziggs'])).toBe(false);
   });
 });

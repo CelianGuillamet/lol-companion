@@ -13,7 +13,21 @@ export type UsageEvent =
   /** Aucun headliner reconnu pendant la bannière du début de partie : lectures faites et textes approchants. */
   | { type: 'headliner_miss'; at: number; championId: number; scans: number; near: string[] }
   /** Item fini acheté en partie, et ce que l'app conseillait juste avant (followed = c'était le même). */
-  | { type: 'item_bought'; at: number; championId: number; id: number; reco: number | null; plan: number[]; followed: boolean };
+  | { type: 'item_bought'; at: number; championId: number; id: number; reco: number | null; plan: number[]; followed: boolean }
+  /** Score du champion joué et son détail : pour mesurer si synergie et compo prédisent vraiment la victoire. */
+  | ChampScored;
+
+export interface ChampScored {
+  type: 'champ_scored';
+  at: number;
+  gameId: number;
+  championId: number;
+  score: number;
+  winrate: number | null;
+  synergy: number;
+  comp: number;
+  win: boolean;
+}
 
 export interface FollowStat {
   followed: { picks: number; wins: number };
