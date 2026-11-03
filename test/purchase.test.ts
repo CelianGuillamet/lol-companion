@@ -68,3 +68,38 @@ describe('décision d’achat partagée', () => {
     expect(purchaseOf({ gold: 1000, buildName: null, rows: [] })).toBeNull();
   });
 });
+
+describe('revente', () => {
+  const sold = { id: 1058, name: 'Needlessly Large Rod', icon: null };
+  const other = { id: 1052, name: 'Amplifying Tome', icon: null };
+  it('passe de « économise » à « vends, puis achète », reste calculé avec la vente', () => {
+    const buy = purchaseOf(panel({ remaining: 600, step: { item: component, price: 500 }, resale: { items: [sold], gain: 305 } }));
+    expect(buy).toMatchObject({ kind: 'item', canBuy: true, item: target, sell: sold, gain: 305, goldAfter: 205, missing: 100 });
+    expect(buy!.title).toBe(`Vends ${sold.name}, puis achète ${target.name}`);
+  });
+  it('nomme les deux ventes', () => {
+    expect(purchaseOf(panel({ remaining: 900, resale: { items: [sold, other], gain: 550 } }))!.title).toBe(`Vends ${sold.name} et ${other.name}, puis achète ${target.name}`);
+  });
+  it('or relu entre-temps : une revente devenue trop courte ne promet plus l’achat', () => {
+    expect(purchaseOf(panel({ remaining: 900, resale: { items: [sold], gain: 305 } }))).toMatchObject({ kind: 'saving', sell: null, gain: 0 });
+  });
+  it('or suffisant : pas de vente', () => {
+    expect(purchaseOf(panel({ remaining: 400, resale: { items: [sold], gain: 305 } }))).toMatchObject({ kind: 'item', sell: null, gain: 0, goldAfter: 100 });
+  });
+});
+
+describe('sac plein', () => {
+  const sold = { id: 1036, name: 'Long Sword', icon: null };
+  it('dit quoi vendre seulement au moment d’acheter', () => {
+    const buy = purchaseOf(panel({ remaining: 400, room: { sell: sold } }));
+    expect(buy).toMatchObject({ kind: 'item', canBuy: true, sell: sold });
+    expect(buy!.title).toMatch(/^Vends Long Sword, puis achète /);
+    expect(purchaseOf(panel({ room: { sell: sold } }))).toMatchObject({ kind: 'saving', sell: null });
+  });
+  it('6 items finis : ni achat ni économie', () => {
+    expect(purchaseOf(panel({ remaining: 400, room: { sell: null, held: true } }))).toMatchObject({ kind: 'full', held: true, title: 'Inventaire plein : termine tes composants avant Force de la nature', sell: null });
+    const buy = purchaseOf(panel({ remaining: 400, room: { sell: null } }));
+    expect(buy).toMatchObject({ kind: 'full', canBuy: false, cost: null, missing: null, goldAfter: null });
+    expect(buy!.title).toMatch(/^Inventaire plein/);
+  });
+});

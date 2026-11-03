@@ -13,6 +13,18 @@ const pool: CardCandidate[] = [
 const line = (text: string, x: number, y: number, h = 0.04, w = 0.18): OcrLine => ({ text, conf: 0.9, x, y, w, h });
 
 describe('matchCards', () => {
+  it('cartes du 26.22 : RISE, titre de 4 lettres, et One Hit Wonder', () => {
+    const p = [...pool, { id: 7, name: 'RISE', rarity: 'kPrismatic' as const }, { id: 8, name: 'One Hit Wonder', rarity: 'kGold' as const }];
+    const r = matchCards([line('RISE', 0.08, 0.3, 0.04, 0.06), line('Goliath', 0.35, 0.3), line('One Hit Wonder', 0.62, 0.3)], p);
+    expect(r?.ids).toEqual([7, 4, 8]);
+    // Un mot de description ne prend pas la place du titre.
+    const d = matchCards([line('Rise', 0.1, 0.55, 0.025, 0.05), line('RISE', 0.08, 0.3, 0.04, 0.06), line('Goliath', 0.35, 0.3), line('One Hit Wonder', 0.62, 0.3)], p);
+    expect(d?.ids).toEqual([7, 4, 8]);
+    // Titre mal lu : pas de faux positif sur un mot voisin.
+    const m = matchCards([line('RIDE', 0.08, 0.3, 0.04, 0.06), line('Goliath', 0.35, 0.3), line('One Hit Wonder', 0.62, 0.3)], p);
+    expect(m?.ids).not.toContain(7);
+  });
+
   it('reconnaît 3 cartes de gauche à droite, avec fautes de lecture et descriptions', () => {
     const r = matchCards(
       [

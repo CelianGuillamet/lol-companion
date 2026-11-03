@@ -47,10 +47,12 @@ const known = (n?: string | null) => (n && !/^#\d+$/.test(n) ? n : null);
               maintenant : <img @error="hideBroken" :src="r.step.item.icon ?? ''" width="18" height="18" class="ic" alt="" /> {{ r.step.item.name }}
               <span class="num">({{ r.step.price.toLocaleString('fr-FR') }})</span>
             </div>
+            <div v-if="r.resale" class="small faint">Vends {{ r.resale.items.map((x) => x.name).join(' et ') }} : +{{ r.resale.gain.toLocaleString('fr-FR') }} or, l'achat passe</div>
+            <div v-else-if="r.room" class="small faint">{{ r.room.sell ? `Sac plein : vends d'abord ${r.room.sell.name}` : 'Sac plein : plus de composant à vendre' }}</div>
           </div>
           <div class="num nprice">
             <div v-if="r.price != null">{{ r.price.toLocaleString('fr-FR') }}</div>
-            <div v-if="r.price != null" class="small" :class="r.missing ? 'bad' : 'good'">{{ r.missing ? `il manque ${r.missing.toLocaleString('fr-FR')}` : 'achetable' }}</div>
+            <div v-if="r.price != null" class="small" :class="r.missing && !r.resale ? 'bad' : 'good'">{{ r.resale ? 'avec la vente' : r.missing ? `il manque ${r.missing.toLocaleString('fr-FR')}` : 'achetable' }}</div>
           </div>
         </div>
       </div>
@@ -128,7 +130,7 @@ const known = (n?: string | null) => (n && !/^#\d+$/.test(n) ? n : null);
           <img @error="hideBroken" v-for="it in b.starter" :key="it.id" :src="it.icon ?? ''" :title="it.name" width="34" height="34" class="ic" alt="" />
         </div>
         <div v-if="b.skills">
-          <div class="maxo">Monte <b v-for="(k, i) in b.skills.max" :key="i">{{ i ? ' › ' : '' }}{{ k }}</b></div>
+          <div class="maxo">Monte <b v-for="(k, i) in b.skills.max" :key="i">{{ i ? ' › ' : '' }}{{ k }}</b><span v-if="b.skills.source" class="faint"> · {{ b.skills.source }}</span></div>
           <div class="order num">
             <span v-for="(k, i) in b.skills.order.slice(0, 18)" :key="i" class="lvl" :class="{ r: k === 'R' }" :title="`niveau ${i + 1}`">{{ k }}</span>
           </div>

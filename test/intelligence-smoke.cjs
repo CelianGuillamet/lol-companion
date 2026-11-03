@@ -42,13 +42,28 @@ process.env.ARAM_SMOKE_JS = `
   assert(rect.top >= 0 && rect.bottom <= innerHeight, 'Bouton de sorts hors écran');
   access.focus(); access.click(); await wait();
   let modal = document.querySelector('.enemy-dialog[open]');
-  assert(modal && modal.querySelectorAll('.enemy-row').length === 5, 'Dialogue ennemi absent ou incomplet');
+  assert(modal && modal.querySelectorAll('.spells .row').length === 5, 'Timers manuels absents du dialogue');
   const bounds = modal.getBoundingClientRect();
   assert(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight, 'Dialogue hors écran');
-  const last = [...modal.querySelectorAll('.enemy-row')].at(-1);
+  const last = [...modal.querySelectorAll('.spells .row')].at(-1);
   last.scrollIntoView({ block: 'end' }); await wait();
   assert(last.getBoundingClientRect().bottom <= innerHeight, 'Dernier ennemi inaccessible');
   assert(modal.querySelector('button').getBoundingClientRect().top >= 0, 'Fermeture hors écran');
+  const flash = modal.querySelector('.cell[aria-label^="Flash de Ahri"]');
+  assert(flash, 'Flash cliquable absent');
+  flash.click(); await wait();
+  const timer = (await window.api.getState()).enemySpells.enemies.find(e => e.championId === 103).spells.find(s => s.slot === 'D');
+  assert(timer.readyAt != null && flash.classList.contains('cd'), 'Le clic ne démarre pas le timer manuel');
+  flash.click(); await wait();
+  const correction = modal.querySelector('[aria-label="Corriger Flash"]');
+  assert(correction, 'Correction du timer inaccessible');
+  const cr = correction.getBoundingClientRect();
+  assert(cr.left >= 0 && cr.right <= innerWidth, 'Correction hors écran');
+  [...correction.querySelectorAll('button')].find(b => b.textContent === '+10 s').click(); await wait();
+  const changed = (await window.api.getState()).enemySpells.enemies.find(e => e.championId === 103).spells.find(s => s.slot === 'D');
+  assert(Math.abs(changed.readyAt - timer.readyAt - 10) < 0.1, 'Correction +10 s non appliquée');
+  [...correction.querySelectorAll('button')].find(b => b.textContent === 'Annuler').click(); await wait();
+  assert((await window.api.getState()).enemySpells.enemies.find(e => e.championId === 103).spells.find(s => s.slot === 'D').readyAt == null, 'Timer non annulé');
   modal.querySelector('button').click(); await wait();
   assert(!document.querySelector('.enemy-dialog[open]') && document.activeElement === access, 'Fermeture ou retour du focus incorrect');
   // Tab conserve sa fonction dans les champs et les boutons.
@@ -104,7 +119,7 @@ app.on('browser-window-created', (_event, win) => {
       let enemy;
       for (let i = 0; i < 50; i++) {
         enemy = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('#enemies'));
-        if (enemy && !enemy.webContents.isLoading() && await enemy.webContents.executeJavaScript("document.querySelectorAll('.enemy-row').length === 5")) break;
+        if (enemy && !enemy.webContents.isLoading() && await enemy.webContents.executeJavaScript("document.querySelectorAll('.spells .row').length === 5")) break;
         await wait();
       }
       if (!enemy || enemy.isDestroyed()) throw new Error('Fenêtre ennemie absente');
@@ -113,7 +128,12 @@ app.on('browser-window-created', (_event, win) => {
         if (b.x < a.x || b.y < a.y || b.x + b.width > a.x + a.width || b.y + b.height > a.y + a.height) throw new Error('Fenêtre ennemie hors écran');
       };
       inside();
-      if (!(await enemy.webContents.executeJavaScript("document.querySelectorAll('.enemy-spells > li').length === 30"))) throw new Error('Sorts manquants dans la fenêtre dédiée');
+      if (!(await enemy.webContents.executeJavaScript("document.querySelectorAll('.spells .cell').length === 15"))) throw new Error('Sorts manquants dans la fenêtre dédiée');
+      const target = await enemy.webContents.executeJavaScript("(() => { const b = document.querySelector('.cell[aria-label^=\"Flash de Ahri\"]').getBoundingClientRect(); return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}; })()");
+      enemy.webContents.sendInputEvent({ type: 'mouseDown', ...target, button: 'left', clickCount: 1 });
+      enemy.webContents.sendInputEvent({ type: 'mouseUp', ...target, button: 'left', clickCount: 1 });
+      await wait();
+      if (!(await enemy.webContents.executeJavaScript("document.querySelector('.cell[aria-label^=\"Flash de Ahri\"]').classList.contains('cd')"))) throw new Error('Premier clic sur la fenêtre ennemie sans effet');
       enemyShortcut(); // masque
       enemy.setPosition(-4000, -4000);
       enemyShortcut(); // recale avant affichage
@@ -126,6 +146,11 @@ app.on('browser-window-created', (_event, win) => {
       if (!enemy.isDestroyed()) throw new Error('Échap ne ferme pas la fenêtre ennemie');
       win.focus();
       await execute("document.querySelector('.enemy-access').click()");
+      await wait();
+      require('node:fs').writeFileSync(join(run, 'intelligence.png'), (await win.webContents.capturePage()).toPNG());
+      // Ce scénario vérifie la fenêtre interactive ; la capture de l'overlay transparent
+      // Linux est couverte séparément par les scénarios d'achat.
+      delete process.env.ARAM_SMOKE_SHOT;
       console.log('Enemy panel keyboard/window assertions passed');
     }
     return result;

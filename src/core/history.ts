@@ -7,6 +7,7 @@ import { dirname } from 'node:path';
 import type { LcuClient } from './lcu';
 import type { HistoryGame, Mode, StatsView } from './types';
 import type { GameReview } from './review';
+import type { BuyReview } from './buyreview';
 import { modeOf } from './modes';
 
 export interface RawParticipant {
@@ -161,10 +162,12 @@ export class History {
   }
 
   /** Ajoute la revue des choix à des parties déjà enregistrées. */
-  async setReviews(reviews: Map<number, GameReview>): Promise<void> {
+  async setReviews(reviews: Map<number, GameReview>, buys: Map<number, BuyReview> = new Map()): Promise<void> {
     for (const g of this.games) {
       const r = reviews.get(g.gameId);
       if (r) g.review = r;
+      const b = buys.get(g.gameId);
+      if (b) g.buys = b;
     }
     await this.save();
   }

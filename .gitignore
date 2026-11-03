@@ -6,3 +6,4 @@ probe-output/*
 data/cache/
 .install/
 dist/
+/test/probe-output/

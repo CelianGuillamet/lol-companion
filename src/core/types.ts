@@ -1,5 +1,11 @@
+import type { AppUpdate } from './appversion';
+import type { RerollAdvice } from './reroll';
+import type { PoolReport } from './pool';
+
+export type { RerollAdvice };
 import type { GameReview } from './review';
 import type { IntelligenceState } from './intelligence/types';
+import type { BuyReview } from './buyreview';
 // Types partagés entre le processus principal (Electron) et l'interface (Vue).
 
 export type Mode = 'aram' | 'mayhem' | 'sr';
@@ -46,6 +52,8 @@ export interface ChampSelectView {
   /** Phrase qui relie les manques de l'équipe au conseil. */
   fillAdvice?: string | null;
   dataNote: string | null; // avertissement sur la fiabilité des données
+  /** Champions du banc hors de ta collection : le client refuserait, ils sont retirés du classement. */
+  notOwned?: string[];
   /** Coéquipiers déjà croisés (d'après ton historique) : Riot ID, parties ensemble, victoires. */
   mates?: { name: string; games: number; wins: number }[];
   /** Faille de l'invocateur (classée, normale, Swiftplay…) : rôle, matchup et counter-picks (OP.GG). */
@@ -74,7 +82,28 @@ export interface SrSelect {
   counterPicks: { id: number; name: string; winRate: number; games: number; lo: number; mastery: number | null }[];
   /** Ennemis connus pour bien jouer contre ton champion. */
   dangers: { id: number; name: string; myWinRate: number; games: number }[];
+  /** Bans conseillés, tant que ton ban n'est pas validé (rien si la file n'a pas de bans). */
+  bans: SrBans | null;
   note: string | null;
+}
+
+export interface SrBans {
+  myTurn: boolean;
+  /** Champion survolé pour ton ban (0 = aucun). */
+  hovered: number;
+  /** Nombre de rôles comptés sur 5 : le tien et ceux des alliés qui ont montré leur champion. */
+  lanes: number;
+  options: { id: number; name: string; gain: number; laneLabel: string; share: number; myWinRate: number | null; winRate: number }[];
+}
+
+/** Avis sur une carte pour ce champion (arammayhem.com), pas une statistique. `plan` = va avec un augment déjà pris. */
+export type ComboKind = 'trap' | 'strong' | 'good' | 'tech' | 'listed' | 'bug' | 'fun' | 'plan';
+export interface ComboNote {
+  kind: ComboKind;
+  label: string;
+  /** true : à garder ; false : à éviter ; null : à titre d'info. */
+  good: boolean | null;
+  with?: string[];
 }
 
 export interface AugmentRow {
@@ -108,11 +137,13 @@ export interface NextBuyPanel {
   /** D'où vient le build : winrate et parties (arammeta, Mayhem), nombre de builds fréquents pour ce champion. */
   buildInfo?: { winrate: number; games: number; count: number; adapted: string[] } | null;
   // step.price = dépense immédiate, après déduction des sous-composants possédés.
-  rows: { item: IconItem; why: string; price: number | null; remaining?: number | null; missing: number; step?: { item: IconItem; price: number } }[];
+  rows: { item: IconItem; why: string; price: number | null; remaining?: number | null; missing: number; step?: { item: IconItem; price: number }; room?: { sell: IconItem | null; held?: boolean }; resale?: { items: IconItem[]; gain: number } }[];
   /** Ton parcours sur 6 places : items finis déjà achetés, puis la suite prévue. */
   plan?: { item: IconItem; owned: boolean; why?: string }[];
   /** Mort : secondes avant de réapparaître (le shop est ouvert). */
   respawn?: number | null;
+  /** Rien d'autre à acheter : l'élixir de ton build (`left` = secondes d'effet, `buy` = à racheter maintenant). */
+  elixir?: { item: IconItem; perk: string; price: number; left: number | null; buy: boolean } | null;
 }
 
 export interface CounterPanel {
@@ -137,6 +168,12 @@ export interface TeamPlayer {
   items?: IconItem[]; // items finis, en direct
 }
 
+export interface ItemStat {
+  id: number;
+  winrate: number;
+  games: number;
+}
+
 export interface BuildPanel {
   championId: number;
   championName: string;
@@ -146,11 +183,16 @@ export interface BuildPanel {
   cores: { name: string; core: IconItem[]; options: StatItem[]; winrate: number; games: number }[];
   boots: StatItem[];
   singles?: StatItem[]; // items seuls très gagnants, hors builds affichés
+  /** Winrate de chaque item seul sur ce champion (Mayhem, arammeta) : sert à comparer un achat au conseil. */
+  itemStats?: ItemStat[];
+  /** Faille (OP.GG) : winrate des items par rang d'achat (4e, 5e, 6e). Seuls comparables entre eux : voir `optionsForSlot`. */
+  slotStats?: Record<number, ItemStat[]>;
   note: string | null;
   balance?: { label: string; good: boolean }[];
-  /** Faille : départ, ordre des compétences, rôle, source et taille de l'échantillon. */
+  /** Faille : départ, rôle, source et taille de l'échantillon. */
   starter?: IconItem[];
-  skills?: { order: string[]; max: string[] } | null;
+  /** Ordre des compétences (OP.GG, tous modes). `source` : précisé quand les chiffres ne viennent pas du mode joué. */
+  skills?: { order: string[]; max: string[]; source?: string } | null;
   lane?: string | null;
   source?: string;
   /** Faille : contre qui ce champion gagne / perd le plus dans ce rôle (OP.GG), avec la borne de confiance. */
@@ -182,6 +224,8 @@ export interface AugmentPanel {
   all?: Record<Rarity, AugmentRow[]>;
   /** Augments que TU prends souvent et avec lesquels tu perds (tous champions, ≥ 4 parties). */
   myTraps?: { id: number; name: string; icon: string | null; games: number; wins: number }[];
+  /** Avis sur les augments du pool pour ce champion, sans tenir compte des augments pris. */
+  combos?: Record<number, ComboNote>;
 }
 
 export interface HistoryGame {
@@ -214,6 +258,8 @@ export interface HistoryGame {
   allyNames?: string[]; // Riot ID des 4 coéquipiers (même ordre que allies)
   /** Revue des choix d'augments (core/review.ts), absente si aucune carte n'a été lue à l'écran. */
   review?: GameReview;
+  /** Revue des achats (core/buyreview.ts), absente si aucun item fini n'a été vu en partie. */
+  buys?: BuyReview;
   noDetail?: boolean; // détail introuvable dans le client
   /** Headliner Mayhem noté en direct (clé de headliner.ts, ex. « commandline ») : lu à l'écran ou d'après les cartes. */
   headliner?: string;
@@ -333,6 +379,10 @@ export interface OfferedCards {
   extra?: AugmentRow[];
   /** Correction selon ton build en cours (items achetés + prévus) : écart de winrate et raison, par augment. */
   fit?: Record<number, { delta: number; why: string | null; good: boolean }>;
+  /** Avis sur les cartes pour ce champion, en tenant compte des cartes conseillées aux choix passés. */
+  combos?: Record<number, ComboNote>;
+  /** Conseil de relance (absent en lecture partielle, hors données ou pour les cartes de headliner). */
+  reroll?: RerollAdvice | null;
 }
 
 export type Connection = 'searching' | 'connected';
@@ -351,25 +401,122 @@ export interface PlayerCard {
   ranks: { queue: 'Solo/Duo' | 'Flex'; tier: string; division: string; lp: number; wins: number; losses: number }[];
 }
 
+export interface SkillNext {
+  key: 'Q' | 'W' | 'E' | 'R';
+  /** Nom du sort donné par le jeu, dans la langue du client. */
+  name: string | null;
+  /** Rang que le sort aura après ce point. */
+  rank: number;
+  /** Un point est à mettre maintenant. */
+  pending: boolean;
+  max: string[];
+  source: string | null;
+}
+
+/** Emplacement suivi : ultime, ou sort d'invocateur 1 / 2 (D / F par défaut). */
+export type EnemySpellSlot = 'R' | 'D' | 'F';
+
+/** Fiabilité d'un timer : calculé (données du patch + objets vus), approximatif (une part inconnue), inconnu (pas de donnée). */
+export type SpellReliability = 'calculé' | 'approx' | 'inconnu';
+
+export interface EnemySpellTimer {
+  slot: EnemySpellSlot;
+  name: string;
+  icon: string | null;
+  /** Cooldown complet avec la haste visible maintenant, en secondes ; null si inconnu ou pas encore débloqué. */
+  cooldown: number | null;
+  /** Temps de jeu (s) où le sort revient, si tu l'as signalé lancé ; null = disponible ou jamais signalé. */
+  readyAt: number | null;
+  /** Retour au plus tôt si une rune ou un augment invisible raccourcit le cooldown ; null si rien de caché. */
+  earliest: number | null;
+  reliability: SpellReliability;
+  /** Ce que le calcul compte, en clair (« 300 s, 10 haste des bottes »). */
+  detail: string;
+  /** Ultime pas encore débloqué au niveau actuel. */
+  locked?: boolean;
+}
+
+export interface EnemySpellRow {
+  championId: number;
+  championName: string;
+  level: number;
+  dead: boolean;
+  spells: EnemySpellTimer[];
+}
+
+/** Sorts ennemis signalés à la main : les timers démarrent quand TU les déclares, jamais tout seuls. */
+export interface EnemySpellPanel {
+  /** Horloge : temps de jeu = Date.now() / 1000 − clockOffset (recalé si le jeu est en pause). */
+  clockOffset: number;
+  enemies: EnemySpellRow[];
+  /** Raison si les cooldowns ne peuvent pas être calculés (Data Dragon injoignable…). */
+  warning: string | null;
+}
+
+export type EnemySpellAction = 'cast' | 'clear' | 'shift';
+
+export interface GoldGapPlayer {
+  championId: number;
+  championName: string;
+  level: number;
+  /** Valeur des objets (prix total du patch, hors consommables). */
+  gold: number;
+}
+
+export interface GoldGapRow {
+  /** Faille : le rôle. null : les joueurs sont juste classés du plus riche au moins riche. */
+  role: string | null;
+  ally: GoldGapPlayer | null;
+  enemy: GoldGapPlayer | null;
+  gap: number | null;
+  mine: boolean;
+}
+
+export interface GoldGapPanel {
+  allyGold: number;
+  enemyGold: number;
+  /** Ton équipe moins la leur. */
+  gap: number;
+  levelGap: number;
+  state: 'ahead' | 'even' | 'behind';
+  richest: GoldGapPlayer;
+  rows: GoldGapRow[];
+  byRole: boolean;
+  /** Objets sans prix connu, comptés 0. */
+  unknown: number;
+}
+
 export interface AppState {
   /** Observations Live Client ; les données non acquises restent explicitement inconnues. */
   intelligence?: IntelligenceState | null;
   /** Nombre d'anciennes parties notées par la revue depuis le lancement (recharge l'historique affiché). */
   reviews?: number;
+  /** Version de l'app en cours (lue dans CHANGELOG.md au lancement). */
+  appVersion?: string | null;
+  /** Version plus récente posée sur le disque, à lancer. */
+  update?: AppUpdate | null;
   connection: Connection;
   player?: PlayerCard | null;
   phase: string | null;
   mode: Mode | null;
   queueId: number | null;
   summonerName: string | null;
-  data: { patch: string | null; loadedAt: number | null; error: string | null; balance?: string; clientPatch?: string };
+  data: { patch: string | null; loadedAt: number | null; error: string | null; balance?: string; combos?: string; clientPatch?: string };
   champSelect: ChampSelectView | null;
   augments: AugmentPanel | null;
   build: BuildPanel | null;
   counters: CounterPanel | null;
   nextBuy: NextBuyPanel | null;
+  /** Le prochain sort à monter, en partie. */
+  skillNext?: SkillNext | null;
+  /** Timers des sorts ennemis signalés à la main, en partie. */
+  enemySpells?: EnemySpellPanel | null;
+  /** Valeur des objets des deux équipes, en partie. */
+  goldGap?: GoldGapPanel | null;
   /** Choix d'augment en cours d'après ton niveau en jeu (1 à 4), null hors partie. */
   augRound: number | null;
+  /** Ton niveau en jeu (ARAM, Mayhem), null hors partie. */
+  liveLevel?: number | null;
   /** Cartes d'augments lues à l'écran, null si aucune lecture en cours. */
   offered?: OfferedCards | null;
   /** Headliner Mayhem de la partie en cours, reconnu à l'écran (bannière) ou d'après ses cartes ; null sinon. */
@@ -383,6 +530,9 @@ export interface Api {
   getState(): Promise<AppState>;
   onState(cb: (s: AppState) => void): () => void;
   pickChampion(championId: number): Promise<{ ok: boolean; message: string }>;
+  hoverBan(championId: number): Promise<{ ok: boolean; message: string }>;
+  /** Signale un sort ennemi : lancé (`cast`), à annuler (`clear`), ou à décaler de `delta` secondes (`shift`, négatif = signalé en retard). */
+  markEnemySpell(championId: number, slot: EnemySpellSlot, action: EnemySpellAction, delta?: number): Promise<{ ok: boolean; message: string }>;
   applyLoadout(): Promise<{ ok: boolean; message: string }>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   refreshData(): Promise<void>;
@@ -403,4 +553,7 @@ export interface Api {
   championLanes(championId: number): Promise<{ lane: string; roleRate: number }[]>;
   balanceChanges(): Promise<{ championId: number; name: string; at: number; text: string; played: number }[]>;
   listChampions(): Promise<{ id: number; name: string; winrate: number | null; games: number; tags: string[] }[]>;
+  poolReport(): Promise<PoolReport | null>;
+  /** Relance l'app pour passer à la version du disque. Refusé en partie. */
+  relaunch(): Promise<{ ok: boolean; message: string }>;
 }

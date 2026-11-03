@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import QRCode from 'qrcode';
-import { state } from '../store';
+import { state, statsBehind } from '../store';
 import type { Settings } from '../../core/types';
 import PageHeader from '../ui/PageHeader.vue';
 import Notice from '../ui/Notice.vue';
@@ -110,11 +110,7 @@ async function refresh() {
 }
 
 // Données anciennes : le patch du client et celui des stats ne correspondent pas
-const stale = computed(() => {
-  const c = state.value?.data.clientPatch;
-  const p = state.value?.data.patch;
-  return !!c && !!p && !c.startsWith(p) && !p.startsWith(c);
-});
+const stale = computed(() => statsBehind(state.value?.data));
 const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 </script>
 
@@ -236,6 +232,7 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2
           <div v-if="s.data.error" class="bad small">{{ s.data.error }}</div>
           <Notice v-if="stale" kind="warn"><p>Client en {{ s.data.clientPatch }} : les stats Mayhem sont encore celles du {{ s.data.patch }}. Elles se mettent à jour quelques jours après un patch.</p></Notice>
           <div v-if="s.data.balance" class="small">Équilibrage ARAM : {{ s.data.balance }}</div>
+          <div v-if="s.data.combos" class="small">Combos Mayhem : {{ s.data.combos }} (Data: arammayhem.com, CC BY 4.0)</div>
           <div class="faint small">Mises en cache 12 h. Les augments Mayhem changent souvent : rafraîchis après un patch.</div>
         </div>
         <button class="btn" :disabled="refreshing" @click="refresh">{{ refreshing ? 'Chargement…' : 'Rafraîchir' }}</button>

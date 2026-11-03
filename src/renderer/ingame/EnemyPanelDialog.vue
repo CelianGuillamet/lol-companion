@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import EnemyIntelligence from './EnemyIntelligence.vue';
+import EnemySpells from './EnemySpells.vue';
+import Notice from '../ui/Notice.vue';
+import { state } from '../store';
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null);
 const titleId = useId();
+const hasSpells = computed(() => !!state.value?.enemySpells?.enemies.length);
 let previousFocus: HTMLElement | null = null;
 
 watch(() => props.open, async (open) => {
@@ -40,7 +44,17 @@ onBeforeUnmount(() => { if (dialog.value?.open) dialog.value.close(); });
         <h2 :id="titleId">Sorts ennemis</h2>
         <button class="btn" autofocus @click="close" aria-label="Fermer les sorts ennemis">Fermer <kbd>Échap</kbd></button>
       </header>
-      <div class="dialog-body"><EnemyIntelligence v-if="open" compact /></div>
+      <div class="dialog-body">
+        <template v-if="open">
+          <EnemySpells />
+          <details v-if="hasSpells && state?.intelligence" class="observations">
+            <summary>Données Live Client et disponibilité</summary>
+            <EnemyIntelligence compact />
+          </details>
+          <EnemyIntelligence v-else-if="state?.intelligence" compact />
+          <Notice v-if="!hasSpells && !state?.intelligence" kind="empty">Aucun sort ennemi disponible pendant cette partie.</Notice>
+        </template>
+      </div>
     </dialog>
   </Teleport>
 </template>
@@ -54,4 +68,6 @@ onBeforeUnmount(() => { if (dialog.value?.open) dialog.value.close(); });
 .dialog-head .btn { flex: none; }
 .dialog-head kbd { margin-left: 5px; }
 .dialog-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px; }
+.observations { margin-top: 12px; }
+.observations summary { min-height: 36px; cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
 </style>

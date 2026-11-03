@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSkinText, headlinerFromCards, headlinerFromText, headlinerNearMisses, historyHeadliner, HEADLINERS } from '../src/core/headliner';
+import { extraDrawAt, isSkinText, headlinerFromCards, headlinerFromText, headlinerNearMisses, historyHeadliner, HEADLINERS } from '../src/core/headliner';
 
 describe('headliners Mayhem', () => {
   it('reconnaît le nom du headliner lu à l’écran, strictement', () => {
@@ -56,8 +56,33 @@ describe('headliners Mayhem', () => {
     expect(historyHeadliner({ mode: 'aram', createdAt: at, augments: [1, 2, 3, 4, 5] }, null)).toBeNull();
   });
 
+  it('Superfans : lu à l’écran, et deviné après coup à 5 augments au niveau 21', () => {
+    expect(headlinerFromText(['Superfans'])?.info.key).toBe('superfans');
+    expect(headlinerFromText(['SUPERFANS'])?.info.name).toBe('Superfans');
+    expect(headlinerFromText(['Superfams'])?.info.key).toBe('superfans'); // une lettre d'écart
+    const at = Date.UTC(2026, 10, 5);
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4, 5], level: 21 }, null)).toBe('Superfans (probable)');
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4, 5], level: 18 }, null)).toBe('K/DA (probable)');
+    // Niveau 21 sans 5e augment : déjà vu en oct. (8021825913), ça ne dit rien du headliner
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4], level: 21 }, null)).toBeNull();
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4, 5], level: 21, headliner: 'kda' }, null)).toBe('K/DA');
+  });
+
+  it('réveille le lecteur de cartes aux tirages hors paliers', () => {
+    expect(extraDrawAt(20, 21)).toBe(true); // bannière ratée : le niveau 21 suffit
+    expect(extraDrawAt(20, 21, 'superfans')).toBe(true);
+    expect(extraDrawAt(19, 22)).toBe(true);
+    expect(extraDrawAt(21, 21)).toBe(false);
+    expect(extraDrawAt(null, 21)).toBe(false); // app lancée en cours de partie
+    expect(extraDrawAt(20, null)).toBe(false);
+    expect(extraDrawAt(17, 18, 'pentakill')).toBe(true);
+    expect(extraDrawAt(17, 18, 'kda')).toBe(false);
+    expect(extraDrawAt(17, 18)).toBe(false);
+    expect(extraDrawAt(18, 19, 'pentakill')).toBe(false);
+  });
+
   it('chaque headliner a au moins un conseil', () => {
-    expect(HEADLINERS).toHaveLength(8);
+    expect(HEADLINERS).toHaveLength(9);
     for (const h of HEADLINERS) expect(h.tips.length).toBeGreaterThan(0);
   });
 });

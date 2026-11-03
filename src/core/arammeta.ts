@@ -125,6 +125,8 @@ export class Arammeta {
   tierList: TierList | null = null;
   loadedAt: number | null = null;
   private details = new Map<number, ChampionDetail>();
+  /** Après un rechargement forcé, le disque peut garder le détail du patch d'avant (12 h) : on le relit en ligne. */
+  private freshDetails = false;
 
   constructor(
     private cacheDir: string,
@@ -160,7 +162,10 @@ export class Arammeta {
   async load(force = false): Promise<TierList> {
     this.tierList = JSON.parse(await this.cached('api/tier-list.json', force)) as TierList;
     this.loadedAt = Date.now();
-    if (force) this.details.clear();
+    if (force) {
+      this.details.clear();
+      this.freshDetails = true;
+    }
     return this.tierList;
   }
 
@@ -168,7 +173,7 @@ export class Arammeta {
     if (this.details.has(championId)) return this.details.get(championId)!;
     const base = (this.tierList?.detailBase || 'api/champions').replace(/^\/+/, '');
     try {
-      const d = JSON.parse(await this.cached(`${base}/${championId}.json`)) as ChampionDetail;
+      const d = JSON.parse(await this.cached(`${base}/${championId}.json`, this.freshDetails)) as ChampionDetail;
       this.details.set(championId, d);
       return d;
     } catch {

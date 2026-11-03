@@ -1,4 +1,4 @@
-// Headliners Mayhem (patch 26.21, « Journey to Stardom ») : un par partie. Ni le client ni l'API Live Client ne
+// Headliners Mayhem (patch 26.21, « Journey to Stardom », Superfans au 26.22) : un par partie. Ni le client ni l'API Live Client ne
 // le donnent (captures du 29 oct.). On le reconnaît donc :
 //  - en partie : nom du headliner lu à l'écran (bannière du début) ou cartes propres au headliner (Pentakill :
 //    3170-3173, vues au choix 1 et au niveau 18) ;
@@ -23,7 +23,9 @@ export const HEADLINERS: HeadlinerInfo[] = [
   { key: 'disco', name: 'Disco', tips: ['Danse sous la boule disco entre deux combats : de l’or pour toi.'] },
   { key: 'cafecuties', name: 'Cafe Cuties', tips: ['Reliques de soin renforcées : recule dessus plutôt qu’en base, et prive-en l’adversaire.'] },
   { key: 'bees', name: 'Bees', tips: ['Ramasse les pots de miel en évitant les abeilles.'] },
-  { key: 'commandline', name: 'Command Line', tips: ['Ton reroll fait monter une carte d’un cran de rareté : reroll une carte Or pour viser du Prismatique.', 'Garde tes rerolls pour les choix où aucune carte ne va avec ton build.'] },
+  // Superfans : 9e headliner, serveur de test du 26.22 (id « Worlds »), texte lu dans les données du PBE du 31 oct.
+  { key: 'superfans', name: 'Superfans', tips: ['Niveau max 21 pour tout le monde, plus d’XP, et un augment en plus au niveau 21 : leur équipe l’aura aussi.', 'Les paliers 7, 11 et 15 arrivent plus tôt : regarde tes cartes plus souvent.'] },
+  { key: 'commandline', name: 'Command Line', tips: ['À chaque choix, ta 1re relance monte d’un cran de rareté (Argent → Or, Or → Prismatique) : ne la saute jamais.', 'Mets-la sur ta moins bonne carte, les suivantes restent dans la rareté du tirage.'] },
 ];
 
 const BY_KEY = new Map(HEADLINERS.map((h) => [h.key, h]));
@@ -40,6 +42,8 @@ const SCREEN_FORMS: [string, string][] = [
   ['space groove', 'disco'],
   ['cafe cuties', 'cafecuties'],
   ['command line', 'commandline'],
+  ['superfans', 'superfans'],
+  ['super fans', 'superfans'],
 ];
 
 const lineForm = (raw: string): { t: string; prefixed: boolean } => {
@@ -110,6 +114,20 @@ export function headlinerFromCards(ids: number[]): HeadlinerInfo | null {
   return ids.length >= 2 && ids.every((id) => id >= 3170 && id <= 3173) ? BY_KEY.get('pentakill')! : null;
 }
 
+/** Niveau de l'augment en plus de Superfans. Au-delà de 18, le niveau seul ne prouve rien : 3 parties l'ont dépassé en oct. */
+export const SUPERFANS_LEVEL = 21;
+
+/**
+ * Le niveau vient-il d'ouvrir un tirage hors des paliers 7, 11, 15 ? Le lecteur de cartes dort entre deux paliers : sans ça,
+ * l'augment du niveau 21 (Superfans) et la carte Pentakill du niveau 18 ne sont pas lus. Le niveau 21 compte sans headliner
+ * connu, la bannière peut avoir été ratée.
+ */
+export function extraDrawAt(prev: number | null | undefined, level: number | null | undefined, headliner?: string | null): boolean {
+  if (prev == null || level == null) return false;
+  const passed = (n: number) => prev < n && level >= n;
+  return passed(SUPERFANS_LEVEL) || (headliner === 'pentakill' && passed(18));
+}
+
 /** Sortie du patch 26.21 (premières parties à 5 augments le 21 oct. 2026). */
 export const HEADLINERS_SINCE = Date.UTC(2026, 9, 21);
 
@@ -117,9 +135,9 @@ export const HEADLINERS_SINCE = Date.UTC(2026, 9, 21);
  * Headliner d'une partie de l'historique : noté en direct, sinon marqueur, sinon 5 augments (K/DA probable).
  * `markerName` : nom du headliner d'après l'augment marqueur (null s'il n'y en a pas).
  */
-export function historyHeadliner(g: { mode: string; createdAt: number; augments: number[]; headliner?: string }, markerName: string | null): string | null {
+export function historyHeadliner(g: { mode: string; createdAt: number; augments: number[]; headliner?: string; level?: number }, markerName: string | null): string | null {
   if (g.headliner) return BY_KEY.get(g.headliner)?.name ?? g.headliner;
   if (markerName) return markerName;
-  if (g.mode === 'mayhem' && g.createdAt >= HEADLINERS_SINCE && g.augments.length === 5) return 'K/DA (probable)';
+  if (g.mode === 'mayhem' && g.createdAt >= HEADLINERS_SINCE && g.augments.length === 5) return (g.level ?? 0) >= SUPERFANS_LEVEL ? 'Superfans (probable)' : 'K/DA (probable)';
   return null;
 }

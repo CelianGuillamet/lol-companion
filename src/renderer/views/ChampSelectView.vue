@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { tone, state, championIcon, pct, signed, hideBroken } from '../store';
+import { tone, state, championIcon, pct, signed, hideBroken, statsBehind } from '../store';
 import Home from '../Home.vue';
 import Notice from '../ui/Notice.vue';
 import SrSelectPanel from './SrSelectPanel.vue';
@@ -67,6 +67,7 @@ const open = ref<number | null>(null);
   <SrSelectPanel v-else-if="cs.sr" :cs="cs" />
 
   <div v-else class="page wrap">
+    <Notice v-if="statsBehind(state?.data)" kind="warn"><p>Patch tout neuf : ces winrates viennent encore du {{ state?.data.patch }}. Un champion ou un augment modifié peut être mal classé.</p></Notice>
     <!-- La décision : le seul bloc qui compte quand le chrono tourne -->
     <section v-if="decision" class="decision" :class="[decision.kind, { reco: decision.kind !== 'keep' }]">
       <img @error="hideBroken" :src="championIcon(decision.champ.championId)" width="76" height="76" class="icon portrait" alt="" />
@@ -161,6 +162,7 @@ const open = ref<number | null>(null);
         <span v-if="!cs.myChampionId" class="faint xs">Disponible une fois ton champion choisi.</span>
       </div>
       <p v-if="cs.dataNote" class="faint small">{{ cs.dataNote }}</p>
+      <p v-if="cs.notOwned?.length" class="faint small">Au banc, hors de ta collection, donc non classés : {{ cs.notOwned.join(', ') }}.</p>
       <p class="faint small">Score = points de winrate attendus : winrate Mayhem, synergies avec tes alliés, compo, tes propres résultats.</p>
     </div>
   </div>

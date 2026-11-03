@@ -1,0 +1,15 @@
+{
+  "_note": "Extrait de summoner.json Data Dragon 16.21.1 (cooldowns relevés le 3 nov. 2026), champs réduits.",
+  "type": "summoner",
+  "version": "16.21.1",
+  "data": {
+    "SummonerFlash": { "id": "SummonerFlash", "name": "Flash", "cooldown": [300], "image": { "full": "SummonerFlash.png" } },
+    "SummonerFlash_Jade": { "id": "SummonerFlash_Jade", "name": "Flash", "cooldown": [300], "image": { "full": "SummonerFlash_Jade.png" } },
+    "SummonerHaste": { "id": "SummonerHaste", "name": "Ghost", "cooldown": [240], "image": { "full": "SummonerHaste.png" } },
+    "SummonerHeal": { "id": "SummonerHeal", "name": "Heal", "cooldown": [240], "image": { "full": "SummonerHeal.png" } },
+    "SummonerBarrier": { "id": "SummonerBarrier", "name": "Barrier", "cooldown": [180], "image": { "full": "SummonerBarrier.png" } },
+    "SummonerDot": { "id": "SummonerDot", "name": "Ignite", "cooldown": [180], "image": { "full": "SummonerDot.png" } },
+    "SummonerSnowball": { "id": "SummonerSnowball", "name": "Mark", "cooldown": [80], "image": { "full": "SummonerSnowball.png" } },
+    "SummonerTeleport": { "id": "SummonerTeleport", "name": "Teleport", "cooldown": [300], "image": { "full": "SummonerTeleport.png" } }
+  }
+}

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import EnemyIntelligence from './ingame/EnemyIntelligence.vue';
+import EnemySpells from './ingame/EnemySpells.vue';
 import Notice from './ui/Notice.vue';
 import { state } from './store';
 
 const close = () => window.close();
+const hasSpells = computed(() => !!state.value?.enemySpells?.enemies.length);
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && !event.defaultPrevented) close();
 }
@@ -19,8 +21,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <button class="btn" autofocus @click="close">Fermer <kbd>Échap</kbd></button>
     </header>
     <div class="window-body">
-      <EnemyIntelligence v-if="state?.intelligence" compact />
-      <Notice v-else kind="empty">Aucune observation ennemie disponible. Le panneau se remplit pendant la partie.</Notice>
+      <EnemySpells />
+      <details v-if="hasSpells && state?.intelligence" class="observations">
+        <summary>Données Live Client et disponibilité</summary>
+        <EnemyIntelligence compact />
+      </details>
+      <EnemyIntelligence v-else-if="state?.intelligence" compact />
+      <Notice v-if="!hasSpells && !state?.intelligence" kind="empty">Aucune observation ennemie disponible. Le panneau se remplit pendant la partie.</Notice>
     </div>
   </main>
 </template>
@@ -32,4 +39,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .window-head .btn { flex: none; -webkit-app-region: no-drag; }
 .window-head kbd { margin-left: 4px; }
 .window-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px; }
+.observations { margin-top: 12px; }
+.observations summary { min-height: 36px; cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
 </style>

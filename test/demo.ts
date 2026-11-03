@@ -8,6 +8,8 @@ const inGame = scenario === 'ingame' || scenario === 'purchase' || scenario === 
 
 const mock = await startMockLcu('demo');
 const s = mock.state;
+// Répétition sur l'historique réel : les champions de ces parties, sous un nom factice
+if (process.env.ARAM_DEMO_CHAMPS) (s as unknown as { champions: unknown[] }).champions = process.env.ARAM_DEMO_CHAMPS.split(',').map((id) => ({ id: Number(id), name: `C${id}`, alias: `C${id}` }));
 s.matchList = [
   game(11, 2400, 157, true, [1058, 3078, 1206]),
   game(12, 2400, 89, true, [1058, 1206]),
@@ -43,7 +45,7 @@ if (inGame) {
     teamTwo: [12, 412, 25, 103, 32].map((championId) => ({ puuid: `e${championId}`, championId })),
   };
   (s as unknown as { live: object }).live = {
-    me: { currentGold: 2140, level: 12, riotId: 'Celian#EUW' },
+    me: { currentGold: 2140, level: 12, riotId: 'Celian#EUW', abilities: { Passive: {}, Q: { abilityLevel: 3, displayName: 'Shield of Daybreak' }, W: { abilityLevel: 5, displayName: 'Eclipse' }, E: { abilityLevel: 1, displayName: 'Zenith Blade' }, R: { abilityLevel: 2, displayName: 'Solar Flare' } } },
     players: [
       { riotId: 'Celian#EUW', rawChampionName: 'game_character_displayname_Leona', isDead: true, respawnTimer: 11.4, items: [{ itemID: 3084 }, { itemID: 3111 }], scores: { kills: 2, deaths: 5, assists: 14 } },
       { riotId: 'B#1', rawChampionName: 'game_character_displayname_Morgana', items: [{ itemID: 3157 }, { itemID: 3020 }], scores: { kills: 9, deaths: 2, assists: 6 } },
@@ -69,10 +71,22 @@ if (scenario === 'purchase') {
   const live = (s as unknown as { live: { me: { currentGold: number }; players: { items: { itemID: number }[] }[] } }).live;
   live.me.currentGold = Number(process.env.ARAM_DEMO_GOLD ?? 600);
   live.players[0].items = [3084, 3111, 1033].map((itemID) => ({ itemID }));
+  // ARAM_DEMO_BAG=sell : sac plein avec un composant à vendre ; full : 6 items finis
+  const bag = process.env.ARAM_DEMO_BAG;
+  if (bag) {
+    s.itemData.push(...[9001, 9002, 9003].map((id) => ({ id, name: `Item fini ${id} (test)`, priceTotal: 3000, categories: ['Health'] })), { id: 9004, name: 'Composant orphelin (test)', priceTotal: 435, to: [] }, { id: 9005, name: 'Item fini 9005 (test)', priceTotal: 3000, categories: ['Health'] }, { id: 4401, name: 'Force of Nature', priceTotal: 2800, categories: ['Health', 'SpellBlock'] });
+    live.players[0].items = [3084, 3111, 9001, 9002, 9003, bag === 'full' ? 9005 : 9004].map((itemID, slot) => ({ itemID, slot }));
+  }
 }
 if (scenario === 'intelligence') {
   // Transport/UI seulement : aucune prétention de tracking en vraie partie.
-  s.allGameData = intelligenceFixture();
+  const snapshot = intelligenceFixture();
+  s.allGameData = snapshot;
+  (s as unknown as { live: object }).live = {
+    gameTime: snapshot.gameData.gameTime,
+    me: { ...snapshot.activePlayer, currentGold: 2140, level: 12 },
+    players: snapshot.allPlayers.map((player) => ({ ...player, items: [] })),
+  };
 }
 // Faille (classée solo, mid) : champ select Ahri survolée contre Lux, puis en partie avec les rôles du Live Client
 if (scenario === 'sr' || scenario === 'sringame') {
@@ -111,5 +125,21 @@ if (scenario === 'sr' || scenario === 'sringame') {
       ],
     };
   }
+}
+// Écart d'objets : camps, niveaux et prix pour les scénarios en partie
+if (process.env.ARAM_DEMO_GAP) {
+  const live = (s as unknown as { live?: { players: { team?: string; level?: number; position?: string }[] } }).live;
+  if (process.env.ARAM_DEMO_GAP === 'roles') {
+    const pad = (team: string, position: string, alias: string, itemID: number) => ({ riotId: `${alias}#1`, team, position, rawChampionName: `game_character_displayname_${alias}`, level: 9, items: [{ itemID }] });
+    live?.players.push(pad('ORDER', 'JUNGLE', 'Vi', 3111), pad('ORDER', 'BOTTOM', 'Jinx', 3033), pad('ORDER', 'UTILITY', 'Nami', 3020), pad('CHAOS', 'BOTTOM', 'Caitlyn', 3033), pad('CHAOS', 'UTILITY', 'Soraka', 3020));
+  }
+  live?.players.forEach((p, i) => { p.team ??= i < 5 ? 'ORDER' : 'CHAOS'; p.level ??= 12 - (i % 3); });
+  s.itemData = [[3084, 3000], [3111, 1250], [3157, 3250], [3020, 1100], [3075, 2450], [3033, 3000], [3076, 800], [3118, 3000], [6655, 3100], [6631, 3200]].map(([id, priceTotal]) => ({ id, name: `Objet ${id}`, priceTotal }));
+}
+// Collection : 89 (Leona) dans la rotation, le reste absent. Le remplissage garde la lecture valide.
+if (process.env.ARAM_DEMO_CLIENT) (s as unknown as { gameVersion: string }).gameVersion = process.env.ARAM_DEMO_CLIENT;
+if (process.env.ARAM_DEMO_POOL) {
+  const entry = (id: number, owned = true, freeToPlay = false) => ({ id, freeToPlay, ownership: { owned } });
+  (s as unknown as { collection: unknown }).collection = [...Array.from({ length: 30 }, (_, i) => entry(5000 + i)), entry(54), entry(22), entry(89, false, true)];
 }
 console.log(JSON.stringify({ port: mock.port, token: 'demo' }));

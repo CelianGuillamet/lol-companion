@@ -12,17 +12,24 @@ pas l’absence de la donnée dans toutes les versions du jeu.
 Ce document distingue l’inspection du code, les schémas externes consultés et les observations du runtime.
 Les fixtures et les tests synthétiques ne sont jamais une validation sur une partie réelle.
 
+L’audit initial a porté sur le checkout v1.62 (`2c79843`). Avant publication, `main` a été récupérée
+jusqu’à la v1.88 (`aa02bd4`) : elle contient déjà `enemyspells.ts`, `cooldowns.ts` et `EnemySpells.vue`,
+avec des timers d’ultime et de sorts d’invocateur **déclenchés par un clic de l’utilisateur**. La v1.89
+préserve ces fonctions et les raccorde au panneau accessible. Ces signalements manuels ne sont pas
+un fournisseur de lancements automatiques, de positions cachées ou d’actions hors vision.
+
 ## Application existante
 
 - `src/core/lcu.ts` découvre les arguments de `LeagueClientUx`, puis les lockfiles macOS. La LCU est
   interrogée localement en HTTPS avec l’authentification du client ; Live Client utilise le port 2999.
-- `src/core/engine.ts` lit `activeplayer`, `playerlist` et `gamestats`, et la session LCU pour les équipes.
-  Avant cette mission, il n’acquérait pas `eventdata` et ne comportait aucun fournisseur de lancements
+- Dans le snapshot v1.62 audité, `src/core/engine.ts` lisait `activeplayer`, `playerlist` et `gamestats`, et la session LCU pour les équipes.
+  Il n’acquérait pas `eventdata` et ne comportait aucun fournisseur de lancements
   de sorts ou de coordonnées. `LivePlayer.position` est explicitement un **rôle de lane**, pas une position X/Y.
 - `scripts/probe.mjs` interroge `/help`, le champ select et `allgamedata` une fois par minute en partie.
   Ce rythme et ses filtres de champs concernent les augments ; ce n’est pas un détecteur de sorts.
-- Les captures déjà prévues par le moteur (`probe-output/liveclient-*.json`) ne contiennent que les
-  statistiques de partie et le joueur actif. Elles ne suffisent pas pour auditer les cinq ennemis.
+- Les captures `probe-output/liveclient-*.json` du snapshot initial ne contenaient que les
+  statistiques de partie et le joueur actif. Les versions ultérieures documentent aussi des captures
+  `liveclient-choix*` avec les joueurs ; ces données réelles n’étaient pas accessibles à cet audit cloud.
 - Le processus principal Electron exécute le moteur. Son état est transmis par `state` aux fenêtres,
   via le preload isolé (`contextIsolation`, `nodeIntegration: false`, sandbox). Le téléphone reçoit
   le même état en HTTP/SSE. Il n’est donc pas nécessaire de déplacer l’acquisition dans le renderer.
@@ -57,16 +64,22 @@ L’historique est limité à 200 événements ; une session, un roster différe
 réinitialise. Une perte Live Client invalide la fraîcheur. Les événements non reconnus restent de simples
 événements rapportés et ne déclenchent jamais un lancement de sort.
 
-Le calculateur est branché au module de sorts derrière l’exigence d’un lancement acquis. Il gère les
+Le nouveau `AdvancedCooldownEngine` est branché au module `intelligence/enemy-spell.ts` derrière
+l’exigence d’un lancement acquis. Il gère les
 règles de patch/mode, les accélérations, modificateurs ordonnés, resets/réductions explicitement acquis,
 charges à récupération séquentielle et départ de cooldown après réactivation. **Aucune règle de patch
-de production n’est enregistrée**, faute d’entrées complètes et vérifiées. Ce n’est donc pas un tracker
-automatique de casts opérationnel. Les mouvements, rappels, X/Y et états de vision restent inconnus.
+de production n’est enregistrée dans ce nouveau calculateur**, faute d’entrées complètes et vérifiées.
+Le moteur préexistant `cooldowns.ts`, ses données Data Dragon et les timers manuels sont conservés.
+Ils n’établissent pas un suivi automatique de casts. Les mouvements, rappels, X/Y et états de vision
+restent inconnus dans le pipeline d’observations automatiques.
+
+Les résultats du premier tableau ont été exécutés **avant la fusion de la v1.88**. Ils décrivent le checkout
+initial enrichi ; les résultats de l’intégration finale suivent ce tableau.
 
 | Vérification exécutée | Résultat | Limite |
 |---|---|---|
 | `npm ci --include=dev --no-audit --no-fund` puis installation Electron avec `NODE_USE_ENV_PROXY=1` | Succès, lockfile inchangé | Dépendances et binaire Linux |
-| `npm test` après correction d’accès aux sorts | 209 tests passés, 27 fichiers, aucun ignoré | Données synthétiques ; aucune partie réelle |
+| `npm test` avant fusion, après correction d’accès aux sorts | 209 tests passés, 27 fichiers, aucun ignoré | Données synthétiques ; aucune partie réelle ; résultat non applicable à la fusion sans réexécution |
 | `npm run typecheck` | Succès | Typage uniquement |
 | `npm run build` | Succès | Bundle renderer et main/preload ; avertissement Vite préexistant sur `__dirname` |
 | `test/intelligence-smoke.cjs` sous Electron/Xorg, largeur 1180 px | Code 0, `smoke:ok`, `errors:[]` | Faux serveur HTTPS, cinq ennemis et trente états de sorts inconnus |
@@ -74,13 +87,31 @@ automatique de casts opérationnel. Les mouvements, rappels, X/Y et états de vi
 | `node dist/intelligence-probe.mjs` sur ce cloud | Code 2 ; Live Client/OpenAPI/replay absents, LCU non découvert | Aucune acquisition réelle validée |
 | `git diff --check` | Succès | Aucun changement de manifeste ou de lockfile |
 
-La correction d’accès v1.64 ajoute le bouton d’en-tête, un dialogue aux dimensions du viewport,
+Après fusion de `aa02bd4` (v1.88), `NODE_USE_ENV_PROXY=1 npm test` passe : **515 tests passés,
+4 ignorés** dans la répétition réelle qui exige des captures absentes de ce cloud. Typage et build
+réussissent. Les premiers timeouts des tests distants venaient d’appels réseau hors du proxy ;
+la configuration Node fournie par l’environnement a été rétablie pour cette validation.
+Les scénarios Electron sont passés séparément aux largeurs 1180 et 390 px (`smoke:ok`, `errors:[]`).
+Ils utilisent cette fois les vrais composants manuels de v1.88 : clic Flash, timer actif, correction
++10 s, annulation, fermeture Échap, restauration du focus et récupération d’une fenêtre hors écran.
+Les captures de l’overlay transparent auxiliaire sont laissées à ses scénarios dédiés ; elles ne servent
+pas de preuve pour le panneau interactif corrigé.
+
+L’installateur de mise à jour a passé 11 tests de fichiers, dont un vrai refus de permissions avec
+restauration. Le générateur a produit deux ZIP identiques, extrait et vérifié leurs empreintes,
+puis appliqué le paquet sur une copie de l’arbre Git v1.88 en préservant des fichiers personnels témoins.
+Cette preuve couvre les copies, empreintes et sauvegardes sous Linux ; l’installation native macOS
+et le rendu par-dessus League en plein écran restent non validés.
+
+La correction d’accès, intégrée sous le numéro v1.89 après synchronisation de `main`, ajoute le bouton d’en-tête, un dialogue aux dimensions du viewport,
 Tab quand le compagnon est actif, et une fenêtre interactive ouverte par ⌘⇧E. Le scénario Electron
 vérifie aussi le défilement jusqu’au cinquième ennemi, Échap, le retour du focus, la navigation Tab
 dans les champs/boutons, et la récupération d’une fenêtre volontairement déplacée hors écran.
 Les tests grand écran et 390 px passent sous Linux ; le raccourci est exercé via son gestionnaire
 enregistré. Ni Tab global ni l’affichage au-dessus du jeu plein écran macOS ne sont validés ici.
-Les cases Flash restent informatives et ne créent pas de timer au clic.
+Dans le panneau d’observations `EnemyIntelligence.vue`, les cases Flash restent informatives.
+Le composant préexistant `EnemySpells.vue` conserve ses boutons : un clic y signale manuellement un
+lancement et démarre le timer correspondant. La fusion les réutilise dans le dialogue et la fenêtre dédiée.
 
 Un essai de la suite existante a échoué sur un timeout d’initialisation : les anciens tests moteur
 contactaient encore les descriptions Mayhem du wiki malgré leurs autres dépendances hors ligne.

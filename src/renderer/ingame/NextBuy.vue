@@ -23,10 +23,12 @@ const fmt = (n: number) => n.toLocaleString('fr-FR');
             <img @error="hideBroken" :src="r.step.item.icon ?? ''" width="20" height="20" class="ic" alt="" />
             En attendant : {{ r.step.item.name }} ({{ fmt(r.step.price) }})
           </div>
+          <div v-if="r.resale" class="room">Vends {{ r.resale.items.map((x) => x.name).join(' et ') }} : +{{ fmt(r.resale.gain) }} or, l'achat passe</div>
+          <div v-else-if="r.room" class="room">{{ r.room.sell ? `Sac plein : vends d'abord ${r.room.sell.name}` : r.room.held ? 'Sac plein : termine d\'abord tes composants' : 'Sac plein : plus de composant à vendre' }}</div>
         </div>
         <div v-if="r.price != null" class="price num">
           <div>{{ fmt(r.price) }}</div>
-          <div :class="r.missing ? 'bad' : 'good'">{{ r.missing ? `−${fmt(r.missing)}` : 'OK' }}</div>
+          <div :class="r.missing && !r.resale ? 'bad' : 'good'">{{ r.resale ? 'avec la vente' : r.missing ? `−${fmt(r.missing)}` : 'OK' }}</div>
         </div>
       </li>
     </ol>
@@ -47,6 +49,7 @@ li.first { background: var(--panel-2); box-shadow: inset 0 0 0 1px rgba(232, 195
 li.first .name { font-size: 15px; }
 .why { font-size: 12px; color: var(--muted); }
 .step { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--good); margin-top: 3px; }
+.room { font-size: 12px; color: var(--warn); margin-top: 3px; }
 .price { text-align: right; font-size: 13px; font-weight: 650; }
 .foot { margin: 0; font-size: 12px; color: var(--faint); }
 </style>

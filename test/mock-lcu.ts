@@ -71,7 +71,7 @@ export async function startMockLcu(token = 'secret') {
       // API Live Client du jeu (port 2999 en vrai) : pas d'authentification
       if (path === '/liveclientdata/allgamedata') return state.allGameData ? send(200, state.allGameData) : send(404);
       if (path === '/liveclientdata/activeplayer') return (state as unknown as { live?: { me?: object } }).live?.me ? send(200, (state as unknown as { live: { me: object } }).live.me) : send(404);
-      if (path === '/liveclientdata/gamestats') return send(200, { gameMode: 'KIWI', gameTime: 42, mapNumber: 12 });
+      if (path === '/liveclientdata/gamestats') return send(200, { gameMode: 'KIWI', gameTime: (state as unknown as { live?: { gameTime?: number } }).live?.gameTime ?? 42, mapNumber: 12 });
       if (path === '/liveclientdata/playerlist') return (state as unknown as { live?: { players?: object } }).live?.players ? send(200, (state as unknown as { live: { players: object } }).live.players) : send(404);
       if (req.headers.authorization !== expected) return send(401, { message: 'unauthorized' });
 
@@ -87,6 +87,7 @@ export async function startMockLcu(token = 'secret') {
         case route === 'GET /lol-ranked/v1/current-ranked-stats':
           return send(200, { queues: [{ queueType: 'RANKED_SOLO_5x5', tier: 'GOLD', division: 'II', leaguePoints: 47, wins: 31, losses: 28 }, { queueType: 'RANKED_FLEX_SR', tier: '', division: 'NA' }] });
         case route === 'GET /lol-game-data/assets/v1/champion-summary.json':
+          if ((state as unknown as { champions?: unknown[] }).champions) return send(200, (state as unknown as { champions: unknown[] }).champions);
           return send(200, [
             { id: -1, name: 'Aucun', alias: 'None' },
             { id: 157, name: 'Yasuo', alias: 'Yasuo' },
@@ -120,7 +121,12 @@ export async function startMockLcu(token = 'secret') {
         case route === 'GET /lol-lobby-team-builder/champ-select/v1/subset-champion-list':
           return state.subset ? send(200, state.subset) : send(404, { message: 'no subset' });
         case !!(m = route.match(/^PATCH \/lol-champ-select\/v1\/session\/actions\/(\d+)$/)): {
-          const s = state.session as { localPlayerCellId: number; myTeam: { cellId: number; championId: number }[] };
+          const s = state.session as { localPlayerCellId: number; myTeam: { cellId: number; championId: number }[]; actions?: { id: number; type: string; championId: number }[][] };
+          const ban = s.actions?.flat().find((a) => a.id === Number(m![1]) && a.type === 'ban');
+          if (ban) {
+            ban.championId = (body as { championId: number }).championId;
+            return send(204);
+          }
           const me = s.myTeam.find((p) => p.cellId === s.localPlayerCellId)!;
           me.championId = (body as { championId: number }).championId;
           state.subset = null;
@@ -140,6 +146,10 @@ export async function startMockLcu(token = 'secret') {
           return send(200, [{ championId: Number(path.split('/')[6]), primaryPerkStyleId: 8000, secondaryPerkStyleId: 8400, perks: [{ id: 8010 }, { id: 9111 }, { id: 9104 }, { id: 8299 }, { id: 8444 }, { id: 8242 }, { id: 5005 }, { id: 5008 }, { id: 5001 }] }]);
         case route === 'GET /lol-perks/v1/pages':
           return send(200, state.perksPages);
+        case route === 'GET /lol-champions/v1/owned-champions-minimal': {
+          const col = (state as unknown as { collection?: { id: number; freeToPlay: boolean; ownership: { owned: boolean } }[] }).collection;
+          return col ? send(200, col) : send(404, { message: 'absent' });
+        }
         case route === 'GET /lol-champion-mastery/v1/local-player/champion-mastery':
           return send(200, [{ championId: 89, championLevel: 12, championPoints: 154321 }]);
         case route === 'GET /lol-patch/v1/game-version':

@@ -7,6 +7,7 @@ import { Arammeta } from '../src/core/arammeta';
 import { Balance } from '../src/core/balance';
 import { PUUID, startMockLcu } from './mock-lcu';
 import { intelligenceFixture } from './intelligence-fixture';
+import { ddFetcher } from './ddragon-fixture';
 
 let mock: Awaited<ReturnType<typeof startMockLcu>>;
 let engine: Engine;
@@ -21,6 +22,7 @@ async function setup(canDiscover = () => true) {
       readFileSync(join(__dirname, 'fixtures', url.replace('https://arammeta.com/api/', '')), 'utf8')),
     balance: new Balance(join(dataDir, 'balance'), async () => { throw new Error('hors ligne'); }),
     augInfoFetcher: async () => readFileSync(join(__dirname, 'fixtures/mayhem-augments.lua'), 'utf8'),
+    ddragonFetcher: ddFetcher(),
   });
   await engine.refreshData(false);
   mock.state.phase = 'InProgress';

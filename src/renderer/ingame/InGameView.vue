@@ -5,6 +5,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { state, championIcon, pct, hideBroken, ROUND_LABEL } from '../store';
 import AugmentChooser from './AugmentChooser.vue';
 import BuyPanel from './BuyPanel.vue';
+import SkillNext from './SkillNext.vue';
+import EnemySpells from './EnemySpells.vue';
+import GoldGap from './GoldGap.vue';
+import GoldGapTable from './GoldGapTable.vue';
 import BuildView from '../views/BuildView.vue';
 import EnemyIntelligence from './EnemyIntelligence.vue';
 import EnemyPanelDialog from './EnemyPanelDialog.vue';
@@ -19,17 +23,21 @@ const narrow = ref(mq.matches);
 const onMq = () => (narrow.value = mq.matches);
 mq.addEventListener('change', onMq);
 onBeforeUnmount(() => mq.removeEventListener('change', onMq));
-const view = ref<'augs' | 'buy' | 'enemy'>(panel.value ? 'augs' : champ.value ? 'buy' : 'enemy');
+const spells = computed(() => !!state.value?.enemySpells?.enemies.length);
+const enemyAvailable = computed(() => spells.value || !!intelligence.value);
+const view = ref<'augs' | 'buy' | 'spells' | 'enemy'>(panel.value ? 'augs' : champ.value ? 'buy' : spells.value ? 'spells' : 'enemy');
 const activeView = computed(() => {
-  if ((view.value === 'augs' && panel.value) || (view.value === 'buy' && champ.value) || (view.value === 'enemy' && intelligence.value)) return view.value;
-  return panel.value ? 'augs' : champ.value ? 'buy' : 'enemy';
+  if ((view.value === 'augs' && panel.value) || (view.value === 'buy' && champ.value) ||
+    (view.value === 'spells' && spells.value) || (view.value === 'enemy' && intelligence.value)) return view.value;
+  return panel.value ? 'augs' : champ.value ? 'buy' : spells.value ? 'spells' : 'enemy';
 });
 const showBuild = ref(false);
+const showGap = ref(false);
 const headliner = computed(() => state.value?.headliner ?? null);
 const enemyPanelOpen = ref(false);
-watch(intelligence, (value) => { if (!value) enemyPanelOpen.value = false; });
+watch(enemyAvailable, (value) => { if (!value) enemyPanelOpen.value = false; });
 function onKey(event: KeyboardEvent) {
-  if (!intelligence.value || enemyPanelOpen.value || !document.hasFocus() || event.defaultPrevented || event.repeat ||
+  if (!enemyAvailable.value || enemyPanelOpen.value || !document.hasFocus() || event.defaultPrevented || event.repeat ||
     event.key !== 'Tab' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey || document.querySelector('dialog[open], [role="dialog"]')) return;
   const target = event.target instanceof Element ? event.target : document.activeElement;
   if (target?.closest('input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="textbox"], [tabindex]')) return;
@@ -41,7 +49,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <div v-if="!champ && !intelligence" class="waiting">
+  <div v-if="!champ && !enemyAvailable" class="waiting">
     <h1>En attente de ta partie</h1>
     <p>Dès que ton champion est connu, ses augments et quoi acheter s’affichent ici.</p>
   </div>
@@ -52,17 +60,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="who">
         <h1>{{ champ?.championName ?? 'En partie' }}</h1>
         <div class="sub">
-          <span v-if="state?.augRound" class="round">Choix {{ state.augRound }} · {{ ROUND_LABEL[state.augRound - 1] }}</span>
+          <span v-if="state?.augRound" class="round">{{ state.headliner?.key === 'superfans' && (state.liveLevel ?? 0) >= 21 ? 'Augment en plus · niveau 21' : `Choix ${state.augRound} · ${ROUND_LABEL[state.augRound - 1]}` }}</span>
           <span v-if="panel" class="faint">Winrate Mayhem {{ pct(panel.championWinrate) }}</span>
         </div>
       </div>
-      <button v-if="intelligence" class="btn enemy-access" title="Tab dans cette fenêtre · En jeu : ⌘⇧E sur Mac, Ctrl⇧E sur Windows/Linux" aria-haspopup="dialog" :aria-expanded="enemyPanelOpen" @click="enemyPanelOpen = true">Sorts ennemis <kbd>Tab</kbd></button>
-      <nav v-if="narrow && (panel || intelligence)" class="tabs" aria-label="Informations en partie">
+      <GoldGap class="gap-chip" @toggle="showGap = !showGap" :open="showGap" />
+      <button v-if="enemyAvailable" class="btn enemy-access" title="Tab dans cette fenêtre · En jeu : ⌘⇧E sur Mac, Ctrl⇧E sur Windows/Linux" aria-haspopup="dialog" :aria-expanded="enemyPanelOpen" @click="enemyPanelOpen = true">Sorts ennemis <kbd>Tab</kbd></button>
+      <nav v-if="narrow && (panel || enemyAvailable)" class="tabs" aria-label="Informations en partie">
         <button v-if="panel" :aria-pressed="activeView === 'augs'" :class="{ on: activeView === 'augs' }" @click="view = 'augs'">Augments</button>
         <button v-if="champ" :aria-pressed="activeView === 'buy'" :class="{ on: activeView === 'buy' }" @click="view = 'buy'">Achat</button>
+        <button v-if="spells" :aria-pressed="activeView === 'spells'" :class="{ on: activeView === 'spells' }" @click="view = 'spells'">Sorts</button>
         <button v-if="intelligence" :aria-pressed="activeView === 'enemy'" :class="{ on: activeView === 'enemy' }" @click="view = 'enemy'">Ennemis</button>
       </nav>
     </header>
+
+    <GoldGapTable v-if="showGap" />
 
     <section v-if="headliner" class="headliner" aria-label="Headliner de la partie">
       <div class="hl-name"><span class="faint small">Headliner</span> <strong>{{ headliner.name }}</strong> <span class="faint small">· {{ headliner.source === 'écran' ? 'lu à l’écran' : 'd’après tes cartes' }}</span></div>
@@ -71,10 +83,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
     <div class="cols" :class="{ single: !panel }">
       <AugmentChooser v-if="panel && (!narrow || activeView === 'augs')" :panel="panel" class="left" />
-      <div v-if="!narrow || activeView !== 'augs' || !panel" class="right">
-        <BuyPanel v-if="champ && (!narrow || activeView === 'buy')" :emphasize="!panel || narrow" />
-        <EnemyIntelligence v-if="intelligence && (!narrow || activeView === 'enemy')" />
-        <div v-if="build && (!narrow || activeView === 'buy')" class="more">
+      <EnemySpells v-if="narrow && activeView === 'spells'" />
+      <EnemyIntelligence v-if="narrow && activeView === 'enemy'" />
+      <div v-if="!narrow || activeView === 'buy'" class="right">
+        <EnemySpells v-if="!narrow" />
+        <SkillNext />
+        <BuyPanel v-if="champ" :emphasize="!panel || narrow" />
+        <EnemyIntelligence v-if="!narrow && intelligence" />
+        <div v-if="build" class="more">
           <button class="btn" :aria-expanded="showBuild" @click="showBuild = !showBuild">{{ showBuild ? 'Masquer le build complet' : 'Voir le build complet' }}</button>
           <BuildView v-if="showBuild" compact no-live />
         </div>
@@ -94,12 +110,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .waiting h1 { font-size: 22px; }
 .waiting p { margin: 0; color: var(--muted); max-width: 380px; }
 .ingame { height: 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.head { display: flex; flex-shrink: 0; gap: 12px; align-items: center; padding: 14px 18px 12px; border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.head { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: 12px; align-items: center; padding: 14px 18px 12px; border-bottom: 1px solid var(--border); background: var(--surface-1); }
 .who h1 { font-size: 22px; line-height: 1.1; }
-.enemy-access { margin-left: auto; flex: none; -webkit-app-region: no-drag; }
+.enemy-access { margin-left: 0; flex: none; -webkit-app-region: no-drag; }
 .enemy-access kbd { margin-left: 5px; }
 .sub { display: flex; gap: 10px; font-size: 12px; margin-top: 2px; }
 .round { color: var(--blue); font-weight: 650; }
+.gap-chip { margin-left: auto; }
+.gap-chip + .tabs { margin-left: 10px; }
 .tabs { margin-left: auto; display: flex; border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .tabs button { min-height: 36px; border: 0; background: transparent; color: var(--muted); padding: 0 14px; font: inherit; font-weight: 650; cursor: pointer; }
 .tabs button + button { border-left: 1px solid var(--border); }
@@ -113,7 +131,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   .cols { grid-template-columns: 1fr; padding: 12px; }
   .head { padding: 12px; flex-wrap: wrap; }
   .sub { flex-wrap: wrap; gap: 2px 10px; }
-  .tabs { width: 100%; margin-left: 0; }
+  .tabs, .gap-chip + .tabs { width: 100%; margin-left: 0; }
+  .tabs button { min-width: 0; padding-inline: 6px; }
   .tabs button { flex: 1; padding: 9px; }
 }
 </style>

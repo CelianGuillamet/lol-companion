@@ -1,7 +1,8 @@
 # ARAM Companion (Mac)
 
 Outil perso pour ARAM, ARAM: Mayhem et la Faille (classée, normale, Swiftplay) sur macOS. API officielles uniquement (client League local, API Live Client
-du jeu, CommunityDragon, arammeta, wiki LoL) : pas de lecture mémoire, pas d'injection, pas de timers.
+du jeu, CommunityDragon, arammeta, arammayhem.com, wiki LoL) : pas de lecture mémoire, pas d'injection,
+pas de détection automatique des lancements ennemis. Les timers de sorts ennemis sont démarrés à la main.
 
 ## Lancer l'app
 
@@ -19,14 +20,22 @@ Journal : `~/Library/Logs/ARAM Companion.log`. L'icône du Dock s'appelle « Ele
   achetable), items contre l'équipe adverse (qui suivent les scores), build le plus gagnant.
 - **Mes stats / Historique** : toutes tes parties, filtres, tendances, adversaires / alliés / duos, page champion,
   export.
+- **Sorts ennemis** : timers manuels des sorts d’invocateur et de l’ultime. Clique sur un sort quand tu le vois
+  partir ; le panneau indique les limites du cooldown calculé et permet de corriger le signalement.
 - **Équipe ennemie** en partie : roster, sorts d’invocateur équipés, événements publiés et horloge Live Client.
   Provenance et indisponibilités affichées. **Positions hors vision et suivi automatique des lancements non
   opérationnels** : aucun fournisseur de ces données n’a été vérifié. Aucun timer n’est inventé.
 
 Raccourcis : ⌘⇧A masquer l'overlay · ⌘⇧M écran suivant · ⌘⇧S fenêtre en jeu · ⌘⇧E sorts ennemis.
+
+Pour mettre à jour une installation existante sur Mac sans compiler : télécharge le
+[paquet v1.89](releases/ARAM-Companion-v1.89-mac-update.zip), décompresse-le et double-clique sur
+**Installer ARAM Companion.command**. Quitte puis rouvre le compagnon après l’installation.
+Les données personnelles et le moteur Electron sont conservés. [Détails et sauvegarde](docs/mac-update.md).
 Le bouton **Sorts ennemis** en haut de la vue en partie ouvre aussi le panneau. **Tab** fonctionne quand
 le compagnon est actif ; Tab dans League conserve le tableau des scores. Le panneau et les fenêtres sont
-recalés dans l’écran et leur contenu peut défiler. Les sorts affichés ne démarrent aucun timer au clic.
+recalés dans l’écran et leur contenu peut défiler. Le panneau reprend les timers manuels existants ;
+les observations automatiques du roster et des sorts équipés restent distinctes de ces signalements.
 
 ## Développement
 
@@ -44,8 +53,9 @@ Code : `src/core/` (logique sans Electron), `electron/` (fenêtres, serveur tél
 
 [Audit des sources et limites](docs/intelligence-investigation.md). Le pipeline `src/core/intelligence/`
 lit `allgamedata` dans le processus principal et transmet ses observations par l’IPC existant. Le calculateur
-de cooldowns exige une règle de patch, un lancement et des statistiques acquis ; son catalogue de production
-reste vide en l’absence de données validées.
+`AdvancedCooldownEngine` exige une règle de patch, un lancement et des statistiques acquis ; son catalogue
+de production reste vide en l’absence de fournisseur validé. Le moteur existant `cooldowns.ts` continue
+d’alimenter les timers démarrés à la main ; il ne prouve pas qu’un lancement a été observé automatiquement.
 
 Sur l’hôte qui exécute League, en partie :
 

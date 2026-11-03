@@ -1,6 +1,7 @@
 // Scénario complet contre le faux client : connexion, champ select Mayhem, choix de carte,
 // banc, import runes/sorts/item set, panneau d'augments, fin de partie enregistrée.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { reviewChoice, reviewGame } from '../src/core/review';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -194,20 +195,86 @@ describe('moteur contre un faux client League', () => {
     const miss = engine.usage.events.filter((e) => e.type === 'headliner_miss');
     expect(miss.at(-1)).toMatchObject({ type: 'headliner_miss', championId: 54, scans: 4, near: ['HARTSTEL'] });
     // un choix d'augment complet lu à l'écran : sa valeur est gardée pour la revue d'après-partie
-    const panelRows = Object.values(engine.state.augments?.all ?? {}).flat().filter((a) => !a.estimated).slice(0, 3);
+    const panelAll = Object.values(engine.state.augments?.all ?? {}).flat().filter((a) => !a.estimated);
+    const panelRows = panelAll.slice(0, 3);
     expect(panelRows).toHaveLength(3);
     const reviewIds = panelRows.map((a) => a.id);
     expect(engine.setOffered({ ids: reviewIds, names: panelRows.map((a) => a.name), rarity: null, unsure: null, misses: [] }, ctx)).toBe(true);
+    // 2e tirage au même palier, sans carte commune (augment en plus K/DA) : il ne doit pas écraser le 1er
+    const extraRows = panelAll.slice(3, 6);
+    expect(extraRows).toHaveLength(3);
+    const extraIds = extraRows.map((a) => a.id);
+    expect(engine.setOffered({ ids: extraIds, names: extraRows.map((a) => a.name), rarity: null, unsure: null, misses: [] }, ctx)).toBe(true);
     // cartes Pentakill lues à l'écran → headliner de la partie, noté avec la partie
     expect(engine.setOffered({ ids: [3170, 3171, 3172], names: ['A', 'B', 'C'], rarity: null, unsure: null, misses: [] }, ctx)).toBe(true);
     expect(engine.state.headliner).toMatchObject({ key: 'pentakill', name: 'Pentakill', source: 'cartes' });
     expect(engine.state.headliner?.tips.length).toBeGreaterThan(0);
     engine.headlinerMissed(2, []); // headliner déjà connu : rien de noté
+    // conseiller de reroll, sur un tirage à part (retiré de la revue de la partie)
+    const offersBefore = new Map((engine as unknown as { offersThisGame: Map<string, unknown> }).offersThisGame);
+    const golds = [...(engine.state.augments?.all?.kGold ?? [])].sort((a, b) => b.winrate - a.winrate);
+    expect(golds.length).toBeGreaterThanOrEqual(5);
+    const pick = (i: number[]) => ({ ids: i.map((n) => golds[n].id), names: i.map((n) => golds[n].name), rarity: 'kGold' as const, unsure: null, misses: [] });
+    engine.state.headliner = null;
+    engine.setOffered(pick([2, 3, 4]), ctx);
+    const first = engine.state.offered?.reroll;
+    expect(first).toMatchObject({ kind: 'free', upgrade: false, left: 3 });
+    expect(first?.targets).not.toContain(golds[2].id);
+    expect(engine.usage.events.filter((e) => e.type === 'cards_seen').at(-1)).toMatchObject({ rarity: 'kGold', reroll: { kind: 'free' } });
+    // une carte relancée n'a plus de relance et ne revient pas dans le pool
+    const target = first!.targets[0];
+    const after = [2, 3, 4].map((n) => (golds[n].id === target ? 1 : n));
+    engine.setOffered(pick(after), ctx);
+    const second = engine.state.offered?.reroll;
+    expect(second?.left).toBe(2);
+    expect(second?.targets).not.toContain(golds[1].id);
+    // revue des relances : le tirage garde ses lectures et son pool, et sa carte la plus forte relancée se note
+    const draw = (engine as unknown as { draw: { steps: { id: number }[][]; pool?: number[]; upgraded?: number[] | null } }).draw;
+    expect(draw.steps.map((s) => s.map((c) => c.id))).toEqual([[2, 3, 4].map((n) => golds[n].id), after.map((n) => golds[n].id)]);
+    expect(draw.pool?.length).toBeGreaterThanOrEqual(8);
+    expect(draw.upgraded).toBeNull();
+    // lecture partielle : aucun conseil, et le suivi du tirage reste en place
+    engine.setOffered({ ...pick(after), unsure: 'lecture partielle' }, ctx);
+    expect(engine.state.offered?.reroll).toBeNull();
+    engine.setOffered(pick(after), ctx);
+    expect(engine.state.offered?.reroll?.left).toBe(2);
+    // choix suivant de la même rareté : les 4 cartes déjà vues dans la partie ne reviennent pas dans le pool
+    const firstPool = draw.pool!.length;
+    const later = golds.slice(-3);
+    expect(later.map((a) => a.id).some((id) => [1, 2, 3, 4].some((n) => golds[n].id === id))).toBe(false);
+    const withInfo = engine as unknown as { augInfo: unknown };
+    const realInfo = withInfo.augInfo;
+    withInfo.augInfo = { size: 1, has: (n: string) => n !== later[1].name, tags: () => new Set() };
+    engine.setOffered({ ids: later.map((a) => a.id), names: later.map((a) => a.name), rarity: 'kGold', unsure: null, misses: [] }, ctx);
+    withInfo.augInfo = realInfo;
+    expect((engine as unknown as { draw: { pool?: number[] } }).draw.pool?.length).toBe(firstPool - 4);
+    const seenEvent = engine.usage.events.filter((e) => e.type === 'cards_seen').at(-1);
+    expect(seenEvent).toMatchObject({ reroll: { pool: firstPool - 4 } });
+    // cartes dont le wiki n'a pas le texte : notées, car elles n'ont aucune correction selon le build
+    expect((seenEvent as unknown as { noText?: string[] }).noText).toEqual([later[1].name]);
+    // un augment d'un tirage précédent lu à l'écran : lecture partielle, pas de conseil, tirage intact (Giant Slayer, 3 nov.)
+    const laterIds = later.map((a) => a.id);
+    engine.setOffered({ ids: [golds[2].id, laterIds[1], laterIds[2]], names: [golds[2].name, later[1].name, later[2].name], rarity: 'kGold', unsure: null, misses: [] }, ctx);
+    expect(engine.state.offered).toMatchObject({ ids: laterIds.slice(1), unsure: '2 cartes sur 3 reconnues' });
+    expect(engine.state.offered?.reroll).toBeNull();
+    expect((engine as unknown as { draw: { ids: number[] } }).draw.ids).toEqual(laterIds);
+    expect(engine.usage.events.filter((e) => e.type === 'bound_unknown')).toHaveLength(0);
+    // nouveau tirage (aucune carte commune) : relances remises à zéro ; Command Line vise le cran du dessus
+    engine.state.headliner = { key: 'commandline', name: 'Command Line', source: 'écran', tips: [] };
+    const silvers = [...(engine.state.augments?.all?.kSilver ?? [])];
+    engine.setOffered({ ids: silvers.slice(-3).map((a) => a.id), names: silvers.slice(-3).map((a) => a.name), rarity: 'kSilver', unsure: null, misses: [] }, ctx);
+    expect(engine.state.offered?.reroll).toMatchObject({ kind: 'free', upgrade: true, left: 3 });
+    expect(engine.state.offered?.reroll?.targets).toHaveLength(1);
+    // cartes de headliner : pas de relance à conseiller
+    engine.setOffered({ ids: [3170, 3171, 3172], names: ['A', 'B', 'C'], rarity: 'kGold', unsure: null, misses: [] }, ctx);
+    expect(engine.state.offered?.reroll).toBeNull();
+    engine.state.headliner = { key: 'pentakill', name: 'Pentakill', source: 'cartes', tips: ['x'] };
+    (engine as unknown as { offersThisGame: Map<string, unknown> }).offersThisGame = offersBefore;
     expect(engine.usage.events.filter((e) => e.type === 'headliner_miss')).toHaveLength(miss.length);
     engine.setOffered(null);
     mock.state.phase = 'EndOfGame';
     mock.state.eogGameId = 77;
-    mock.state.games[77] = game(77, 2400, 54, true, [1058, reviewIds[2]]);
+    mock.state.games[77] = game(77, 2400, 54, true, [1058, reviewIds[2], extraIds[0]]);
     await engine.tick();
     // une lecture commencée pendant la partie et terminée après sa fin est jetée (ni cartes, ni télémétrie)
     expect(engine.isCurrentRead(ctx)).toBe(false);
@@ -222,11 +289,14 @@ describe('moteur contre un faux client League', () => {
     expect(engine.getHistory().find((g) => g.gameId === 77)?.headliner).toBe('Pentakill');
     // revue : seul le choix d'augment est noté (les cartes du headliner n'ont pas de stats), et elle reste avec la partie
     const review = engine.getHistory().find((g) => g.gameId === 77)?.review;
-    expect(review?.choices).toHaveLength(1);
+    expect(review?.choices).toHaveLength(2);
     expect(review?.choices[0]).toMatchObject({ picked: reviewIds[2] });
+    expect(review?.choices[1]).toMatchObject({ picked: extraIds[0], choice: 1 });
+    const picks = engine.usage.events.filter((e) => e.type === 'card_picked' && e.gameId === 77);
+    expect(picks.map((e) => (e as { picked: number }).picked)).toEqual(expect.arrayContaining([reviewIds[2], extraIds[0]]));
     expect(review?.choices[0].verdict).not.toBe('unknown');
     expect(review?.approx).toBeUndefined();
-    expect(JSON.parse(readFileSync(join(dataDir, 'history.json'), 'utf8')).games.find((g: { gameId: number }) => g.gameId === 77).review.analysed).toBe(1);
+    expect(JSON.parse(readFileSync(join(dataDir, 'history.json'), 'utf8')).games.find((g: { gameId: number }) => g.gameId === 77).review.analysed).toBe(2);
     // ancienne partie (avant la revue) : notée après coup depuis usage.json, une seule fois
     const panel3 = await engine.championAugments(157);
     const old = Object.values(panel3?.all ?? {}).flat().slice(0, 3).map((a) => a.id);
@@ -236,6 +306,31 @@ describe('moteur contre un faux client League', () => {
     const backfilled = engine.getHistory().find((g) => g.gameId === 3)?.review;
     expect(backfilled).toMatchObject({ approx: true, analysed: 1 });
     expect(engine.state.reviews).toBe(1);
+    await expect(engine.backfillReviews()).resolves.toBe(0);
+    // achats d'avant la v1.64 : retrouvés par champion et date, notés une seule fois, sans raison du conseil
+    const g3 = engine.rawHistory().find((g) => g.gameId === 3)!;
+    engine.usage.add({ type: 'item_bought', at: g3.createdAt + 60_000, championId: 157, id: 123430, reco: 6333, plan: [6333, 3065], followed: false });
+    await expect(engine.backfillReviews()).resolves.toBe(1);
+    const oldBuys = engine.getHistory().find((g) => g.gameId === 3)?.buys;
+    expect(oldBuys?.approx).toBe(true);
+    expect(oldBuys?.lines[0]).toMatchObject({ id: 123430, value: 0.6361, recoValue: 0.6053, verdict: 'close' });
+    await expect(engine.backfillReviews()).resolves.toBe(0);
+    // partie d'avant la v1.66 : ses relances sont reprises une seule fois depuis cards_seen, revue d'origine intacte
+    const golds3 = [...(panel3?.all?.kGold ?? [])].sort((a, b) => b.winrate - a.winrate);
+    expect(golds3.length).toBeGreaterThanOrEqual(6);
+    const [t, u, v, w, x] = [0, 1, 2, 3, 4].map((i) => golds3[golds3.length - 1 - i].id).reverse();
+    const start = g3.createdAt + 300_000;
+    const seenAt = (at: number, ids: number[]) => engine.usage.add({ type: 'cards_seen', at, championId: 157, round: 3, ids, best: ids[0], unsure: false });
+    seenAt(start, [t, u, v]);
+    seenAt(start + 3000, [w, u, v]);
+    seenAt(start + 6000, [w, x, v]);
+    const end = g3.createdAt + 2_000_000;
+    engine.usage.add({ type: 'card_picked', at: end, gameId: 3, round: 3, ids: [w, x, v], best: w, picked: w, followed: true, win: false });
+    const stored = engine.rawHistory().find((g) => g.gameId === 3)!;
+    stored.review = reviewGame([reviewChoice(3, [], w)], true)!;
+    await engine.backfillReviews();
+    const again = engine.getHistory().find((g) => g.gameId === 3)?.review;
+    expect(again).toMatchObject({ rerollsDone: true, rerollsApprox: true });
     await expect(engine.backfillReviews()).resolves.toBe(0);
     const callsBefore = mock.calls.length;
     await engine.tick(); // pas de double enregistrement
@@ -417,6 +512,14 @@ describe('moteur contre un faux client League', () => {
     const nb = fresh.state.nextBuy!;
     expect(nb.gold).toBe(1234);
     expect(fresh.state.augRound).toBe(3); // niveau 12 → 3e choix
+    // Superfans : niveau 21, plus de nouveau palier ; le lecteur de cartes se réveille sur `liveLevel`
+    const liveMe = (mock.state as unknown as { live: { me: { level: number } } }).live.me;
+    liveMe.level = 21;
+    await fresh.tick();
+    expect(fresh.state.augRound).toBe(4);
+    expect(fresh.state.liveLevel).toBe(21);
+    liveMe.level = 12;
+    await fresh.tick();
     expect(nb.rows.length).toBeGreaterThan(0);
     const firstCore = fresh.state.build!.cores[0].core[0].id;
     expect(nb.rows[0].item.id).toBe(firstCore);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bestComponent, nextBuys } from '../src/core/nextbuy';
+import { bestComponent, consumedBy, itemToSell, nextBuys, itemSlot, optionsForSlot, resaleFor } from '../src/core/nextbuy';
 
 const PRICES: Record<number, number> = { 1: 3000, 2: 3100, 3: 2800, 4: 2900, 9: 1100, 3047: 1200, 3075: 2450 };
 const base = {
@@ -172,5 +172,225 @@ describe('conseil stable', () => {
     expect(kept.rows[0].id).toBe(second);
     expect(kept.plan.find((p) => !p.owned)?.id).toBe(second);
     expect(nextBuys({ ...base, owned: [], keep: 999999 }, 4).rows[0].id).toBe(free.rows[0].id);
+  });
+
+  it('rang du prochain item : bottes et composants ne comptent pas', () => {
+    const fini = new Set([1, 2, 3]);
+    expect(itemSlot([], (id) => fini.has(id))).toBe(1);
+    expect(itemSlot([1, 2, 3, 9, 1036], (id) => fini.has(id))).toBe(4);
+  });
+
+  it('options du rang : on ne mélange pas un 4e item avec un 5e, gonflé par la longueur de la partie', () => {
+    // Vraie forme OP.GG : le winrate monte avec le rang (Rabadon 58 % en 4e, 64 % en 5e)
+    const merged = [{ id: 7, winrate: 0.6, games: 1700 }, { id: 3, winrate: 0.56, games: 10000 }];
+    const fourth = [{ id: 3, winrate: 0.56, games: 10000 }, { id: 7, winrate: 0.53, games: 900 }, { id: 8, winrate: 0.7, games: 12 }];
+    const options = optionsForSlot(merged, fourth, () => false);
+    expect(options.map((o) => o.id)).toEqual([3, 7]);
+    const r = nextBuys({ ...base, cores: [{ core: [1, 2], options }], counters: [], owned: [1, 2, 9] }, 2);
+    expect(r.rows.map((x) => x.id)).toEqual([3, 7]);
+  });
+
+  it('options du rang : items déjà pris écartés, repli sur les options fusionnées s’il en reste moins de 2', () => {
+    const merged = [{ id: 7, winrate: 0.6, games: 1700 }];
+    const stats = [{ id: 3, winrate: 0.56, games: 1000 }, { id: 4, winrate: 0.55, games: 1000 }, { id: 3042, winrate: 0.54, games: 1000 }];
+    expect(optionsForSlot(merged, stats, (id) => id === 3).map((o) => o.id)).toEqual([4, 3042]);
+    expect(optionsForSlot(merged, stats, (id) => id === 3, (id) => (id === 3042 ? 3004 : id)).map((o) => o.id)).toEqual([4, 3004]);
+    expect(optionsForSlot(merged, stats, (id) => id !== 4)).toBe(merged);
+    expect(optionsForSlot(merged, undefined, () => false)).toBe(merged);
+  });
+});
+
+describe('revente comptée dans l’or disponible', () => {
+  // 100 = composant de 200, 101 et 102 = composants orphelins, 300-302 = items finis, 900 = bottes
+  const P: Record<number, number> = { 100: 875, 101: 350, 102: 435, 103: 1300, 200: 3000, 201: 2800, 300: 3000, 301: 3000, 302: 3000, 900: 1100 };
+  const SELL: Record<number, number> = { 100: 612, 101: 245, 102: 305, 300: 2100, 900: 770 };
+  const comps = (id: number) => (({ 200: [100] }) as Record<number, number[]>)[id] ?? [];
+  const finished = (id: number) => id >= 200;
+  const input = { boots: [], counters: [], allBoots: new Set([900]), price: (id: number) => P[id] ?? null, components: comps, complete: finished, sellValue: (id: number) => SELL[id] ?? null };
+
+  it('sac plein : la vente imposée compte, l’achat passe au lieu d’« économise »', () => {
+    const bag = [300, 301, 302, 900, 303, 101];
+    const r = nextBuys({ ...input, gold: 2600, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0];
+    expect(r.missing).toBe(200);
+    expect(r.room).toEqual({ sell: 101 });
+    expect(r.resale).toEqual({ sell: [101], gain: 245 });
+    expect(r.step).toBeUndefined();
+  });
+
+  it('ajoute une 2e vente si la 1re ne suffit pas, la plus petite somme d’abord', () => {
+    const bag = [300, 301, 302, 900, 101, 102];
+    expect(nextBuys({ ...input, gold: 2400, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0].resale).toEqual({ sell: [101, 102], gain: 550 });
+    expect(nextBuys({ ...input, gold: 2600, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0].resale).toEqual({ sell: [101], gain: 245 });
+    expect(nextBuys({ ...input, gold: 2200, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0].resale).toBeUndefined();
+  });
+
+  it('avec de la place, un composant reste : sur 10 ventes réelles, 7 visaient l’item que Celian finissait', () => {
+    const bag = [300, 900, 101];
+    const r = nextBuys({ ...input, gold: 2600, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0];
+    expect(r.resale).toBeUndefined();
+    expect(r.room).toBeUndefined();
+  });
+
+  it('ne vend jamais un composant de l’item visé ni d’un achat prévu', () => {
+    const bag = [300, 900, 100];
+    expect(nextBuys({ ...input, gold: 2000, owned: bag, bag, cores: [{ core: [200], options: [] }] }).rows[0].resale).toBeUndefined();
+    expect(nextBuys({ ...input, gold: 2600, owned: bag, bag, cores: [{ core: [201, 200], options: [] }] }).rows[0].resale).toBeUndefined();
+  });
+
+  it('valeur inconnue : l’objet ne compte pas, rien n’est supposé', () => {
+    const bag = [300, 900, 103];
+    expect(nextBuys({ ...input, gold: 2700, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0].resale).toBeUndefined();
+    const sans = nextBuys({ ...input, sellValue: undefined, gold: 2700, owned: [101], bag: [101], cores: [{ core: [201], options: [] }] }).rows[0];
+    expect(sans.resale).toBeUndefined();
+  });
+
+  it('or suffisant : aucune vente pour rien, et seul le 1er conseil en parle', () => {
+    const bag = [300, 900, 101];
+    expect(nextBuys({ ...input, gold: 5000, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0].resale).toBeUndefined();
+    const rows = nextBuys({ ...input, gold: 2600, owned: bag, bag, cores: [{ core: [201, 301], options: [] }] }).rows;
+    expect(rows[1].resale).toBeUndefined();
+  });
+
+  it('plus rien à vendre : pas de revente', () => {
+    const six = [300, 301, 302, 303, 900, 304];
+    expect(nextBuys({ ...input, gold: 2700, owned: six, bag: six, cores: [{ core: [201], options: [] }] }).rows[0].resale).toBeUndefined();
+  });
+
+  it('resaleFor retire aussi la bonne copie d’un composant en double', () => {
+    expect(resaleFor(200, 500, [100, 100, 300, 301, 302, 900], [200], null, finished, (id) => id === 900, (id) => P[id] ?? null, comps, (id) => SELL[id] ?? null)).toEqual({ sell: [100], gain: 612 });
+  });
+});
+
+describe('revente, parties du 3 nov. (Jhin, Tahm Kench)', () => {
+  // Vrais prix et recettes. L'app conseillait de vendre Last Whisper (1 450) pour acheter Executioner's Calling (800), puis l'Executioner's qu'elle venait de faire acheter.
+  const EXEC = 3123, MORTAL = 3033, WHISPER = 3035, DOMINIK = 3036, CLOAK = 1018, BF = 1038, IE = 3031, MAW = 3156, COLLECTOR = 6676, HUBRIS = 126697, BOOTS = 3009, DIRK = 3134, DAWN = 3072, POTION = 2003;
+  const P: Record<number, number> = { [EXEC]: 800, [MORTAL]: 3200, [WHISPER]: 1450, [DOMINIK]: 3100, [CLOAK]: 600, [BF]: 1300, [IE]: 3500, [MAW]: 3100, [COLLECTOR]: 3000, [HUBRIS]: 3000, [BOOTS]: 900, [DIRK]: 1000, [DAWN]: 3400, [POTION]: 50 };
+  const recipe: Record<number, number[]> = { [MORTAL]: [EXEC, WHISPER], [DOMINIK]: [WHISPER], [IE]: [BF, CLOAK], [EXEC]: [] };
+  const comps = (id: number) => recipe[id] ?? [];
+  const finished = (id: number) => (P[id] ?? 0) >= 2000;
+  const input = { boots: [], allBoots: new Set([BOOTS]), price: (id: number) => P[id] ?? null, components: comps, complete: finished, sellValue: (id: number) => (P[id] ? Math.floor(P[id] * 0.7) : null) };
+  const antiheal = { title: 'Anti-soins', items: [EXEC, MORTAL], urgent: true };
+  const cores = [{ core: [COLLECTOR, HUBRIS], options: [{ id: IE, winrate: 0.5 }, { id: MAW, winrate: 0.5 }] }];
+
+  it('ne vend pas Last Whisper pour un composant moins cher (15 h 15)', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, WHISPER];
+    const r = nextBuys({ ...input, gold: 154, owned: bag, bag, cores, counters: [antiheal] }).rows[0];
+    expect(r.id).toBe(EXEC);
+    expect(r.resale).toBeUndefined();
+  });
+
+  it('sac plein : B. F. Sword et Cloak restent pour Infinity Edge (15 h 19)', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, CLOAK, BF];
+    const r = nextBuys({ ...input, gold: 380, owned: bag, bag, cores, counters: [antiheal] }).rows[0];
+    expect(r.id).toBe(IE);
+    expect(r.room).toBeUndefined();
+    expect(r.resale).toBeUndefined();
+  });
+
+  it('sac plein sans item à finir : le composant visé attend, sans vente', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, CLOAK, BF];
+    const r = nextBuys({ ...input, gold: 380, owned: bag, bag, cores: [{ core: [COLLECTOR], options: [] }], counters: [antiheal] }).rows[0];
+    expect(r.id).toBe(EXEC);
+    expect(r.room).toEqual({ sell: null, held: true });
+  });
+
+  it('sac plein : une potion peut céder sa place à un composant', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, BF, POTION];
+    const r = nextBuys({ ...input, gold: 380, owned: bag, bag, cores: [{ core: [COLLECTOR], options: [] }], counters: [antiheal] }).rows[0];
+    expect(r.room).toEqual({ sell: POTION });
+  });
+
+  it('garde le composant qui couvre une menace et propose son item fini (15 h 24)', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, IE, EXEC];
+    const r = nextBuys({ ...input, gold: 2562, owned: bag, bag, cores, counters: [antiheal, { title: 'Résistance magique', items: [MAW], urgent: true }] }).rows[0];
+    expect(r.id).toBe(MORTAL);
+    expect(r.why).toBe('termine ton item contre anti-soins');
+    expect(r.room).toBeUndefined();
+    expect(r.resale).toBeUndefined();
+  });
+
+  it('la couverture tient aussi sans item à finir : rien à vendre', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, IE, EXEC];
+    const r = nextBuys({ ...input, gold: 2562, owned: bag, bag, cores, counters: [{ title: 'Anti-soins', items: [EXEC] }, { title: 'Résistance magique', items: [MAW], urgent: true }] }).rows[0];
+    expect(r.id).toBe(MAW);
+    expect(r.room).toEqual({ sell: null });
+  });
+
+  it('avec de la place, une potion peut combler les derniers sous d’un item fini', () => {
+    const bag = [DIRK, BOOTS, POTION, CLOAK];
+    const r = nextBuys({ ...input, gold: 2980, owned: bag, bag, cores: [{ core: [COLLECTOR], options: [] }], counters: [] }).rows[0];
+    expect(r.resale).toEqual({ sell: [POTION], gain: 35 });
+  });
+});
+
+describe('sac plein', () => {
+  // 100 = Pickaxe, 101 = Long Sword, 102 = Potion ; 200 se construit sur 100, 201 sur rien que tu aies ; 300-303 = items finis
+  const P: Record<number, number> = { 111: 300, 100: 875, 101: 350, 102: 150, 110: 1000, 200: 3000, 201: 2800, 300: 3000, 301: 3000, 302: 3000, 303: 3000, 900: 1100 };
+  const comps = (id: number) => (({ 200: [100], 201: [110], 110: [111] }) as Record<number, number[]>)[id] ?? [];
+  const finished = (id: number) => id >= 200 && id < 900 || id === 900;
+  const input = { gold: 5000, boots: [], counters: [], allBoots: new Set([900]), price: (id: number) => P[id] ?? null, components: comps, complete: finished };
+  const bag = [300, 301, 900, 302, 100, 101];
+
+  it('passe en tête l’item qui consomme un composant du sac', () => {
+    const r = nextBuys({ ...input, owned: bag, bag, cores: [{ core: [300, 201, 200], options: [] }] });
+    expect(r.rows[0].id).toBe(200);
+    expect(r.rows[0].room).toBeUndefined();
+    expect(r.rows[1].id).toBe(201);
+    expect(r.rows[1].room).toEqual({ sell: 101 }); // Pickaxe sert à 200 : on vend le reste
+  });
+
+  it('demande de vendre le composant le moins cher, ni fini ni bottes', () => {
+    const r = nextBuys({ ...input, owned: [300, 301, 900, 302, 101, 102], bag: [300, 301, 900, 302, 101, 102], cores: [{ core: [201], options: [] }] });
+    expect(r.rows[0].room).toEqual({ sell: 102 });
+  });
+
+  it('6 items finis : rien à vendre', () => {
+    const six = [300, 301, 302, 303, 900, 200];
+    const r = nextBuys({ ...input, owned: six, bag: six, cores: [{ core: [201], options: [] }] });
+    expect(r.rows[0].room).toEqual({ sell: null });
+  });
+
+  it('une menace forte reste devant, avec la vente à faire', () => {
+    const r = nextBuys({ ...input, owned: bag, bag, cores: [{ core: [300, 200], options: [] }], counters: [{ title: 'Armure', items: [201], urgent: true }] });
+    expect(r.rows[0].id).toBe(201);
+    expect(r.rows[0].room).toEqual({ sell: 101 });
+  });
+
+  it('ne propose pas un composant sans place', () => {
+    const r = nextBuys({ ...input, gold: 1200, owned: bag, bag, cores: [{ core: [201], options: [] }] });
+    expect(r.rows[0].step).toBeUndefined();
+    const free = bag.slice(0, 5);
+    expect(nextBuys({ ...input, gold: 1200, owned: free, bag: free, cores: [{ core: [201], options: [] }] }).rows[0].step?.id).toBe(110);
+  });
+
+  it('un composant qui consomme le sien passe, même sac plein', () => {
+    const b = [300, 301, 900, 302, 303, 111];
+    const r = nextBuys({ ...input, gold: 800, owned: b, bag: b, cores: [{ core: [201], options: [] }] });
+    expect(r.rows[0].room).toBeUndefined(); // 201 → 110 → 111 : la recette consomme 111
+    expect(r.rows[0].step?.id).toBe(110);
+  });
+
+  it('5 places prises ou sac inconnu : rien ne change', () => {
+    const five = bag.slice(0, 5);
+    expect(nextBuys({ ...input, owned: five, bag: five, cores: [{ core: [201], options: [] }] }).rows[0].room).toBeUndefined();
+    expect(nextBuys({ ...input, owned: bag, cores: [{ core: [201], options: [] }] }).rows[0].room).toBeUndefined();
+  });
+
+  it('ne vend jamais un Tear, une quête de support ou une Dark Seal', () => {
+    expect(itemToSell([300, 3070, 3865, 1082], [], () => false, () => false, () => 100, () => [])).toBe(300);
+    expect(itemToSell([3070, 3865, 1082], [], () => false, () => false, () => 100, () => [])).toBeNull();
+  });
+
+  it('ne vend pas un objet sans prix connu (objet Mayhem hors catalogue) ni un objet cher', () => {
+    const price = (id: number) => (id === 1 ? null : id === 2 ? 2500 : 300);
+    expect(itemToSell([1, 2, 3], [], () => false, () => false, price, () => [])).toBe(3);
+    expect(itemToSell([1, 2], [], () => false, () => false, price, () => [])).toBeNull();
+  });
+
+  it('consumedBy descend la recette et compte chaque item une fois', () => {
+    const c = (id: number) => (({ 1: [2, 2], 2: [3] }) as Record<number, number[]>)[id] ?? [];
+    expect(consumedBy(1, [2, 3], c)).toEqual([2, 3]);
+    expect(consumedBy(1, [2, 2], c)).toEqual([2, 2]);
+    expect(consumedBy(1, [9], c)).toEqual([]);
   });
 });
