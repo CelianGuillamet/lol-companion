@@ -8,14 +8,17 @@ const fmt = (n: number) => n.toLocaleString('fr-FR');
 
 <template>
   <div class="purchase">
-    <div class="label">{{ purchase.canBuy ? 'Acheter maintenant' : purchase.kind === 'saving' ? 'À économiser' : 'Prix à vérifier' }}</div>
+    <div class="label">{{ purchase.sell ? 'Vendre, puis acheter' : purchase.canBuy ? 'Acheter maintenant' : purchase.kind === 'full' ? 'Inventaire plein' : purchase.kind === 'saving' ? 'À économiser' : 'Prix à vérifier' }}</div>
     <div class="row" :title="purchase.title">
       <img v-if="purchase.item.icon" @error="hideBroken" :src="purchase.item.icon" width="22" height="22" alt="" />
       <span v-else />
       <span class="name">{{ purchase.item.name }}</span>
       <span class="num" :class="purchase.canBuy ? 'good' : 'faint'">{{ purchase.cost == null ? '—' : `${fmt(purchase.cost)} or` }}</span>
     </div>
-    <div v-if="purchase.kind === 'component'" class="detail" :title="purchase.target.name">Pour {{ purchase.target.name }}</div>
+    <div v-if="purchase.gain" class="detail" :title="purchase.sellNames">Vends {{ purchase.sellNames }} (+{{ fmt(purchase.gain) }} or).</div>
+    <div v-else-if="purchase.sell" class="detail" :title="purchase.sell.name">Vends d'abord {{ purchase.sell.name }} : sac plein.</div>
+    <div v-else-if="purchase.kind === 'full'" class="detail">Plus de composant à vendre : à toi de juger.</div>
+    <div v-else-if="purchase.kind === 'component'" class="detail" :title="purchase.target.name">Pour {{ purchase.target.name }}</div>
     <div v-else-if="purchase.kind === 'saving' && purchase.missing != null" class="detail">Il manque {{ fmt(purchase.missing) }} or.</div>
     <div v-else-if="purchase.kind === 'unknown'" class="detail">Vérifie le coût dans la boutique.</div>
     <div class="detail" :title="purchase.why">{{ purchase.why }}</div>

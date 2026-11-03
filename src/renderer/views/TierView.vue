@@ -7,6 +7,7 @@ import { explore } from '../explore';
 import PageHeader from '../ui/PageHeader.vue';
 import Segmented from '../ui/Segmented.vue';
 import Notice from '../ui/Notice.vue';
+import PoolPanel from '../ui/PoolPanel.vue';
 
 const rows = ref<{ id: number; name: string; winrate: number | null; games: number; tags: string[] }[]>([]);
 type Lane = 'top' | 'jungle' | 'mid' | 'adc' | 'support';
@@ -94,6 +95,7 @@ async function open(id: number) {
     <PageHeader title="Préparer" :sub="mode === 'mayhem' ? `Champions classés par winrate Mayhem global (arammeta, patch ${state?.data.patch ?? '?'}, 300 parties minimum). Un clic ouvre la fiche : augments et build.` : 'Champions classés par rôle en classée (OP.GG, patch en cours) : palier puis winrate. Un clic ouvre le build du rôle.'">
       <Segmented v-model="mode" :options="MODES" label="Mode" />
     </PageHeader>
+    <PoolPanel v-if="mode === 'mayhem'" />
     <div class="filters">
       <Segmented v-if="mode === 'sr'" v-model="lane" :options="LANE_OPTS" label="Rôle" />
       <input v-model="q" class="input search" placeholder="Filtrer par nom…" spellcheck="false" aria-label="Filtrer les champions par nom" />

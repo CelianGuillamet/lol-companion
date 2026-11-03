@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ReviewPanel from '../ui/ReviewPanel.vue';
+import BuyReviewPanel from '../ui/BuyReviewPanel.vue';
 import { choiceText, points, reviewSummary } from '../../core/review';
 import Notice from '../ui/Notice.vue';
 import { QUEUE_LABEL } from '../../core/modes';
@@ -232,6 +233,11 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
           · environ {{ points(reviewed.lostPerGame) }} pts perdus par partie
         </div>
         <div v-if="reviewed.worst" class="small">Choix le plus coûteux : {{ choiceText(reviewed.worst) }}</div>
+        <div v-if="reviewed.rerollCostly + reviewed.rerollUnused" class="small num">
+          Relances : {{ reviewed.rerollCostly }} meilleure{{ reviewed.rerollCostly > 1 ? 's' : '' }} carte{{ reviewed.rerollCostly > 1 ? 's' : '' }} relancée{{ reviewed.rerollCostly > 1 ? 's' : '' }} à tort,
+          {{ reviewed.rerollUnused }} relance{{ reviewed.rerollUnused > 1 ? 's' : '' }} gratuite{{ reviewed.rerollUnused > 1 ? 's' : '' }} laissée{{ reviewed.rerollUnused > 1 ? 's' : '' }}
+          · environ {{ points(reviewed.rerollLostPerGame) }} pts par partie
+        </div>
         <div class="faint small">D’après les stats globales : ça note tes décisions, pas tes résultats. Ouvre une partie pour voir le détail.</div>
       </section>
 
@@ -272,6 +278,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
 
           <div v-if="open === g.gameId" class="detail">
             <ReviewPanel v-if="g.review" class="wide" :review="g.review" />
+            <BuyReviewPanel v-if="g.buys?.analysed" class="wide" :review="g.buys" />
             <div v-if="details[g.gameId] === 'loading'" class="faint small pad">Lecture de la partie dans le client…</div>
             <div v-else-if="!details[g.gameId]" class="faint small pad">
               Le client n’a plus le détail de cette partie (il ne garde que les plus récentes, et il doit être ouvert).

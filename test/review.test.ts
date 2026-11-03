@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { choiceText, reviewChoice, reviewGame, reviewSummary, roundLabel, type ReviewCard } from '../src/core/review';
+import { choiceText, rerollText, reviewChoice, reviewGame, reviewSummary, roundLabel, type ReviewCard } from '../src/core/review';
 
 const card = (id: number, value: number, games = 20_000, estimated = false): ReviewCard => ({ id, name: `Carte ${id}`, value, games, estimated });
 
@@ -64,7 +64,34 @@ describe('reviewGame et reviewSummary', () => {
   });
 
   it('nomme les moments du choix', () => {
-    expect([1, 2, 3, 4].map(roundLabel)).toEqual(['Début', 'Niveau 7', 'Niveau 11', 'Niveau 15']);
+    expect([1, 2, 3, 4].map((r) => roundLabel(r))).toEqual(['Début', 'Niveau 7', 'Niveau 11', 'Niveau 15']);
+    expect(roundLabel(2, 1)).toBe('Niveau 7, 2e choix');
     expect(roundLabel(null)).toBe('Choix');
+  });
+});
+
+describe('relances dans la revue', () => {
+  const base = reviewChoice(1, [card(1, 0.56), card(2, 0.52)], 1);
+  const costly = { ...base, reroll: { verdict: 'costly' as const, name: 'Carte 9', value: 0.6, delta: 0.02 } };
+  const good = { ...base, reroll: { verdict: 'good' as const, name: 'Carte 8', value: 0.46, delta: 0.015 } };
+
+  it('compte les relances à part des choix, un bon pari ne compte pas', () => {
+    const r = reviewGame([costly, good])!;
+    expect(r.lost).toBe(0);
+    expect(r.rerollLost).toBeCloseTo(0.02);
+  });
+
+  it('dit ce qui s’est passé, en moyenne', () => {
+    expect(rerollText(costly.reroll)).toBe('Tu as relancé Carte 9 (60,0\u00a0%), ta meilleure carte : environ 2,0 pts perdus en moyenne.');
+    expect(rerollText(good.reroll)).toContain('bon pari');
+    expect(rerollText({ verdict: 'unused', name: 'Carte 7', value: 0.45, delta: 0.012 })).toContain('gratuitement');
+  });
+
+  it('bilan : seulement sur les parties où les relances ont été regardées', () => {
+    const seen = { ...reviewGame([costly])!, rerollsDone: true };
+    const notSeen = reviewGame([base])!;
+    expect(reviewSummary([seen, notSeen])).toMatchObject({ games: 2, rerollGames: 1, rerollCostly: 1, rerollUnused: 0 });
+    expect(reviewSummary([seen, notSeen])?.rerollLostPerGame).toBeCloseTo(0.02);
+    expect(reviewSummary([notSeen])).toMatchObject({ rerollGames: 0, rerollLostPerGame: 0 });
   });
 });

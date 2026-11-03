@@ -4,6 +4,7 @@ import { QUEUE_LABEL } from '../core/modes';
 // Maintenant (suit la partie) · Préparer (tier list, fiches champion) · Mes parties · Réglages.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { state, PHASE_LABEL } from './store';
+import { canRelaunch } from '../core/appversion';
 import NowView from './views/NowView.vue';
 import PrepareView from './views/PrepareView.vue';
 import GamesView from './views/GamesView.vue';
@@ -26,6 +27,14 @@ const stale = computed(() => {
   return !!c && !!p && !c.startsWith(p) && !p.startsWith(c);
 });
 const modeLabel = computed(() => (s.value.mode === 'mayhem' ? 'Mayhem' : s.value.mode === 'aram' ? 'ARAM' : s.value.mode === 'sr' ? (QUEUE_LABEL[s.value.queueId ?? 0] ?? 'Faille') : null));
+
+// Version posée sur le disque par une session planifiée : rien ne change tant que l'app n'est pas relancée
+const update = computed(() => s.value.update ?? null);
+const relaunchable = computed(() => canRelaunch(s.value.phase));
+const relaunchError = ref('');
+async function relaunch() {
+  relaunchError.value = (await window.api.relaunch()).message;
+}
 
 // Quand la partie avance (champ select, chargement), on revient sur « Maintenant »
 watch(
@@ -80,6 +89,20 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
         </button>
       </nav>
       <div class="side-foot">
+        <section v-if="update" class="update" aria-label="Mise à jour de l'app">
+          <strong>Mise à jour prête : {{ update.latest }}</strong>
+          <span v-if="update.count > 1" class="behind">{{ update.count }} versions pas encore lancées</span>
+          <button v-if="relaunchable" class="btn" @click="relaunch">Relancer l'app</button>
+          <span v-else class="behind">Relance après la partie</span>
+          <span v-if="relaunchError" class="behind" role="alert">{{ relaunchError }}</span>
+          <details>
+            <summary>Quoi de neuf</summary>
+            <ul>
+              <li v-for="n in update.news" :key="n.version"><b>{{ n.version }}</b> {{ n.title }}</li>
+            </ul>
+            <p v-if="update.count > update.news.length" class="behind">et {{ update.count - update.news.length }} de plus</p>
+          </details>
+        </section>
         <PlayerCard />
         <div class="status" role="status">
           <div class="conn" :class="s.connection">
@@ -91,6 +114,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
             Stats Mayhem {{ s.data.patch }}<template v-if="stale"> · client {{ s.data.clientPatch }}</template>
           </div>
           <div v-else-if="s.data.error" class="data err">Stats Mayhem indisponibles</div>
+          <div v-if="s.appVersion" class="data">App {{ s.appVersion }}</div>
         </div>
       </div>
     </aside>
@@ -114,7 +138,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 .shell { display: grid; grid-template-columns: 220px 1fr; height: 100%; }
 /* Rail du client : encre profonde, filet d'or sur le bord, onglet actif « serti » d'or */
 .side {
-  position: relative; display: flex; flex-direction: column; gap: 24px; padding: 42px 0 16px;
+  position: relative; display: flex; flex-direction: column; gap: 24px; padding: 42px 0 16px; overflow-y: auto;
   background: linear-gradient(180deg, #071019 0%, #03080e 100%);
   -webkit-app-region: drag;
 }
@@ -139,6 +163,12 @@ nav { display: flex; flex-direction: column; }
 .nav.on svg { color: var(--gold); }
 .live { width: 7px; height: 7px; transform: rotate(45deg); background: var(--blue); margin-left: auto; box-shadow: 0 0 8px rgba(10, 200, 185, 0.9); }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 0; font-size: 12px; border-top: 1px solid var(--border); }
+.update { display: flex; flex-direction: column; gap: 6px; -webkit-app-region: no-drag; color: var(--text); }
+.update strong { font-size: 12.5px; color: var(--gold-hi); }
+.update .behind { color: var(--muted); font-size: 11.5px; }
+.update summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
+.update ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; max-height: 96px; overflow: auto; font-size: 11.5px; color: var(--muted); }
+.update li b { color: var(--text); font-weight: 600; }
 .status { display: flex; flex-direction: column; gap: 4px; }
 .conn { display: flex; gap: 8px; align-items: center; color: var(--muted); font-weight: 600; }
 .conn .mode { margin-left: auto; color: var(--gold); font-weight: 600; font-size: 11.5px; }

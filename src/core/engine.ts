@@ -8,22 +8,37 @@ import { Arammeta, type ChampionDetail, type DetailRow } from './arammeta';
 import { GameData } from './gamedata';
 import { History, parseGame, participantStats, hasFullDetail, type RawGame } from './history';
 import { scoreCandidates, needsOf, fillAdvice } from './advisor';
-import { parseSession, readSubset, pickCard, takeFromBench, requestTradeDetailed, type ParsedChampSelect, type RawSession } from './champselect';
+import { parseSession, readSubset, pickCard, hoverBanAction, takeFromBench, requestTradeDetailed, type ParsedChampSelect, type RawSession } from './champselect';
+import { parseCollection, poolReport, type Collection, type PoolReport } from './pool';
 import { applyRunes, applySpells, applyItemSet, bestSpells, recommendedPage } from './loadout';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './settings';
 import { modeOf, opggModeOf, QUEUE_LABEL, SR_MAP_ID } from './modes';
 import { wilson, verdictOf } from './stats';
 import { Balance, badges } from './balance';
-import { nextBuys, TRANSFORMS } from './nextbuy';
+import { Combos, comboNote, protectCombos } from './combos';
+import { ELIXIR_IDS, ELIXIR_PRICE, ELIXIRS, elixirAdvice, elixirBought, elixirRole, elixirUntil } from './elixir';
+import { BAG_SLOTS, expandOwned, itemSlot, nextBuys, optionsForSlot, TRANSFORMS, type BuildCore } from './nextbuy';
+import { nextSkill, pointsOffPlan, skillLevels, spentPoints, type LiveAbilities, type SkillLevels } from './skills';
+import { gameOfBuy, itemValues, reviewBuys, type BuyReview } from './buyreview';
 import { buildRole, championTags, compFromItems, counterItemsFor, damageKind, enemiesFromSession, enemyThreats, fedWeight, readTeams } from './counters';
-import { reviewChoice, reviewGame, type GameReview, type ReviewCard } from './review';
+import { rerollLostOf, reviewChoice, reviewGame, type GameReview, type ReviewCard } from './review';
 import type { BalanceBadge } from './balance';
 import type { CardCandidate, CardRead } from './cardmatch';
-import { Usage, followStat, type UsageEvent } from './usage';
+import { Usage, followStat, type ItemBought, type UsageEvent } from './usage';
 import { isSkinText, headlinerFromCards, historyHeadliner, type HeadlinerInfo } from './headliner';
-import { AugmentInfo, buildProfile, fitOf } from './augfit';
-import { OpggClient, OpggData, buildArgs, laneOf, LANE_LABEL, matchupFrom, counterPicksFrom, type Lane, type OpggAnalysis } from './opgg';
-import type { Candidate, MatchupView, SrSelect, AppState, CounterPanel, NextBuyPanel, AugmentPanel, AugmentRow, BuildPanel, ChampSelectView, GameDetail, HistoryEntry, HistoryGame, LogEntry, Mode, Rarity, Settings, StatItem } from './types';
+import { drawFromSeen, ghostCards, offerChoice, offerKind, seenBefore, settleOffers, type OfferSlot } from './offers';
+import { adviseReroll, reviewDraw, type RerollAdvice } from './reroll';
+import { AugmentInfo, buildProfile } from './augfit';
+import { fitWithAlternatives, openCores, preferredCore, type TakenAugment } from './buildchoice';
+import { boundFit, boundItems, boundTarget, unknownBound } from './itembound';
+import { banOptions } from './bans';
+import { CooldownData, ddragonCandidates } from './cooldowns';
+import { EnemySpellTracker, type EnemyInput } from './enemyspells';
+import { goldGap, probePlayers, sampleSlot, type GapInput } from './goldgap';
+import type { AppUpdate } from './appversion';
+import type { EnemySpellAction, EnemySpellPanel, EnemySpellSlot, GoldGapPanel } from './types';
+import { type OpggMode, OpggClient, OpggData, buildArgs, laneOf, LANE_LABEL, matchupFrom, counterPicksFrom, type Lane, type OpggAnalysis } from './opgg';
+import type { Candidate, MatchupView, SrBans, SrSelect, AppState, CounterPanel, NextBuyPanel, AugmentPanel, AugmentRow, BuildPanel, ChampSelectView, ComboNote, GameDetail, HistoryEntry, HistoryGame, ItemStat, LogEntry, Mode, Rarity, Settings, SkillNext, StatItem } from './types';
 
 export interface EngineOptions {
   dataDir: string;
@@ -35,16 +50,37 @@ export interface EngineOptions {
   live?: { port: number; host?: string };
   arammeta?: Arammeta;
   balance?: Balance;
+  combos?: Combos;
   pollMs?: number;
+  /** Tests : téléchargement des fichiers Data Dragon (cooldowns). */
+  ddragonFetcher?: (url: string) => Promise<string>;
 }
 
 const RARITIES: Rarity[] = ['kPrismatic', 'kGold', 'kSilver'];
+const NEXT_RARITY: Partial<Record<Rarity, Rarity>> = { kSilver: 'kGold', kGold: 'kPrismatic' };
+
+/** Tirage en cours : suivi des relances, et de quoi les noter après la partie. */
+interface DrawTrack {
+  round: number | null;
+  rarity: Rarity | null;
+  ids: number[];
+  rolled: Set<number>;
+  seen: Set<number>;
+  /** Cartes vues aux tirages précédents de la partie. */
+  before: Set<number>;
+  steps: ReviewCard[][];
+  pool?: number[];
+  upgraded?: number[] | null;
+}
 
 export class Engine extends EventEmitter {
   state: AppState;
+  private cooldowns: CooldownData;
+  private spellTracker: EnemySpellTracker;
   private lcu: LcuClient | null = null;
   private meta: Arammeta;
   private balance: Balance;
+  private combos: Combos;
   private game = new GameData();
   private history: History;
   private settingsFile: string;
@@ -69,14 +105,28 @@ export class Engine extends EventEmitter {
   private lane: Lane | null = null;
   private srCache = new Map<string, Promise<OpggAnalysis | null>>();
   /** Ton build en cours : profil (critiques, AP…) et nombre d'items pris en compte. */
-  private buildFit: { profile: ReturnType<typeof buildProfile>; seen: number } | null = null;
+  private buildFit: { profile: ReturnType<typeof buildProfile>; alternatives: ReturnType<typeof buildProfile>[]; seen: number; owned: Set<number>; planned: Set<number> } | null = null;
+  /** Build changé à cause d'un augment supposé pris, pour `build_lean` en fin de partie. */
+  private leanThisGame: { from: string; to: string; items: number[]; augments: number[]; bought: boolean } | null = null;
+  private leanCore: number | null = null;
+  /** Augments liés à un item supposés pris cette partie (carte conseillée), pour `item_bound` en fin de partie. */
+  private boundThisGame = new Map<number, { item: number; bought: boolean }>();
   /** Dernières cartes lues par choix d'augment pendant la partie en cours (pour savoir si tu as suivi la reco). */
-  private offersThisGame = new Map<string, { round: number | null; ids: number[]; best: number | null; cards: ReviewCard[] }>();
+  /** Tirage en cours, pour suivre les cartes déjà relancées. */
+  private draw: DrawTrack | null = null;
+  private unknownBoundSeen = new Set<string>();
+  private offersThisGame = new Map<string, OfferSlot & { best: number | null; cards: ReviewCard[]; draw?: DrawTrack | null }>();
   private missesThisGame = new Set<string>();
   private backfilling = false;
   private headlinerText: string | null = null;
   /** Achats : inventaire et conseil au tick précédent (pour savoir si tu as suivi le conseil d'achat). */
-  private lastBuy: { owned: number[]; reco: number | null; plan: number[] } | null = null;
+  private lastBuy: { owned: number[]; reco: number | null; plan: number[]; why?: string } | null = null;
+  private lastResale: string | null = null;
+  /** Fin de l'effet de l'élixir bu (ms), et ce qu'il faut pour voir le prochain achat : l'API ne dit rien d'un élixir. */
+  private elixirEnd: number | null = null;
+  private elixirTick: { gold: number; owned: string; id: number } | null = null;
+  private elixirNoted = false;
+  private buysThisGame: ItemBought[] = [];
   private lastCandidates: Candidate[] = [];
   /** Conseils d'achat que tu as passés dans cette partie (nombre de fois). */
   private skippedBuys = new Map<number, number>();
@@ -114,12 +164,15 @@ export class Engine extends EventEmitter {
     super();
     this.meta = opts.arammeta ?? new Arammeta(join(opts.dataDir, 'cache'));
     this.balance = opts.balance ?? new Balance(join(opts.dataDir, 'cache'));
+    this.combos = opts.combos ?? new Combos(join(opts.dataDir, 'cache'));
     this.history = new History(join(opts.dataDir, 'history.json'));
     this.settingsFile = join(opts.dataDir, 'settings.json');
     this.augInfo = new AugmentInfo(join(opts.dataDir, 'cache'), opts.augInfoFetcher);
     this.opgg = new OpggClient(join(opts.dataDir, 'cache', 'opgg'), opts.probeDir ?? null);
     this.opggData = new OpggData(this.opgg);
     this.usage = new Usage(opts.probeDir ? join(opts.probeDir, 'usage.json') : null);
+    this.cooldowns = new CooldownData(join(opts.dataDir, 'cache'), opts.ddragonFetcher);
+    this.spellTracker = new EnemySpellTracker(this.cooldowns);
     this.discover = opts.discover ?? discoverCredentials;
     this.state = {
       connection: 'searching',
@@ -133,7 +186,9 @@ export class Engine extends EventEmitter {
       build: null,
       counters: null,
       nextBuy: null,
+      skillNext: null,
       augRound: null,
+      liveLevel: null,
       stats: { total: 0, byMode: { aram: { games: 0, wins: 0 }, mayhem: { games: 0, wins: 0 }, sr: { games: 0, wins: 0 } }, champions: [], augments: [], recent: [], vsEnemies: [], withAllies: [], duos: [] },
       settings: { ...DEFAULT_SETTINGS },
       log: [],
@@ -179,6 +234,19 @@ export class Engine extends EventEmitter {
   /** Message dans le journal (utilisé aussi par la fenêtre Electron). */
   note(level: LogEntry['level'], text: string): void {
     this.log(level, text);
+    this.emitIfChanged();
+  }
+
+  /** Version en cours, une fois au lancement, notée pour savoir quel code a joué une partie. */
+  setAppVersion(version: string): void {
+    this.state.appVersion = version;
+    this.usage.add({ type: 'app_start', at: Date.now(), version });
+    this.log('info', `Version ${version} lancée`);
+    this.emitIfChanged();
+  }
+
+  setUpdate(update: AppUpdate | null): void {
+    this.state.update = update;
     this.emitIfChanged();
   }
 
@@ -245,12 +313,18 @@ export class Engine extends EventEmitter {
     }
     await this.balance.load(force).catch(() => undefined);
     await this.augInfo.load(force).catch(() => undefined);
+    await this.combos.load(force).catch(() => undefined);
+    this.panelCache.clear(); // les avis sont dans le panneau
+    this.state.data.combos = `${this.combos.source === 'site' ? 'arammayhem.com' : 'instantané embarqué du 3 nov. (site injoignable)'}, ${this.combos.rows.length} combos`;
     this.state.data.balance =
       this.balance.source === 'wiki' ? `wiki LoL, ${this.balance.size} champions` : `instantané embarqué patch 16.21 (wiki injoignable)`;
     this.emitIfChanged();
   }
 
   private masteryCache: { at: number; map: Map<number, { level: number; points: number }> } | null = null;
+  private collectionCache: { at: number; col: Collection | null } | null = null;
+  private collectionSeen = false;
+  private poolExtra = new Set<number>();
 
   /** Ta maîtrise par champion (LCU), relue au plus toutes les 10 minutes. */
   private async masteries(): Promise<Map<number, { level: number; points: number }>> {
@@ -260,6 +334,46 @@ export class Engine extends EventEmitter {
     if (Array.isArray(rows)) for (const r of rows) map.set(r.championId, { level: r.championLevel, points: r.championPoints });
     this.masteryCache = { at: Date.now(), map };
     return map;
+  }
+
+  /** Ta collection (10 min de cache), `null` si le client ne la donne pas : rien n'est alors filtré. */
+  private async collection(): Promise<Collection | null> {
+    if (this.collectionCache && Date.now() - this.collectionCache.at < 600_000) return this.collectionCache.col;
+    const col = parseCollection(await this.lcu?.get<unknown>('/lol-champions/v1/owned-champions-minimal'));
+    this.collectionCache = { at: Date.now(), col };
+    if (col && !this.collectionSeen) {
+      this.collectionSeen = true;
+      const total = this.listChampions().length;
+      this.persistLog('jeu', `Collection : ${col.owned.size} champions à toi, ${col.free.size} gratuits, sur ${total}`);
+      this.usage.add({ type: 'pool_seen', at: Date.now(), owned: col.owned.size, free: col.free.size, total });
+    }
+    return col;
+  }
+
+  /** Quels champions débloquer pour de meilleures cartes en ARAM / Mayhem. `null` : client fermé ou pas de stats globales. */
+  async poolReport(): Promise<PoolReport | null> {
+    if (!this.meta.tierList) return null;
+    const col = await this.collection();
+    return col ? poolReport(col, this.listChampions()) : null;
+  }
+
+  /**
+   * Retire du banc ce que tu ne peux pas prendre. Le wiki dit la rotation des 4 dernières semaines tirable aussi, ce
+   * que l'endpoint ne montre pas : un champion qu'on t'a vraiment proposé compte donc comme tien jusqu'à la fin.
+   */
+  private async dropUnreachable(parsed: ParsedChampSelect): Promise<string[]> {
+    const col = await this.collection();
+    if (!col) return [];
+    const has = (id: number) => col.owned.has(id) || col.free.has(id) || this.poolExtra.has(id);
+    for (const id of [...parsed.cards, parsed.myChampionId]) {
+      if (!id || has(id)) continue;
+      this.poolExtra.add(id);
+      this.persistLog('jeu', `Collection : ${this.champName(id)} proposé hors de ta collection lue`);
+      this.usage.add({ type: 'pool_outside', at: Date.now(), championId: id });
+    }
+    const out = parsed.candidates.filter((c) => c.source === 'bench' && !has(c.championId)).map((c) => c.championId);
+    parsed.candidates = parsed.candidates.filter((c) => !out.includes(c.championId));
+    return out.map((id) => this.champName(id));
   }
 
   private namesOf(id: number): string[] {
@@ -316,6 +430,18 @@ export class Engine extends EventEmitter {
     return l ? this.srBuildPanel(championId, l, 'ranked') : this.buildPanel(championId, 'mayhem');
   }
 
+  /** Nom de champion (client ou OP.GG, en anglais) → id. */
+  private championIdByName(): (name: string) => number | undefined {
+    const byName = new Map<string, number>();
+    const key = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const [id, c] of this.game.champions) {
+      byName.set(key(c.name), id);
+      byName.set(key(c.alias), id);
+    }
+    for (const [id, m] of Object.entries(this.meta.tierList?.champs ?? {})) if (m.name_en) byName.set(key(m.name_en), Number(id));
+    return (name) => byName.get(key(name));
+  }
+
   /**
    * Tier list Faille d'un rôle (OP.GG, patch en cours, classée) : champions joués au moins 5 % du temps dans ce
    * rôle, avec le palier OP.GG (1 = le plus fort), le winrate et le nombre de parties.
@@ -324,18 +450,12 @@ export class Engine extends EventEmitter {
     const l = laneOf(lane);
     if (!l) return [];
     const meta = await this.opggData.laneMeta();
-    const byName = new Map<string, number>();
-    const key = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    for (const [id, c] of this.game.champions) {
-      byName.set(key(c.name), id);
-      byName.set(key(c.alias), id);
-    }
-    for (const [id, m] of Object.entries(this.meta.tierList?.champs ?? {})) if (m.name_en) byName.set(key(m.name_en), Number(id));
+    const idOf = this.championIdByName();
     const out: { id: number; name: string; winrate: number; games: number; tier: number | null; roleRate: number }[] = [];
     for (const rows of meta.values())
       for (const r of rows) {
         if (r.lane !== l || r.roleRate < 0.05) continue;
-        const id = byName.get(key(r.champion)) ?? 0;
+        const id = idOf(r.champion) ?? 0;
         if (id > 0) out.push({ id, name: this.champName(id), winrate: r.winRate, games: r.games, tier: r.tier, roleRate: r.roleRate });
       }
     return out.sort((a, b) => (a.tier ?? 9) - (b.tier ?? 9) || b.winrate - a.winrate);
@@ -506,11 +626,24 @@ export class Engine extends EventEmitter {
       this.recordAttempts = 0;
       this.recordStartedAt = 0;
       this.offersThisGame.clear();
+      this.boundThisGame.clear();
+      this.leanThisGame = null;
+      this.leanCore = null;
+      this.draw = null;
       this.missesThisGame.clear();
       this.state.headliner = null;
       this.lastBuy = null;
+      this.buysThisGame = [];
       this.skippedBuys.clear();
       this.probedRounds.clear();
+      this.spellTracker.reset();
+      this.state.enemySpells = null;
+      this.state.goldGap = null;
+      this.goldSamples.clear();
+      this.lastGameTime = null;
+      this.elixirEnd = null;
+      this.elixirTick = null;
+      this.elixirNoted = false;
       await this.handleChampSelect();
     } else if (phase !== 'ChampSelect') {
       this.probedSelect = false;
@@ -545,7 +678,13 @@ export class Engine extends EventEmitter {
       this.state.build = null;
       this.state.counters = null;
       this.state.nextBuy = null;
+      this.state.skillNext = null;
+      this.skillTrack = null;
+      this.state.enemySpells = null;
+      this.state.goldGap = null;
+      this.spellTracker.reset();
       this.state.augRound = null;
+      this.state.liveLevel = null;
       this.state.headliner = null;
       this.myChampionId = 0;
       this.lane = null;
@@ -565,6 +704,10 @@ export class Engine extends EventEmitter {
     this.state.build = null;
     this.state.counters = null;
     this.state.nextBuy = null;
+    this.state.skillNext = null;
+    this.state.enemySpells = null;
+    this.state.goldGap = null;
+    this.spellTracker.reset();
   }
 
   private async onConnected(): Promise<void> {
@@ -697,6 +840,7 @@ export class Engine extends EventEmitter {
       if (!parsed.myChampionId && meCell?.championPickIntent) parsed.myChampionId = meCell.championPickIntent;
       parsed.candidates = [];
     }
+    const notOwned = mode === 'sr' ? [] : await this.dropUnreachable(parsed);
     this.parsed = parsed;
     if (parsed.myChampionId) this.myChampionId = parsed.myChampionId;
     const tier = this.meta.tierList;
@@ -726,6 +870,7 @@ export class Engine extends EventEmitter {
       // Avec ton champion : « il manque » ne doit plus citer ce qu'il apporte
       needs: needsOf(parsed.myChampionId ? [...parsed.allies, parsed.myChampionId] : parsed.allies, tier),
       fillAdvice: fillAdvice(candidates),
+      ...(notOwned.length ? { notOwned } : {}),
       sr: mode === 'sr' ? await this.srSelect(session, parsed.myChampionId) : null,
       dataNote: mode === 'sr' ? null : !tier
         ? 'Données globales indisponibles : classement basé uniquement sur tes stats perso.'
@@ -740,7 +885,7 @@ export class Engine extends EventEmitter {
     let line = `Champ select : conseil ${top ? `${top.name} (${top.source}, ${top.score.toFixed(1)} pts, ${top.winrate != null ? Math.round(top.winrate * 100) : '?'} %)` : '—'} · tu as ${cur ? `${cur.name} (${cur.score.toFixed(1)} pts, ${cur.winrate != null ? Math.round(cur.winrate * 100) : '?'} %)` : '—'}`;
     const sr = view.sr;
     if (sr) {
-      line = `Champ select Faille (${sr.queueLabel}, ${sr.laneLabel ?? 'rôle inconnu'}) : ${sr.me ? `${sr.me.name} ${Math.round(sr.me.winRate * 100)} % sur ${sr.me.games}` : 'pas de champion'}${sr.matchup ? ` · contre ${sr.matchup.opponent.name} ${Math.round(sr.matchup.myWinRate * 100)} % (${sr.matchup.verdict}, ${sr.matchup.games} parties)` : ''}${sr.counterPicks.length ? ` · counters : ${sr.counterPicks.map((c) => `${c.name} ${Math.round(c.winRate * 100)} %`).join(', ')}` : ''}`;
+      line = `Champ select Faille (${sr.queueLabel}, ${sr.laneLabel ?? 'rôle inconnu'}) : ${sr.me ? `${sr.me.name} ${Math.round(sr.me.winRate * 100)} % sur ${sr.me.games}` : 'pas de champion'}${sr.matchup ? ` · contre ${sr.matchup.opponent.name} ${Math.round(sr.matchup.myWinRate * 100)} % (${sr.matchup.verdict}, ${sr.matchup.games} parties)` : ''}${sr.counterPicks.length ? ` · counters : ${sr.counterPicks.map((c) => `${c.name} ${Math.round(c.winRate * 100)} %`).join(', ')}` : ''}${sr.bans?.options.length ? ` · bans : ${sr.bans.options.map((b) => b.name).join(', ')}` : ''}`;
     }
     if (line !== this.lastSelectLine) {
       this.lastSelectLine = line;
@@ -843,6 +988,113 @@ export class Engine extends EventEmitter {
     const snap = await this.liveSnapshot();
     this.state.counters = await this.counterPanel(id, snap);
     this.state.nextBuy = await this.nextBuyPanel(snap);
+    this.state.skillNext = this.skillPanel(snap);
+    this.state.enemySpells = await this.enemySpellPanel(snap);
+    this.state.goldGap = this.goldGapPanel(snap);
+  }
+
+  /**
+   * Sorts ennemis : sorts équipés, niveau, objets et arbres de runes via l'API Live Client (ce que montre le tableau
+   * des scores). Les timers ne démarrent que quand tu signales un sort (`markEnemySpell`), jamais d'eux-mêmes.
+   * Data Dragon se charge en arrière-plan : un tick sans données n'attend pas le réseau.
+   */
+  private async enemySpellPanel(snap: LiveSnap | null): Promise<EnemySpellPanel | null> {
+    if (!snap?.mine?.team) return this.state.enemySpells ?? null;
+    const live = this.opts.live;
+    const stats = await liveClient<{ gameTime?: number }>('gamestats', live?.port, live?.host);
+    if (typeof stats?.gameTime !== 'number') return this.state.enemySpells ?? null;
+    this.lastGameTime = stats.gameTime;
+    void this.cooldowns.loadAny(ddragonCandidates(this.state.data.clientPatch, this.game.ddragonVersion));
+    const enemies: EnemyInput[] = snap.players
+      .filter((p) => p.team && p.team !== snap.mine!.team)
+      .map((p): EnemyInput => {
+        const id = snap.champOf(p);
+        const trees = [p.runes?.primaryRuneTree?.id, p.runes?.secondaryRuneTree?.id].filter((x): x is number => typeof x === 'number');
+        return {
+          championId: id,
+          championName: this.game.championName(id, p.championName),
+          alias: this.game.championAlias(id) ?? '',
+          level: p.level ?? 1,
+          dead: !!p.isDead,
+          items: (p.items ?? []).map((i) => i.itemID),
+          spells: [p.summonerSpells?.summonerSpellOne?.rawDisplayName ?? null, p.summonerSpells?.summonerSpellTwo?.rawDisplayName ?? null],
+          spellNames: [p.summonerSpells?.summonerSpellOne?.displayName ?? null, p.summonerSpells?.summonerSpellTwo?.displayName ?? null],
+          runeTrees: trees.length ? trees : null,
+          balanceHaste: this.balanceHaste(id),
+        };
+      })
+      .filter((e) => e.championId > 0);
+    if (this.cooldowns.ready) for (const e of enemies) if (e.alias) void this.cooldowns.loadChampion(e.alias);
+    return this.spellTracker.update(enemies, stats.gameTime, this.state.mode);
+  }
+
+  /** Accélération d'équilibrage du champion dans le mode en cours. La Faille n'en a pas. */
+  private balanceHaste(id: number): number {
+    const mode = this.state.mode;
+    if (mode !== 'aram' && mode !== 'mayhem') return 0;
+    const m = this.meta.champion(id);
+    return this.balance.forChampion([m?.name_en ?? '', m?.alias ?? '', this.game.championName(id, '')].filter(Boolean), mode)?.ability_haste ?? 0;
+  }
+
+  /** Temps de jeu de la dernière lecture de `gamestats`, null hors partie. */
+  private lastGameTime: number | null = null;
+  /** Écart d'objets toutes les 5 minutes, pour `gold_gap`. */
+  private goldSamples = new Map<number, { t: number; gap: number; levels: number }>();
+
+  /** Écart d'objets : ce que montre le tableau des scores, valorisé au prix du patch. Jamais de conseil de jeu. */
+  private goldGapPanel(snap: LiveSnap | null): GoldGapPanel | null {
+    if (!snap?.mine?.team) return this.state.goldGap ?? null;
+    const players: GapInput[] = snap.players
+      .filter((p) => p.team)
+      .map((p) => {
+        const id = snap.champOf(p);
+        return {
+          championId: id,
+          championName: id ? this.game.championName(id, p.championName) : (p.championName ?? p.rawChampionName?.split('_').pop() ?? '?'),
+          ally: p.team === snap.mine!.team,
+          me: p === snap.mine,
+          level: p.level ?? 1,
+          position: p.position ?? '',
+          items: p.items ?? [],
+        };
+      });
+    const panel = goldGap(players, (id) => this.game.itemPrice(id) ?? this.meta.tierList?.itemLut?.[String(id)]?.p ?? null, this.state.mode);
+    if (panel && this.lastGameTime != null) {
+      const slot = sampleSlot(this.lastGameTime);
+      if (slot > 0 && !this.goldSamples.has(slot)) this.goldSamples.set(slot, { t: Math.round(this.lastGameTime), gap: panel.gap, levels: panel.levelGap });
+    }
+    return panel;
+  }
+
+  /** Tu signales un sort ennemi (fenêtre, second écran ou téléphone). Le temps de jeu est relu au moment du clic. */
+  async markEnemySpell(championId: number, slot: EnemySpellSlot, action: EnemySpellAction, delta = 0): Promise<{ ok: boolean; message: string }> {
+    if (!['R', 'D', 'F'].includes(slot) || !['cast', 'clear', 'shift'].includes(action)) return { ok: false, message: 'Action inconnue' };
+    const live = this.opts.live;
+    const stats = await liveClient<{ gameTime?: number }>('gamestats', live?.port, live?.host);
+    if (typeof stats?.gameTime !== 'number') return { ok: false, message: 'Pas de partie en cours (API Live Client muette)' };
+    const r = this.spellTracker.mark(Number(championId), slot, action, stats.gameTime, Number.isFinite(delta) ? Math.max(-120, Math.min(120, delta)) : 0);
+    this.state.enemySpells = this.spellTracker.panel();
+    this.emitIfChanged();
+    return r;
+  }
+
+  /** Ordre des points pris pendant la partie, pour `skills_taken`. `partial` : app lancée en cours de partie, le début manque. */
+  private skillTrack: { levels: SkillLevels; taken: string; partial: boolean } | null = null;
+
+  /** Le prochain point à mettre et son sort. Rien sans ordre connu (OP.GG injoignable) : mieux vaut ne rien dire. */
+  private skillPanel(snap: LiveSnap | null): SkillNext | null {
+    const levels = skillLevels(snap?.me.abilities);
+    const level = snap?.me.level;
+    if (!levels || !level) return this.state.skillNext ?? null;
+    const partial = spentPoints(levels) > 1;
+    const t = (this.skillTrack ??= { levels: partial ? levels : { Q: 0, W: 0, E: 0, R: 0 }, taken: '', partial });
+    for (const k of ['Q', 'W', 'E', 'R'] as const) t.taken += k.repeat(Math.max(0, levels[k] - t.levels[k]));
+    t.levels = levels;
+    const plan = this.state.build?.skills;
+    if (!plan?.order.length) return null;
+    const key = nextSkill(plan.order, plan.max, levels, level);
+    if (!key) return null;
+    return { key, name: snap?.me.abilities?.[key]?.displayName ?? null, rank: levels[key] + 1, pending: level > spentPoints(levels), max: plan.max, source: plan.source ?? null };
   }
 
   /**
@@ -895,10 +1147,64 @@ export class Engine extends EventEmitter {
     try {
       const { mkdir, writeFile } = await import('node:fs/promises');
       await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, `liveclient-choix${round}-${Date.now()}.json`), JSON.stringify({ round, activeplayer: scrub(snap.me as object), me: scrub(snap.mine as object | null) }, null, 1));
+      await writeFile(join(dir, `liveclient-choix${round}-${Date.now()}.json`), JSON.stringify({ round, activeplayer: scrub(snap.me as object), me: scrub(snap.mine as object | null), players: probePlayers(snap.players) }, null, 1));
     } catch {
       /* diagnostic seulement */
     }
+  }
+
+  /**
+   * Items à acheter pour les augments liés à un item. L'augment pris n'est connu qu'en fin de partie : on suppose la
+   * carte conseillée (suivie sur 68 choix de 86), en le disant. Un mauvais pari passe après 2 achats différents (`skipped`).
+   */
+  private boundBuys(owned: Set<number>, cores: BuildCore[]): { id: number; why: string }[] {
+    if (this.state.mode !== 'mayhem') return [];
+    const role = buildRole(this.meta.champion(this.myChampionId)?.comp);
+    const out: { id: number; why: string }[] = [];
+    const seen = new Set<number>();
+    for (const o of this.offersThisGame.values()) {
+      if (o.kind !== 'augment' || o.best == null || seen.has(o.best)) continue;
+      seen.add(o.best);
+      const name = this.augName(o.best);
+      const id = boundTarget(name, owned, cores, role);
+      const track = this.boundThisGame.get(o.best);
+      if (id != null && !out.some((x) => x.id === id)) out.push({ id, why: `pour ${name}, si tu l'as pris` });
+      if (id != null) this.boundThisGame.set(o.best, { item: id, bought: false });
+      else if (track) track.bought = true;
+    }
+    for (const [id, t] of this.boundThisGame) if (!seen.has(id) && !t.bought) this.boundThisGame.delete(id);
+    return out;
+  }
+
+  /** Cartes conseillées aux choix passés, sans les augments liés à un item : `boundBuys` s'en occupe. */
+  private takenAugments(): TakenAugment[] {
+    if (this.state.mode !== 'mayhem' || !this.augInfo.size) return [];
+    const ids = new Set<number>();
+    for (const o of this.offersThisGame.values()) if (o.kind === 'augment' && o.best != null) ids.add(o.best);
+    return [...ids].map((id) => ({ id, name: this.augName(id), tags: this.augInfo.tags(this.augName(id)) })).filter((a) => !boundItems(a.name));
+  }
+
+  /** Noms anglais : c'est eux que lit le fichier de combos, le client peut être dans une autre langue. */
+  private augNameEn(id: number): string {
+    return this.meta.tierList?.augs[String(id)]?.name_en ?? this.augName(id);
+  }
+
+  /** Avis de la communauté sur ces cartes pour ce champion. `taken` : cartes conseillées aux choix passés. */
+  private comboNotes(championId: number, ids: number[], taken: number[] = []): Record<number, ComboNote> {
+    const out: Record<number, ComboNote> = {};
+    const names = taken.map((id) => this.augNameEn(id));
+    for (const id of ids) {
+      const note = comboNote(this.combos.rows, this.namesOf(championId), this.augNameEn(id), names);
+      if (note) out[id] = note;
+    }
+    return out;
+  }
+
+  /** Cartes conseillées aux choix d'avant : une relecture du tirage en cours n'en est pas un. */
+  private assumedBefore(round: number | null): number[] {
+    const ids = new Set<number>();
+    for (const o of this.offersThisGame.values()) if (o.kind === 'augment' && o.best != null && o.round !== round) ids.add(o.best);
+    return [...ids];
   }
 
   /** Or et items du joueur via l'API Live Client du jeu (officielle, lecture seule). */
@@ -907,57 +1213,111 @@ export class Engine extends EventEmitter {
     if (!b) return null;
     const me = snap?.me;
     if (!me || typeof me.currentGold !== 'number') return this.state.nextBuy;
-    if (typeof me.level === 'number' && this.state.mode !== 'sr') this.state.augRound = 1 + Number(me.level >= 7) + Number(me.level >= 11) + Number(me.level >= 15);
+    // Le choix reste 4 au-delà : l'augment du niveau 21 (Superfans) suit le même chemin que celui de K/DA (`choice: 1`), avec les stats du choix 4.
+    if (typeof me.level === 'number' && this.state.mode !== 'sr') {
+      this.state.augRound = 1 + Number(me.level >= 7) + Number(me.level >= 11) + Number(me.level >= 15);
+      this.state.liveLevel = me.level;
+    }
     void this.probeRound(snap);
+    void this.cooldowns.loadAny(ddragonCandidates(this.state.data.clientPatch, this.game.ddragonVersion)); // valeurs de revente
     const owned = (snap.mine?.items ?? []).map((i) => i.itemID);
+    const slotted = snap.mine?.items ?? [];
+    const bag = slotted.length && slotted.every((i) => typeof i.slot === 'number') ? slotted.filter((i) => i.slot! < BAG_SLOTS).map((i) => i.itemID) : undefined;
     const buyable = (id: number) => this.game.specialRecipe(id) || TRANSFORMS[id] || id;
     const becomes = new Map<number, string>();
     for (const c of b.cores) for (const x of [...c.core, ...c.options]) if (buyable(x.id) !== x.id) becomes.set(buyable(x.id), x.name);
     const named = (t: { title: string; champions: { name: string }[] }) => (t.champions.length ? `${t.title} (${t.champions.slice(0, 3).map((c) => c.name).join(', ')})` : t.title);
+    // Faille : les options se comparent au rang de l'item à acheter (OP.GG), bottes à part
+    const isDone = (id: number) => (this.game.items.size ? this.game.isComplete(id) : (this.game.itemPrice(id) ?? 0) >= 2000);
+    const isItem = (id: number) => isDone(id) && !this.game.isBoots(id);
+    const slot = itemSlot(owned, isItem);
+    const ownedAll = new Set(expandOwned(owned, (id) => this.game.specialRecipe(id)));
+    const bySlot = (coreIds: number[], options: { id: number; winrate: number; games?: number }[]) =>
+      optionsForSlot(options, b.slotStats?.[slot], (id) => ownedAll.has(id) || coreIds.includes(id), buyable);
     const sameInventory = this.lastBuy != null && [...this.lastBuy.owned].sort().join() === [...owned].sort().join();
+    // Items qui se transforment (Muramana, Fimbulwinter, Seraph) : on conseille ce qui s'achète (Manamune…)
+    const cores = b.cores.map((c) => ({ core: c.core.map((x) => buyable(x.id)), options: bySlot(c.core.map((x) => buyable(x.id)), c.options.map((o) => ({ id: buyable(o.id), winrate: o.winrate, games: o.games }))) }));
+    const bound = this.boundBuys(ownedAll, cores);
+    const cat = (id: number) => this.game.categories(id);
+    const components = (id: number) => this.game.components(id);
+    const choices = b.cores.map((c, k) => ({ items: cores[k].core, winrate: c.winrate, games: c.games }));
+    const lean = preferredCore(choices, this.takenAugments(), owned, cat, components);
+    const leanChanged = (lean?.index ?? null) !== this.leanCore;
+    this.leanCore = lean?.index ?? null;
+    if (lean) {
+      const items = choices[lean.index].items;
+      const to = b.cores[lean.index].name;
+      if (this.leanThisGame?.to !== to) this.leanThisGame = { from: b.cores[lean.base].name, to, items, augments: lean.augments.map((a) => a.id), bought: false };
+    }
     const r = nextBuys({
       owned,
-      keep: sameInventory ? this.lastBuy!.reco : null,
+      bag,
+      keep: sameInventory && !leanChanged ? this.lastBuy!.reco : null,
+      prefer: lean?.index ?? null,
       gold: me.currentGold,
-      // Items qui se transforment (Muramana, Fimbulwinter, Seraph) : on conseille ce qui s'achète (Manamune…)
-      cores: b.cores.map((c) => ({ core: c.core.map((x) => buyable(x.id)), options: c.options.map((o) => ({ id: buyable(o.id), winrate: o.winrate, games: o.games })) })),
+      cores,
+      bound,
       boots: b.boots.map((x) => x.id),
       counters: (this.state.counters?.threats ?? []).map((t) => ({ title: named(t), items: t.items.map((x) => buyable(x.id)), urgent: t.urgent })),
       allBoots: new Set([...b.boots.map((x) => x.id), 1001, 3006, 3009, 3020, 3047, 3111, 3158, 3008, ...[...this.game.items.keys()].filter((id) => this.game.isBoots(id))]),
       price: (id) => this.game.itemPrice(id) ?? this.meta.tierList?.itemLut?.[String(id)]?.p ?? null,
       components: (id) => this.game.components(id),
+      sellValue: (id) => this.cooldowns.sellValue(id),
       specialRecipe: (id) => this.game.specialRecipe(id),
       complete: this.game.items.size ? (id) => this.game.isComplete(id) : undefined,
-      ...(this.state.mode === 'sr' ? { labels: { core: 'cœur du build OP.GG', option: 'item suivant' } } : {}),
+      ...(this.state.mode === 'sr' ? { labels: { core: 'cœur du build OP.GG', option: b.slotStats?.[slot]?.length ? `${slot}e item` : 'item suivant' } } : {}),
+      ...(lean ? { labels: { core: `build ${b.cores[lean.index].name}, pour ${lean.augments.map((a) => a.name).join(', ')}, si tu l'as pris`, option: '3e item' } } : {}),
       skipped: new Set([...this.skippedBuys].filter(([, n]) => n >= 2).map(([id]) => id)),
     });
     const itemOf = (id: number) => this.game.item(id, this.meta.tierList?.itemLut?.[String(id)]?.e);
     // Télémétrie locale : chaque item fini acheté, comparé au conseil affiché juste avant
-    const isDone = (id: number) => (this.game.items.size ? this.game.isComplete(id) : (this.game.itemPrice(id) ?? 0) >= 2000);
     if (this.lastBuy) {
+      let at = itemSlot(this.lastBuy.owned, isItem);
       for (const id of owned)
         if (!this.lastBuy.owned.includes(id) && isDone(id)) {
           const reco = this.lastBuy.reco;
           const followed = reco === id || reco === this.game.specialRecipe(id);
           if (reco != null && !followed && !this.game.isBoots(id)) this.skippedBuys.set(reco, (this.skippedBuys.get(reco) ?? 0) + 1);
-          this.usage.add({ type: 'item_bought', at: Date.now(), championId: this.myChampionId, id, reco, plan: this.lastBuy.plan, followed: reco === id || reco === this.game.specialRecipe(id) });
+          const stats = b.slotStats?.[at]?.length ? b.slotStats[at] : null;
+          const buy = this.withValues({ type: 'item_bought', at: Date.now(), championId: this.myChampionId, id, reco, plan: this.lastBuy.plan, followed, ...(this.lastBuy.why ? { why: this.lastBuy.why } : {}), ...(stats ? { slot: at } : {}) }, stats ?? b.itemStats);
+          if (isItem(id)) at++;
+          this.usage.add(buy);
+          this.buysThisGame.push(buy);
         }
     }
     // Ton build en cours, pour rapprocher les augments proposés de ce que tu construis vraiment
     const planned = r.plan.filter((x) => !x.owned).map((x) => x.id);
-    const cat = (id: number) => this.game.categories(id);
     const known = (id: number) => cat(id).length > 0 && !this.game.isBoots(id);
-    this.buildFit = { profile: buildProfile(owned, planned, cat), seen: owned.filter((id) => isDone(id) && known(id)).length + planned.filter(known).length };
+    if (this.leanThisGame?.items.some((id) => ownedAll.has(id))) this.leanThisGame.bought = true;
+    // Pour noter une carte liée à un item, le plan ne compte pas l'item ajouté à cause de cette carte (sinon elle se justifierait toute seule)
+    const inBuild = new Set([...cores[r.coreIndex]?.core ?? [], ...cores[r.coreIndex]?.options.map((o) => o.id) ?? []]);
+    const added = new Set(bound.map((x) => x.id).filter((id) => !inBuild.has(id)));
+    const alternatives = this.state.mode === 'mayhem' ? openCores(choices, owned, components).open.filter((k) => k !== r.coreIndex).map((k) => buildProfile(owned, choices[k].items, cat)) : [];
+    this.buildFit = { profile: buildProfile(owned, planned, cat), alternatives, seen: owned.filter((id) => isDone(id) && known(id)).length + planned.filter(known).length, owned: ownedAll, planned: new Set([...inBuild, ...planned].filter((id) => !added.has(id))) };
     if (this.state.offered) {
       const o = this.state.offered;
       const fit = this.fitFor(o.ids, o.names);
       if (JSON.stringify(fit) !== JSON.stringify(o.fit)) this.state.offered = { ...o, fit };
     }
     const reco = r.rows[0]?.id ?? null;
-    if (reco !== this.lastBuy?.reco && reco != null) this.persistLog('jeu', `Achat conseillé : ${itemOf(reco).name} (${r.rows[0].why}) · or ${Math.floor(me.currentGold)} · inventaire ${owned.map((i) => itemOf(i).name).join(', ') || 'vide'}`);
-    this.lastBuy = { owned, reco, plan: r.rows.map((x) => x.id) };
+    if (reco !== this.lastBuy?.reco && reco != null) {
+      const room = r.rows[0].room;
+      const roomNote = room ? (room.sell != null ? ` · sac plein, vendre ${itemOf(room.sell).name}` : ' · sac plein, rien à vendre') : '';
+      this.persistLog('jeu', `Achat conseillé : ${itemOf(reco).name} (${r.rows[0].why}) · or ${Math.floor(me.currentGold)} · inventaire ${owned.map((i) => itemOf(i).name).join(', ') || 'vide'}${roomNote}`);
+      if (bag && bag.length >= BAG_SLOTS) this.usage.add({ type: 'bag_full', at: Date.now(), championId: this.myChampionId, gold: Math.floor(me.currentGold), reco, sell: room?.sell ?? null, blocked: Boolean(room), bag, level: me.level ?? null });
+    }
+    const resale = r.rows[0]?.resale;
+    const resaleKey = resale ? `${reco}:${resale.sell.join()}` : null;
+    if (resale && resaleKey !== this.lastResale) {
+      this.persistLog('jeu', `Revente : ${resale.sell.map((id) => itemOf(id).name).join(', ')} (+${resale.gain} or) pour acheter ${itemOf(reco!).name}, il manquait ${Math.ceil(r.rows[0].missing)} or`);
+      this.usage.add({ type: 'resale', at: Date.now(), championId: this.myChampionId, gold: Math.floor(me.currentGold), reco: reco!, gap: Math.ceil(r.rows[0].missing), gain: resale.gain, sell: resale.sell, full: (bag?.length ?? 0) >= BAG_SLOTS, level: me.level ?? null });
+    }
+    this.lastResale = resaleKey;
+    this.lastBuy = { owned, reco, plan: r.rows.map((x) => x.id), why: r.rows[0]?.why };
+    const elixir = this.elixirPanel(snap, owned, !r.rows.length || r.rows[0].room?.sell === null, (id) => isDone(id));
     return {
       gold: Math.floor(me.currentGold),
+      elixir,
       plan: r.plan.map((p) => ({ item: itemOf(p.id), owned: p.owned, ...(p.why ? { why: p.why } : {}) })),
       respawn: snap.mine?.isDead ? Math.ceil(snap.mine.respawnTimer ?? 0) : null,
       buildName: b.cores[r.coreIndex]?.name ?? null,
@@ -977,8 +1337,83 @@ export class Engine extends EventEmitter {
         remaining: x.remaining,
         missing: Math.ceil(x.missing),
         ...(x.step ? { step: { item: this.game.item(x.step.id), price: x.step.price } } : {}),
+        ...(x.room ? { room: { sell: x.room.sell != null ? itemOf(x.room.sell) : null } } : {}),
+        ...(x.resale ? { resale: { items: x.resale.sell.map(itemOf), gain: x.resale.gain } } : {}),
       })),
     };
+  }
+
+  /** Rien d'autre à acheter : l'élixir de ton build, et le suivi de celui que tu as bu. */
+  private elixirPanel(snap: LiveSnap, owned: number[], idle: boolean, isDone: (id: number) => boolean): NextBuyPanel['elixir'] {
+    const me = snap.me!;
+    const gold = me.currentGold!;
+    const now = Date.now();
+    const key = [...owned].sort().join();
+    const respawn = snap.mine?.isDead ? snap.mine.respawnTimer : null;
+    const was = this.elixirTick;
+    const price = this.game.itemPrice(was?.id ?? 0) ?? ELIXIR_PRICE;
+    if (was && elixirBought(was.gold, gold, was.owned === key, price)) {
+      this.elixirEnd = elixirUntil(now, respawn);
+      this.persistLog('jeu', `Élixir acheté : ${this.game.item(was.id).name} · or ${Math.floor(gold)}`);
+      this.usage.add({ type: 'elixir', at: now, championId: this.myChampionId, id: was.id, gold: Math.floor(gold), level: me.level ?? null, bought: true });
+    }
+    // Pas sac plein, l'élixir attend dans le sac : le boire est un geste à toi, on n'en conseille pas un 2e.
+    if (owned.some((id) => ELIXIR_IDS.has(id))) {
+      this.elixirTick = null;
+      return null;
+    }
+    const finished = owned.filter((id) => isDone(id));
+    const comp = this.meta.champion(this.myChampionId)?.comp;
+    const role = elixirRole(buildRole(comp), compFromItems(comp, finished, (id) => this.game.categories(id)).built);
+    const id = ELIXIRS[role].id;
+    const advice = elixirAdvice({
+      role,
+      level: me.level,
+      gold,
+      idle,
+      price: this.game.itemPrice(id) ?? ELIXIR_PRICE,
+      onMap: this.cooldowns.onMap(id, this.state.mode === 'sr' ? 11 : 12),
+      until: this.elixirEnd,
+      now,
+    });
+    this.elixirTick = advice?.buy ? { gold, owned: key, id } : null;
+    if (!advice) return null;
+    if (advice.buy && !this.elixirNoted) {
+      this.elixirNoted = true;
+      this.persistLog('jeu', `Élixir conseillé : ${advice.name}, rien d'autre à acheter · or ${Math.floor(gold)} · inventaire ${owned.map((x) => this.game.item(x).name).join(', ')}`);
+      this.usage.add({ type: 'elixir', at: now, championId: this.myChampionId, id, gold: Math.floor(gold), level: me.level ?? null, bought: false });
+    }
+    return { item: this.game.item(id, advice.name), perk: advice.perk, price: advice.price, left: advice.left, buy: advice.buy };
+  }
+
+  /** Complète un achat avec ce qu'il faut pour le juger : winrates de la même source, bottes, conseil couvert. */
+  private withValues(e: ItemBought, stats: ItemStat[] | undefined): ItemBought {
+    const values = itemValues(stats, (id) => this.game.specialRecipe(id) || TRANSFORMS[id] || id);
+    const mine = values.get(e.id);
+    const reco = e.reco == null ? undefined : values.get(e.reco);
+    const covers = e.reco != null && !e.followed && this.coversAdvice(e.id, e.reco);
+    const boots = this.game.isBoots(e.id) || (e.reco != null && this.game.isBoots(e.reco));
+    return {
+      ...e,
+      ...(mine ? { value: mine.winrate, games: mine.games } : {}),
+      ...(reco ? { recoValue: reco.winrate, recoGames: reco.games } : {}),
+      ...(covers ? { covers } : {}),
+      ...(boots ? { boots } : {}),
+    };
+  }
+
+  /** Autre item, même effet : le conseil est un composant de l'item acheté, ou les deux répondent à la même menace. */
+  private coversAdvice(id: number, reco: number): boolean {
+    const parts = new Set<number>();
+    const walk = (x: number, depth: number) => {
+      for (const c of this.game.components(x)) {
+        parts.add(c);
+        if (depth < 3) walk(c, depth + 1);
+      }
+    };
+    walk(id, 0);
+    if (parts.has(reco)) return true;
+    return (this.state.counters?.threats ?? []).some((t) => t.items.some((x) => x.id === id) && t.items.some((x) => x.id === reco));
   }
 
   private probedGames = new Set<number>();
@@ -1204,6 +1639,7 @@ export class Engine extends EventEmitter {
         .slice(0, 5)
         .map(([id, r]) => ({ id, name: this.augName(id), icon: this.game.augmentIcon(id) ?? this.meta.augmentIconUrl(id), games: r.games, wins: r.wins })),
     };
+    panel.combos = this.comboNotes(championId, Object.values(panel.all ?? {}).flat().map((a) => a.id));
     this.panelCache.set(championId, panel);
     return panel;
   }
@@ -1257,20 +1693,32 @@ export class Engine extends EventEmitter {
           .slice(0, 6)
           .map((r) => stat(r.id, r.wr, r.g));
       })(),
+      itemStats: (detail?.singleItems?.top ?? []).map((r) => ({ id: Number(r.slug), winrate: r.wr, games: r.g })).filter((r) => r.id),
       balance: this.balanceOf(championId, mode),
       note:
         mode === 'aram'
           ? 'ARAM classique : runes recommandées par le client. Les items et winrates détaillés n’existent que pour Mayhem (arammeta).'
           : null,
     };
+    this.attachAramSkills(panel);
     if (lcu) this.buildCache.set(key, panel); // sans client : pas de runes, on ne garde pas en cache
     return panel;
+  }
+
+  /**
+   * ARAM et Mayhem : ordre des compétences d'OP.GG (file ARAM, ils n'ont pas de file Mayhem ; le rôle n'y change rien).
+   * Sans attendre : OP.GG lent ou coupé ne doit pas retarder le build, l'ordre arrive au tour suivant.
+   */
+  private attachAramSkills(panel: BuildPanel): void {
+    void this.srAnalysis(panel.championId, 'top', 'aram').then((a) => {
+      if (a?.skillMax.length && a.skillOrder.length) panel.skills = { order: a.skillOrder, max: a.skillMax, source: 'OP.GG, ARAM' };
+    });
   }
 
   // ---------------------------------------------------------------- Faille de l'invocateur (OP.GG)
 
   /** Analyse OP.GG (champion × rôle × file), gardée en mémoire ; un échec est réessayé après 1 min. */
-  private srAnalysis(id: number, lane: Lane, modeOverride?: ReturnType<typeof opggModeOf>): Promise<OpggAnalysis | null> {
+  private srAnalysis(id: number, lane: Lane, modeOverride?: OpggMode): Promise<OpggAnalysis | null> {
     const mode = modeOverride ?? opggModeOf(this.state.queueId);
     const key = `${id}|${lane}|${mode}`;
     let p = this.srCache.get(key);
@@ -1303,7 +1751,7 @@ export class Engine extends EventEmitter {
     if (assigned) this.lane = assigned;
     const lane = myId ? await this.myLane(myId) : assigned;
     const queueLabel = QUEUE_LABEL[this.state.queueId ?? 0] ?? 'Faille';
-    const out: SrSelect = { lane, laneLabel: lane ? LANE_LABEL[lane] : null, queueLabel, me: null, matchup: null, counterPicks: [], dangers: [], note: null };
+    const out: SrSelect = { lane, laneLabel: lane ? LANE_LABEL[lane] : null, queueLabel, me: null, matchup: null, counterPicks: [], dangers: [], bans: null, note: null };
     if (!lane) {
       out.note = 'Rôle inconnu : choisis ou survole un champion pour voir ses stats.';
       return out;
@@ -1338,7 +1786,57 @@ export class Engine extends EventEmitter {
       // Ennemis (tous rôles) qui battent ton champion d'après OP.GG
       out.dangers = (mine?.losesTo ?? []).filter((c) => enemies.includes(c.id) && c.id !== opp && c.games >= 200).map((c) => ({ id: c.id, name: this.champName(c.id, c.name), myWinRate: c.myWinRate, games: c.games }));
     }
+    out.bans = await this.srBans(session, lane, mine);
     return out;
+  }
+
+  /** Bans conseillés tant que ton ban reste à valider ; null sur une file sans bans (Swiftplay) ou sans données. */
+  private async srBans(session: RawSession, lane: Lane, mine: OpggAnalysis | null): Promise<SrBans | null> {
+    const actions = (session.actions ?? []).flat().filter((a) => a.type === 'ban');
+    const own = actions.find((a) => a.actorCellId === session.localPlayerCellId && !a.completed);
+    if (!own) return null;
+    const meta = await this.opggData.laneMeta();
+    if (!meta.size) return null;
+    const cells = new Set(session.myTeam.map((p) => p.cellId));
+    const excluded = new Set(
+      [
+        ...actions.filter((a) => a.completed || (cells.has(a.actorCellId) && a.id !== own.id)).map((a) => a.championId),
+        ...(session.bans?.myTeamBans ?? []),
+        ...(session.bans?.theirTeamBans ?? []),
+        ...session.myTeam.flatMap((p) => [p.championId, p.championPickIntent ?? 0]),
+        ...(session.theirTeam ?? []).map((p) => p.championId),
+      ].filter((id) => id > 0),
+    );
+    const lanes = new Set<Lane>([lane]);
+    for (const p of session.myTeam) {
+      const l = laneOf(p.assignedPosition);
+      if (l && (p.championId > 0 || (p.championPickIntent ?? 0) > 0)) lanes.add(l);
+    }
+    const options = banOptions({ meta, lanes: [...lanes], myLane: lane, mine, excluded, idOf: this.championIdByName() }).map((o) => ({
+      id: o.id,
+      name: this.champName(o.id, o.name),
+      gain: o.gain,
+      laneLabel: LANE_LABEL[o.lane],
+      share: o.share,
+      myWinRate: o.myWinRate,
+      winRate: o.winRate,
+    }));
+    return { myTurn: own.isInProgress, hovered: own.championId, lanes: lanes.size, options };
+  }
+
+  /** Survole un ban conseillé. Ne le valide jamais : la confirmation reste dans le client. */
+  async hoverBan(championId: number): Promise<{ ok: boolean; message: string }> {
+    const lcu = this.lcu;
+    if (!lcu) return { ok: false, message: 'Pas de champ select en cours' };
+    const name = this.champName(championId);
+    const session = await lcu.get<RawSession>('/lol-champ-select/v1/session');
+    const own = (session?.actions ?? []).flat().find((a) => a.actorCellId === session?.localPlayerCellId && a.type === 'ban' && !a.completed);
+    if (!own?.isInProgress) return { ok: false, message: 'Ce n’est pas ton tour de bannir' };
+    const ok = await hoverBanAction(lcu, own, championId);
+    const message = ok ? `${name} survolé : confirme le ban dans le client` : `Le client a refusé ${name}`;
+    this.log(ok ? 'success' : 'warning', message);
+    await this.tick();
+    return { ok, message };
   }
 
   /** Build Faille depuis OP.GG : départ, cœur, 4e/5e/6e items classés par borne basse de confiance, bottes, runes, sorts, compétences. */
@@ -1363,6 +1861,7 @@ export class Engine extends EventEmitter {
     const options = [...opts.values()].sort((p, q) => wilson(q.winrate, q.games).lo - wilson(p.winrate, p.games).lo).slice(0, 5);
     const rec = !a?.runes && this.lcu ? await recommendedPage(this.lcu, id, SR_MAP_ID, lane ? LCU_POS[lane] : 'NONE') : null;
     const runes = a?.runes ?? (rec ? { ...rec, winrate: 0, games: 0 } : null);
+    const slotRows = (list: OpggAnalysis['fourth']) => list.filter((x) => x.ids[0]).map((x) => ({ id: x.ids[0], winrate: x.winrate, games: x.games }));
     const queue = modeOverride ? 'Classée' : (QUEUE_LABEL[this.state.queueId ?? 0] ?? 'Faille');
     const panel: BuildPanel = {
       championId: id,
@@ -1378,6 +1877,7 @@ export class Engine extends EventEmitter {
           }
         : null,
       spells: a?.spells.length === 2 ? [{ items: a.spells.map((sp) => this.game.spell(sp)), winrate: 0, games: 0 }] : [],
+      slotStats: a ? { 4: slotRows(a.fourth), 5: slotRows(a.fifth), 6: slotRows(a.sixth) } : undefined,
       cores: core.length ? [{ name: 'OP.GG', core: core.map(itemOf), options, winrate: a!.core!.winrate, games: a!.core!.games }] : [],
       boots: a?.boots ? [stat(a.boots)] : [],
       starter: (a?.starter?.ids ?? []).map(itemOf),
@@ -1427,10 +1927,21 @@ export class Engine extends EventEmitter {
     if (this.state.headliner && game.mode === 'mayhem') game.headliner = this.state.headliner.key;
     const review = this.reviewOfGame(game.augments);
     if (review) game.review = review;
+    const buys = reviewBuys(this.buysThisGame.filter((e) => e.championId === game.championId), (id) => this.itemName(id));
+    if (buys) game.buys = buys;
+    this.buysThisGame = [];
     await this.history.add(game);
     this.recordPicks(gameId, game.augments, game.win);
     const played = this.lastCandidates.find((c) => c.championId === game.championId);
     if (played) this.usage.add({ type: 'champ_scored', at: Date.now(), gameId, championId: played.championId, score: played.score, winrate: played.winrate, synergy: played.parts?.synergy ?? 0, comp: played.parts?.comp ?? 0, win: game.win });
+    if (this.skillTrack?.taken) {
+      const { taken, partial } = this.skillTrack;
+      const plan = this.state.build?.skills;
+      this.usage.add({ type: 'skills_taken', at: Date.now(), gameId, championId: game.championId, taken, partial, win: game.win, ...(plan?.order.length && !partial ? { plan: plan.order.join(''), off: pointsOffPlan(taken, plan.order, plan.max) } : {}) });
+    }
+    this.skillTrack = null;
+    if (this.goldSamples.size) this.usage.add({ type: 'gold_gap', at: Date.now(), gameId, mode: game.mode, samples: [...this.goldSamples.values()], win: game.win });
+    this.goldSamples.clear();
     this.log('success', `Partie enregistrée : ${this.champName(game.championId)} (${game.win ? 'victoire' : 'défaite'}, ${game.augments.length} augments)`);
     this.refreshStats();
     return true;
@@ -1482,10 +1993,16 @@ export class Engine extends EventEmitter {
 
   /** Revue des choix de la partie qui vient de finir (cartes lues à l'écran), à garder avec la partie. */
   private reviewOfGame(augments: number[]): GameReview | null {
-    const choices = [...this.offersThisGame.values()]
-      .filter((o) => o.cards.length)
-      .map((o) => reviewChoice(o.round, o.cards, o.ids.find((id) => augments.includes(id)) ?? null));
-    return reviewGame(choices);
+    const choices = settleOffers([...this.offersThisGame.values()], augments)
+      .filter(({ offer }) => offer.cards.length)
+      .map(({ offer, picked }) => {
+        const c = reviewChoice(offer.round, offer.cards, picked, offer.choice);
+        const d = offer.draw;
+        const reroll = picked != null && d?.pool ? reviewDraw(d.steps, d.pool, d.upgraded ?? null) : null;
+        return reroll ? { ...c, reroll } : c;
+      });
+    const review = reviewGame(choices);
+    return review && { ...review, rerollsDone: true };
   }
 
   /**
@@ -1501,27 +2018,79 @@ export class Engine extends EventEmitter {
       const found = new Map<number, GameReview>();
       for (const g of this.history.games) {
         const list = picks.get(g.gameId);
-        if (g.review || g.mode !== 'mayhem' || !list) continue;
+        if (g.review?.rerollsDone || g.mode !== 'mayhem' || !list) continue;
         const panel = await this.augmentPanel(g.championId);
         if (!panel) continue;
-        const review = reviewGame(
-          list.filter((e) => !e.ids.every((id) => id >= 3170 && id < 3200)).map((e) => reviewChoice(e.round, this.reviewCards(panel, e.ids, e.round), e.picked)),
-          true,
-        );
-        if (review) found.set(g.gameId, review);
+        const review =
+          g.review ??
+          reviewGame(
+            list.filter((e) => !e.ids.every((id) => id >= 3170 && id < 3200)).map((e) => reviewChoice(e.round, this.reviewCards(panel, e.ids, e.round), e.picked, e.choice)),
+            true,
+          );
+        if (review) found.set(g.gameId, this.withOldRerolls(review, g, list, panel));
       }
-      if (!found.size) return 0;
-      await this.history.setReviews(found);
-      this.state.reviews = (this.state.reviews ?? 0) + found.size;
-      this.persistLog('info', `Revue des choix : ${found.size} ancienne${found.size > 1 ? 's' : ''} partie${found.size > 1 ? 's' : ''} notée${found.size > 1 ? 's' : ''}`);
+      const bought = await this.backfillBuys();
+      if (!found.size && !bought.size) return 0;
+      await this.history.setReviews(found, bought);
+      this.state.reviews = (this.state.reviews ?? 0) + found.size + bought.size;
+      if (found.size) this.persistLog('info', `Revue des choix : ${found.size} ancienne${found.size > 1 ? 's' : ''} partie${found.size > 1 ? 's' : ''} notée${found.size > 1 ? 's' : ''}`);
+      if (bought.size) this.persistLog('info', `Revue des achats : ${bought.size} ancienne${bought.size > 1 ? 's' : ''} partie${bought.size > 1 ? 's' : ''} notée${bought.size > 1 ? 's' : ''}`);
       this.emitIfChanged();
-      return found.size;
+      return found.size + bought.size;
     } catch (e) {
       this.persistLog('warning', `Revue des anciennes parties impossible : ${(e as Error).message}`);
       return 0;
     } finally {
       this.backfilling = false;
     }
+  }
+
+  /** Partie d'avant la v1.66 : ses relances se relisent dans `cards_seen`, avec les stats actuelles. */
+  private withOldRerolls(review: GameReview, g: HistoryGame, picks: Extract<UsageEvent, { type: 'card_picked' }>[], panel: AugmentPanel): GameReview {
+    const seen = this.usage.events.filter((e): e is Extract<UsageEvent, { type: 'cards_seen' }> => e.type === 'cards_seen');
+    const choices = review.choices.map((c) => {
+      const pick = picks.find((e) => e.round === c.round && (e.choice ?? 0) === (c.choice ?? 0) && e.picked === c.picked);
+      if (!pick || c.picked == null) return c;
+      const steps = drawFromSeen(seen, { championId: g.championId, round: c.round, ids: pick.ids, from: g.createdAt, until: pick.at }).map((ids) => this.reviewCards(panel, ids, c.round));
+      const rarity = steps[0] && this.drawRarity(steps[0].map((x) => x.id));
+      if (!rarity) return c;
+      const known = new Set([...steps[0].map((x) => x.id), ...seenBefore(seen, { championId: g.championId, from: g.createdAt, until: pick.at }, steps[0].map((x) => x.id))]);
+      const up = g.headliner === 'commandline' ? NEXT_RARITY[rarity] : undefined;
+      const reroll = reviewDraw(steps, this.poolValues(panel, rarity, known, c.round, false), up ? this.poolValues(panel, up, known, c.round, false) : null);
+      return reroll ? { ...c, reroll } : c;
+    });
+    return { ...review, choices, rerollLost: choices.reduce((n, c) => n + rerollLostOf(c), 0), rerollsDone: true, rerollsApprox: true };
+  }
+
+  /** Rareté d'un tirage dont la lecture ne l'a pas gardée : celle de la majorité de ses cartes. */
+  private drawRarity(ids: number[]): Rarity | null {
+    const of = ids.map((id) => this.meta.tierList?.augs[String(id)]?.rarity);
+    const rarity = of.find((r, i) => r && of.indexOf(r) !== i);
+    return rarity === 'kPrismatic' || rarity === 'kGold' || rarity === 'kSilver' ? rarity : null;
+  }
+
+  /** Achats des parties Mayhem sans revue : `usage.json` les garde sans valeur, on prend les stats actuelles. */
+  private async backfillBuys(): Promise<Map<number, BuyReview>> {
+    const list = new Map<number, ItemBought[]>();
+    const games = this.history.games.filter((g) => g.mode === 'mayhem' && !g.buys);
+    for (const e of this.usage.events) {
+      if (e.type !== 'item_bought') continue;
+      const g = gameOfBuy(e, games);
+      if (g) list.set(g.gameId, [...(list.get(g.gameId) ?? []), e]);
+    }
+    const out = new Map<number, BuyReview>();
+    for (const g of games) {
+      const events = list.get(g.gameId);
+      if (!events) continue;
+      const stats = (await this.buildPanel(g.championId, 'mayhem'))?.itemStats;
+      const review = reviewBuys(events.map((e) => this.withValues(e, stats)), (id) => this.itemName(id), true);
+      if (review) out.set(g.gameId, review);
+    }
+    return out;
+  }
+
+  private itemName(id: number): string {
+    return this.game.item(id, this.meta.tierList?.itemLut?.[String(id)]?.e).name;
   }
 
   /** Meilleure carte parmi celles lues, d'après le winrate au moment du choix (comme l'affichage). */
@@ -1535,6 +2104,71 @@ export class Engine extends EventEmitter {
     const known = ids.map((id) => rows.get(id)).filter((a): a is AugmentRow => !!a);
     const fit = (a: AugmentRow) => this.state.offered?.fit?.[a.id]?.delta ?? 0;
     return known.length ? known.sort((a, b) => at(b) + fit(b) - (at(a) + fit(a)))[0].id : null;
+  }
+
+  /** Valeur d'un augment au moment du choix, comme dans le classement affiché. */
+  private rowValue(a: AugmentRow, fit?: Record<number, { delta: number }>, round = this.state.augRound): number {
+    return ((round ? a.rounds?.[round - 1] : null) ?? a.winrate) + (fit?.[a.id]?.delta ?? 0);
+  }
+
+  /** Retire d'une lecture complète les cartes vues à un choix précédent : elle redevient partielle, donc sans conseil. */
+  private withoutGhosts(read: CardRead): CardRead {
+    const d = this.draw;
+    if (!d || read.unsure) return read;
+    const ghosts = ghostCards(read.ids, d, this.state.augRound);
+    if (!ghosts.length) return read;
+    this.persistLog('jeu', `Carte déjà vue retirée de la lecture : ${ghosts.map((i) => read.names[i]).join(', ')}`);
+    const keep = <T,>(xs: T[]) => xs.filter((_, i) => !ghosts.includes(i));
+    const ids = keep(read.ids);
+    return { ...read, ids, names: keep(read.names), unsure: `${ids.length} cartes sur 3 reconnues` };
+  }
+
+  /**
+   * Suit les relances du tirage en cours (une carte nouvelle à côté de cartes gardées) et donne le conseil. Une carte
+   * relancée avant la 1re lecture n'est pas vue comme telle : le bouton en jeu fait foi.
+   */
+  private rerollAdvice(read: CardRead): RerollAdvice | null {
+    const panel = this.state.augments;
+    const round = this.state.augRound;
+    const d = this.draw;
+    if (d && d.round === round && d.ids.some((id) => read.ids.includes(id))) {
+      for (const id of read.ids) {
+        if (!d.ids.includes(id)) d.rolled.add(id);
+        d.seen.add(id);
+      }
+      d.ids = read.ids;
+    } else {
+      // Une carte vue dans un choix précédent ne revient pas de la partie (0 sur 439, 17 attendues) : `seen` couvre toute la partie
+      this.draw = { round, rarity: read.rarity, ids: read.ids, rolled: new Set(), seen: new Set([...(d?.seen ?? []), ...read.ids]), before: new Set(d?.seen), steps: [] };
+    }
+    const draw = this.draw!;
+    if (!panel || !draw.rarity || read.ids.length !== 3) return null;
+    draw.steps.push(this.reviewCards(panel, read.ids, round, this.state.offered?.fit));
+    const rows = this.panelRows(panel);
+    for (const a of this.state.offered?.extra ?? []) if (!rows.has(a.id)) rows.set(a.id, a);
+    const fit = this.state.offered?.fit;
+    const cards = read.ids.map((id) => rows.get(id));
+    if (cards.some((a) => !a)) return null;
+    const up = this.state.headliner?.key === 'commandline' && !draw.rolled.size ? NEXT_RARITY[draw.rarity] : undefined;
+    const pool = this.poolValues(panel, draw.rarity, draw.seen);
+    const upgraded = up ? this.poolValues(panel, up, draw.seen) : null;
+    draw.pool ??= pool;
+    if (draw.upgraded === undefined) draw.upgraded = upgraded;
+    return adviseReroll(
+      cards.map((a) => ({ id: a!.id, value: this.rowValue(a!, fit), rolled: draw.rolled.has(a!.id) })),
+      pool,
+      upgraded,
+    );
+  }
+
+  /** Valeurs des cartes encore possibles d'une rareté : le pool du champion, plus les cartes rares sur lui, estimées, sans `seen`. */
+  private poolValues(panel: AugmentPanel, rarity: Rarity, seen: Set<number>, round = this.state.augRound, live = true): number[] {
+    const others = Object.entries(this.meta.tierList?.augs ?? {})
+      .filter(([id, a]) => a.rarity === rarity && offerKind([Number(id)]) === 'augment' && this.game.augmentExists(Number(id)))
+      .map(([id]) => Number(id));
+    const rows = [...(panel.all?.[rarity] ?? []), ...this.estimatedRows(others, panel)].filter((a) => !seen.has(a.id));
+    const fit = live ? this.fitFor(rows.map((a) => a.id), rows.map((a) => a.name)) : undefined;
+    return rows.map((a) => this.rowValue(a, fit, round));
   }
 
   /** Diagnostic : schéma des outils OP.GG et une réponse type, copiés dans probe-output/ (pour lire les données Faille). */
@@ -1574,11 +2208,13 @@ export class Engine extends EventEmitter {
   /** Correction de chaque carte selon ton build en cours (voir augfit.ts). */
   private fitFor(ids: number[], names: string[]): Record<number, { delta: number; why: string | null; good: boolean }> | undefined {
     const b = this.buildFit;
-    if (!b || !this.augInfo.size) return undefined;
+    if (!b) return undefined;
+    const itemName = (id: number) => this.game.item(id, this.meta.tierList?.itemLut?.[String(id)]?.e).name;
     const out: Record<number, { delta: number; why: string | null; good: boolean }> = {};
     ids.forEach((id, i) => {
-      const f = fitOf(this.augInfo.tags(names[i] ?? this.augName(id)), b.profile, b.seen);
-      if (f.delta) out[id] = f;
+      const name = names[i] ?? this.augName(id);
+      const f = boundFit(name, b.owned, b.planned, itemName) ?? (this.augInfo.size ? fitWithAlternatives(this.augInfo.tags(name), b.profile, b.alternatives, b.seen) : null);
+      if (f?.delta) out[id] = f;
     });
     return Object.keys(out).length ? out : undefined;
   }
@@ -1645,6 +2281,14 @@ export class Engine extends EventEmitter {
       this.emitIfChanged();
       return true;
     }
+    read = this.withoutGhosts(read);
+    if (!read.unsure)
+      for (const name of unknownBound(read.names))
+        if (!this.unknownBoundSeen.has(name)) {
+          this.unknownBoundSeen.add(name);
+          this.persistLog('warning', `Augment lié à un item inconnu de l'app : ${name}`);
+          this.usage.add({ type: 'bound_unknown', at: Date.now(), name });
+        }
     for (const text of read.misses)
       if (!this.missesThisGame.has(text) && this.missesThisGame.size < 30) {
         this.missesThisGame.add(text);
@@ -1656,18 +2300,24 @@ export class Engine extends EventEmitter {
     this.state.offered = { ids: read.ids, names: read.names, rarity: read.rarity, unsure: read.unsure, at: Date.now(), ...(extra.length ? { extra } : {}) };
     this.state.offered.fit = this.fitFor(read.ids, read.names);
     const best = read.unsure ? null : this.bestOffered(read.ids);
+    const kind = offerKind(read.ids);
     const round = this.state.augRound;
-    this.persistLog('jeu', `Cartes lues (choix ${round ?? '?'}) : ${read.names.join(' · ')}${read.unsure ? ` — ${read.unsure}` : best != null ? ` → conseil : ${this.augName(best)}` : ''}`);
-    this.usage.add({ type: 'cards_seen', at: Date.now(), championId: this.state.augments?.championId ?? 0, round, ids: read.ids, best, unsure: !!read.unsure });
-    // Un même niveau peut proposer 2 choix (augment normal puis carte headliner, ex. Pentakill HEAVY / POWER / THRASH) :
-    // on les garde séparément, sinon le 2e écrasait le 1er (vu en vraie partie le 28 oct.)
-    const kind = read.ids.every((id) => id >= 3170 && id < 3200) ? 'headliner' : 'augment';
+    const combos = kind === 'augment' && this.state.mode === 'mayhem' && this.state.augments ? this.comboNotes(this.state.augments.championId, read.ids, this.assumedBefore(round)) : {};
+    if (Object.keys(combos).length) this.state.offered.combos = combos;
+    const reroll = read.unsure || kind !== 'augment' ? null : protectCombos(this.rerollAdvice(read), combos);
+    this.state.offered.reroll = reroll;
+    this.persistLog('jeu', `Cartes lues (choix ${round ?? '?'}) : ${read.names.join(' · ')}${read.unsure ? ` — ${read.unsure}` : best != null ? ` → conseil : ${this.augName(best)}` : ''}${reroll && reroll.kind !== 'keep' ? ` ; relance : ${reroll.targets.map((id) => this.augName(id)).join(', ')} (+${(reroll.gain * 100).toFixed(1)} pt)` : ''}${Object.keys(combos).length ? ` ; combos : ${Object.entries(combos).map(([id, c]) => `${this.augName(Number(id))} (${c.label})`).join(', ')}` : ''}`);
+    this.usage.add({ type: 'cards_seen', at: Date.now(), championId: this.state.augments?.championId ?? 0, round, ids: read.ids, best, unsure: !!read.unsure, rarity: read.rarity, ...(Object.keys(combos).length ? { combos: Object.fromEntries(Object.entries(combos).map(([id, c]) => [id, c.kind])) } : {}), ...(reroll ? { reroll: { kind: reroll.kind, targets: reroll.targets, gain: Math.round(reroll.gain * 10000) / 10000, upgrade: reroll.upgrade, pool: this.draw?.pool?.length } } : {}) });
+    // Un même niveau peut proposer 2 choix (carte headliner Pentakill, augment en plus K/DA) : on les garde
+    // séparément, sinon le 2e écrasait le 1er (vu en vraie partie le 28 oct.)
     const hl = read.unsure ? null : headlinerFromCards(read.ids);
     if (hl) this.setHeadliner(hl, 'cartes');
     if (!read.unsure) {
       const panel = this.state.augments;
       const cards = panel && kind === 'augment' ? this.reviewCards(panel, read.ids, round, this.state.offered.fit) : [];
-      this.offersThisGame.set(`${round ?? 0}:${kind}`, { round, ids: read.ids, best, cards });
+      const same = [...this.offersThisGame.values()].filter((o) => o.round === round && o.kind === kind);
+      const choice = offerChoice(same, read.ids);
+      this.offersThisGame.set(`${round ?? 0}:${kind}:${choice}`, { round, ids: read.ids, best, cards, choice, kind, draw: kind === 'augment' ? this.draw : null });
     }
     this.emitIfChanged();
     return true;
@@ -1708,11 +2358,18 @@ export class Engine extends EventEmitter {
 
   /** Fin de partie : pour chaque choix lu à l'écran, quel augment a été pris, et était-ce la recommandation ? */
   private recordPicks(gameId: number, augments: number[], win: boolean): void {
-    for (const o of this.offersThisGame.values()) {
-      const picked = o.ids.find((id) => augments.includes(id)) ?? null;
-      this.usage.add({ type: 'card_picked', at: Date.now(), gameId, round: o.round, ids: o.ids, best: o.best, picked, followed: picked != null && picked === o.best, win });
+    for (const { offer: o, picked } of settleOffers([...this.offersThisGame.values()], augments))
+      this.usage.add({ type: 'card_picked', at: Date.now(), gameId, round: o.round, ...(o.choice ? { choice: o.choice } : {}), ids: o.ids, best: o.best, picked, followed: picked != null && picked === o.best, win });
+    for (const [id, t] of this.boundThisGame) this.usage.add({ type: 'item_bound', at: Date.now(), gameId, augment: id, item: t.item, picked: augments.includes(id), bought: t.bought, win });
+    if (this.leanThisGame) {
+      const { from, to, augments: assumed, bought } = this.leanThisGame;
+      this.usage.add({ type: 'build_lean', at: Date.now(), gameId, from, to, augments: assumed, picked: assumed.some((id) => augments.includes(id)), bought, win });
     }
+    this.leanThisGame = null;
+    this.leanCore = null;
+    this.boundThisGame.clear();
     this.offersThisGame.clear();
+    this.draw = null;
   }
 
   // ---------------------------------------------------------------- réglages
@@ -1731,6 +2388,7 @@ export function shrink(wr: number, games: number, prior: number, k = 400): numbe
 }
 
 interface LiveMe {
+  abilities?: LiveAbilities;
   currentGold?: number;
   level?: number;
   riotId?: string;
@@ -1750,8 +2408,12 @@ interface LivePlayer {
   position?: string;
   isDead?: boolean;
   respawnTimer?: number;
-  items?: { itemID: number }[];
+  items?: { itemID: number; count?: number; consumable?: boolean; slot?: number }[];
   scores?: { kills?: number; deaths?: number; assists?: number };
+  level?: number;
+  summonerSpells?: { summonerSpellOne?: { rawDisplayName?: string; displayName?: string }; summonerSpellTwo?: { rawDisplayName?: string; displayName?: string } };
+  /** Faille : arbres de runes visibles ; null en Mayhem (captures du 2 nov.). */
+  runes?: { primaryRuneTree?: { id?: number }; secondaryRuneTree?: { id?: number } } | null;
 }
 
 const LCU_POS: Record<Lane, string> = { top: 'TOP', jungle: 'JUNGLE', mid: 'MIDDLE', adc: 'BOTTOM', support: 'UTILITY' };

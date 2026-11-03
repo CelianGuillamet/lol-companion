@@ -5,6 +5,10 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { state, championIcon, pct, hideBroken, ROUND_LABEL } from '../store';
 import AugmentChooser from './AugmentChooser.vue';
 import BuyPanel from './BuyPanel.vue';
+import SkillNext from './SkillNext.vue';
+import EnemySpells from './EnemySpells.vue';
+import GoldGap from './GoldGap.vue';
+import GoldGapTable from './GoldGapTable.vue';
 import BuildView from '../views/BuildView.vue';
 
 const panel = computed(() => state.value?.augments ?? null);
@@ -16,8 +20,10 @@ const narrow = ref(mq.matches);
 const onMq = () => (narrow.value = mq.matches);
 mq.addEventListener('change', onMq);
 onBeforeUnmount(() => mq.removeEventListener('change', onMq));
-const view = ref<'augs' | 'buy'>(panel.value ? 'augs' : 'buy');
+const spells = computed(() => !!state.value?.enemySpells?.enemies.length);
+const view = ref<'augs' | 'buy' | 'spells'>(panel.value ? 'augs' : 'buy');
 const showBuild = ref(false);
+const showGap = ref(false);
 const headliner = computed(() => state.value?.headliner ?? null);
 </script>
 
@@ -33,15 +39,19 @@ const headliner = computed(() => state.value?.headliner ?? null);
       <div class="who">
         <h1>{{ champ.championName }}</h1>
         <div class="sub">
-          <span v-if="state?.augRound" class="round">Choix {{ state.augRound }} · {{ ROUND_LABEL[state.augRound - 1] }}</span>
+          <span v-if="state?.augRound" class="round">{{ state.headliner?.key === 'superfans' && (state.liveLevel ?? 0) >= 21 ? 'Augment en plus · niveau 21' : `Choix ${state.augRound} · ${ROUND_LABEL[state.augRound - 1]}` }}</span>
           <span v-if="panel" class="faint">Winrate Mayhem {{ pct(panel.championWinrate) }}</span>
         </div>
       </div>
-      <nav v-if="narrow && panel" class="tabs" aria-label="Informations en partie">
-        <button :aria-pressed="view === 'augs'" :class="{ on: view === 'augs' }" @click="view = 'augs'">Augments</button>
+      <GoldGap class="gap-chip" @toggle="showGap = !showGap" :open="showGap" />
+      <nav v-if="narrow && (panel || spells)" class="tabs" aria-label="Informations en partie">
+        <button v-if="panel" :aria-pressed="view === 'augs'" :class="{ on: view === 'augs' }" @click="view = 'augs'">Augments</button>
         <button :aria-pressed="view === 'buy'" :class="{ on: view === 'buy' }" @click="view = 'buy'">Achat</button>
+        <button v-if="spells" :aria-pressed="view === 'spells'" :class="{ on: view === 'spells' }" @click="view = 'spells'">Sorts</button>
       </nav>
     </header>
+
+    <GoldGapTable v-if="showGap" />
 
     <section v-if="headliner" class="headliner" aria-label="Headliner de la partie">
       <div class="hl-name"><span class="faint small">Headliner</span> <strong>{{ headliner.name }}</strong> <span class="faint small">· {{ headliner.source === 'écran' ? 'lu à l’écran' : 'd’après tes cartes' }}</span></div>
@@ -50,7 +60,10 @@ const headliner = computed(() => state.value?.headliner ?? null);
 
     <div class="cols" :class="{ single: !panel }">
       <AugmentChooser v-if="panel && (!narrow || view === 'augs')" :panel="panel" class="left" />
-      <div v-if="!narrow || view === 'buy' || !panel" class="right">
+      <EnemySpells v-if="narrow && view === 'spells'" />
+      <div v-if="!narrow || view === 'buy' || (!panel && view !== 'spells')" class="right">
+        <EnemySpells v-if="!narrow" />
+        <SkillNext />
         <BuyPanel :emphasize="!panel || narrow" />
         <div v-if="build" class="more">
           <button class="btn" :aria-expanded="showBuild" @click="showBuild = !showBuild">{{ showBuild ? 'Masquer le build complet' : 'Voir le build complet' }}</button>
@@ -75,6 +88,8 @@ const headliner = computed(() => state.value?.headliner ?? null);
 .who h1 { font-size: 22px; line-height: 1.1; }
 .sub { display: flex; gap: 10px; font-size: 12px; margin-top: 2px; }
 .round { color: var(--blue); font-weight: 650; }
+.gap-chip { margin-left: auto; }
+.gap-chip + .tabs { margin-left: 10px; }
 .tabs { margin-left: auto; display: flex; border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .tabs button { min-height: 36px; border: 0; background: transparent; color: var(--muted); padding: 0 14px; font: inherit; font-weight: 650; cursor: pointer; }
 .tabs button + button { border-left: 1px solid var(--border); }
@@ -88,7 +103,7 @@ const headliner = computed(() => state.value?.headliner ?? null);
   .cols { grid-template-columns: 1fr; padding: 12px; }
   .head { padding: 12px; flex-wrap: wrap; }
   .sub { flex-wrap: wrap; gap: 2px 10px; }
-  .tabs { width: 100%; margin-left: 0; }
+  .tabs, .gap-chip + .tabs { width: 100%; margin-left: 0; }
   .tabs button { flex: 1; padding: 9px; }
 }
 </style>

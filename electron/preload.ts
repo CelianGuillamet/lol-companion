@@ -9,6 +9,8 @@ const api: Api = {
     return () => ipcRenderer.removeListener('state', listener);
   },
   pickChampion: (id: number) => ipcRenderer.invoke('pickChampion', id),
+  hoverBan: (id: number) => ipcRenderer.invoke('hoverBan', id),
+  markEnemySpell: (id, slot, action, delta) => ipcRenderer.invoke('markEnemySpell', id, slot, action, delta),
   applyLoadout: () => ipcRenderer.invoke('applyLoadout'),
   setSettings: (patch: Partial<Settings>) => ipcRenderer.invoke('setSettings', patch),
   refreshData: () => ipcRenderer.invoke('refreshData'),
@@ -25,7 +27,9 @@ const api: Api = {
   currentLane: () => ipcRenderer.invoke('currentLane'),
   championLanes: (id: number) => ipcRenderer.invoke('championLanes', id),
   listChampions: () => ipcRenderer.invoke('listChampions'),
+  poolReport: () => ipcRenderer.invoke('poolReport'),
   balanceChanges: () => ipcRenderer.invoke('balanceChanges'),
+  relaunch: () => ipcRenderer.invoke('relaunch'),
   cardReader: (action?: boolean | 'request' | 'settings') => ipcRenderer.invoke('cardReader', action ?? false),
 };
 

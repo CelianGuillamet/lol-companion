@@ -7,6 +7,7 @@ import { recap } from './insights';
 import PageHeader from './ui/PageHeader.vue';
 import Notice from './ui/Notice.vue';
 import ReviewPanel from './ui/ReviewPanel.vue';
+import BuyReviewPanel from './ui/BuyReviewPanel.vue';
 import type { HistoryEntry } from '../core/types';
 
 const games = ref<HistoryEntry[]>([]);
@@ -120,6 +121,7 @@ const winsOf = (x: { n: number; wr: number }) => Math.round(x.wr * x.n);
             <li v-for="l in last.lines" :key="l.text" class="sm" :class="l.good ? 'good' : 'bad'"><span aria-hidden="true">{{ l.good ? '▲' : '▼' }}</span> {{ l.text }}</li>
           </ul>
           <ReviewPanel v-if="last.game.review" :review="last.game.review" />
+          <BuyReviewPanel v-if="last.game.buys?.analysed" :review="last.game.buys" />
           <button class="btn ghost self-start" @click="go('games')">Voir l’historique</button>
         </section>
       </div>

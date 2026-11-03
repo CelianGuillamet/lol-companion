@@ -1,6 +1,6 @@
 // Règles d'affichage partagées par tous les écrans : couleur d'un résultat perso et fiabilité d'un winrate.
 import { describe, expect, it } from 'vitest';
-import { confidenceOf, tone } from '../src/renderer/store';
+import { confidenceOf, statsBehind, tone } from '../src/renderer/store';
 
 describe('tone (résultat perso)', () => {
   it('reste neutre tant que l’écart à 50 % ne tient pas sur l’échantillon', () => {
@@ -24,5 +24,15 @@ describe('confidenceOf (fiabilité d’un winrate)', () => {
   });
   it('explique la marge en points', () => {
     expect(confidenceOf(0.5, 1000).title).toMatch(/± 3,1 points \(95 %\) sur 1\s000 parties/);
+  });
+});
+
+describe('statsBehind (stats en retard sur le client)', () => {
+  it('signale seulement un vrai écart de patch', () => {
+    expect(statsBehind({ patch: '16.21', clientPatch: '16.22' })).toBe(true);
+    expect(statsBehind({ patch: '16.21', clientPatch: '16.21' })).toBe(false);
+    expect(statsBehind({ patch: '16.21' })).toBe(false);
+    expect(statsBehind({ patch: null, clientPatch: '16.22' })).toBe(false);
+    expect(statsBehind(null)).toBe(false);
   });
 });

@@ -1,0 +1,16 @@
+{
+  "_note": "Extrait de champion/Ahri.json Data Dragon 16.21.1 (relevé le 3 nov. 2026), champs réduits.",
+  "type": "champion",
+  "version": "16.21.1",
+  "data": {
+    "Ahri": {
+      "id": "Ahri",
+      "spells": [
+        { "id": "AhriQ", "name": "Orb of Deception", "maxrank": 5, "cooldown": [7, 7, 7, 7, 7], "image": { "full": "AhriQ.png" } },
+        { "id": "AhriW", "name": "Fox-Fire", "maxrank": 5, "cooldown": [9, 8, 7, 6, 5], "image": { "full": "AhriW.png" } },
+        { "id": "AhriE", "name": "Charm", "maxrank": 5, "cooldown": [12, 12, 12, 12, 12], "image": { "full": "AhriE.png" } },
+        { "id": "AhriR", "name": "Spirit Rush", "maxrank": 3, "cooldown": [140, 120, 100], "image": { "full": "AhriR.png" } }
+      ]
+    }
+  }
+}

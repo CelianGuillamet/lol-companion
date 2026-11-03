@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { matchCards, dropCovered, type CardRead, type OcrLine } from '../src/core/cardmatch';
 import type { Engine } from '../src/core/engine';
-import { headlinerFromText, headlinerNearMisses, type HeadlinerInfo } from '../src/core/headliner';
+import { extraDrawAt, headlinerFromText, headlinerNearMisses, type HeadlinerInfo } from '../src/core/headliner';
 import { windowBounds, GAME_BUNDLE } from './displays';
 
 const VISION_JXA = `
@@ -86,6 +86,8 @@ export class CardReader {
   private busy = false;
   private activeUntil = 0;
   private lastRound: number | null | undefined = undefined;
+  private lastLevel: number | null = null;
+  private lastSlowScan = 0;
   private inGame = false;
   private empty = 0;
   private warned = false;
@@ -122,6 +124,7 @@ export class CardReader {
     if (!pool || process.platform !== 'darwin') {
       this.inGame = false;
       this.lastRound = undefined;
+      this.lastLevel = null;
       this.bannerReported = false;
       this.engine.setOffered(null);
       return;
@@ -144,7 +147,13 @@ export class CardReader {
       if (this.lastRound !== undefined) this.activeUntil = now + 180_000; // niveau 7 / 11 / 15
       this.lastRound = s.augRound;
     }
-    if (this.busy || (now > this.activeUntil && !s.offered)) return;
+    // Tirages hors paliers : niveau 21 (Superfans), niveau 18 (Pentakill)
+    if (extraDrawAt(this.lastLevel, s.liveLevel, s.headliner?.key)) this.activeUntil = now + 180_000;
+    this.lastLevel = s.liveLevel ?? this.lastLevel;
+    // K/DA : l'augment en plus arrive à n'importe quel moment, seul un coup d'œil régulier le voit
+    const slow = s.headliner?.key === 'kda' && now - this.lastSlowScan >= KDA_SCAN_MS;
+    if (this.busy || (now > this.activeUntil && !s.offered && !slow)) return;
+    if (slow) this.lastSlowScan = now;
     if (permission() !== 'granted') {
       if (!this.warned) this.engine.note('warning', 'Lecture des cartes : autorisation « Enregistrement de l’écran » manquante. Réglages → « Tester la lecture » pour la demander.');
       this.warned = true;
@@ -198,6 +207,9 @@ export class CardReader {
 }
 
 let lastArea: Rectangle | null = null;
+
+/** K/DA : une lecture toutes les 5 s hors des paliers (une par seconde pendant un palier). */
+const KDA_SCAN_MS = 5_000;
 
 /** Durée de la bannière du headliner au début de la partie (au-delà, « Bees » seul n'est plus accepté). */
 const BANNER_MS = 90_000;

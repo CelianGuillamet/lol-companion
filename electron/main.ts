@@ -9,13 +9,14 @@ import { Balance } from '../src/core/balance';
 import { PhoneServer } from './phone';
 import { applyAutoLaunch } from './autolaunch';
 import { recap } from '../src/renderer/insights';
+import { canRelaunch, parseChangelog, shouldNudge, updateFrom, type AppVersionEntry } from '../src/core/appversion';
 import { randomBytes } from 'node:crypto';
 import { Arammeta } from '../src/core/arammeta';
 import { matchCards } from '../src/core/cardmatch';
 import { headlinerFromText } from '../src/core/headliner';
 import { CardReader, permission as screenPermission } from './cardreader';
 import { displayOfApp, displayLabel, windowBounds, GAME_BUNDLE, CLIENT_BUNDLE } from './displays';
-import type { AppState, Settings } from '../src/core/types';
+import type { AppState, EnemySpellAction, EnemySpellSlot, Settings } from '../src/core/types';
 
 const RENDERER = join(__dirname, '..', 'renderer');
 const SMOKE = process.env.ARAM_SMOKE === '1'; // test automatique : capture d'écran puis fermeture
@@ -289,6 +290,7 @@ async function syncPhone(): Promise<void> {
     state: () => engine.state,
     history: () => engine.getHistory(),
     detail: (id) => engine.gameDetail(id),
+    markSpell: (id, slot, action, delta) => engine.markEnemySpell(id, slot, action, delta),
   });
   try {
     await phone.start(s.phonePort);
@@ -308,6 +310,37 @@ function broadcast(s: AppState): void {
   notifyAugmentRound(s);
   notifyGameRecorded(s);
   notifyOffered(s);
+  notifyUpdate(s);
+}
+
+// ---------------------------------------------------------------- version sur le disque
+
+const UPDATE_CHECK_MS = 5 * 60_000;
+let runningVersion: string | null = null;
+let lastNudge = 0;
+
+function readVersions(): AppVersionEntry[] {
+  try {
+    return parseChangelog(readFileSync(join(app.getAppPath(), 'CHANGELOG.md'), 'utf8'));
+  } catch {
+    return []; // fichier absent ou en cours d'extraction : on réessaie au prochain contrôle
+  }
+}
+
+/** La version en cours est le CHANGELOG lu au lancement ; une session planifiée pose la suivante sans relancer. */
+function startUpdateCheck(): void {
+  const versions = readVersions();
+  runningVersion = process.env.ARAM_SMOKE_RUNNING ?? versions[0]?.version ?? null;
+  if (runningVersion) engine.setAppVersion(runningVersion);
+  const check = (entries = readVersions()) => engine.setUpdate(updateFrom(runningVersion, entries));
+  check(versions);
+  setInterval(check, UPDATE_CHECK_MS).unref();
+}
+
+function notifyUpdate(s: AppState): void {
+  if (!shouldNudge(s.phase, s.update, lastNudge, Date.now())) return;
+  lastNudge = Date.now();
+  notify(`Mise à jour prête : ${s.update!.latest}`, 'Relance l’app avant ta partie, bouton en bas à gauche.', true);
 }
 
 // ---------------------------------------------------------------- notifications au champ select
@@ -412,6 +445,8 @@ function notifyOffered(s: AppState): void {
 function registerIpc(): void {
   ipcMain.handle('getState', () => engine.state);
   ipcMain.handle('pickChampion', (_e, id: number) => engine.pickChampion(Number(id)));
+  ipcMain.handle('hoverBan', (_e, id: number) => engine.hoverBan(Number(id)));
+  ipcMain.handle('markEnemySpell', (_e, id: number, slot: EnemySpellSlot, action: EnemySpellAction, delta?: number) => engine.markEnemySpell(Number(id), slot, action, Number(delta) || 0));
   ipcMain.handle('applyLoadout', () => engine.applyLoadout(true));
   ipcMain.handle('setSettings', async (_e, patch: Partial<Settings>) => {
     const r = await engine.setSettings(patch);
@@ -443,7 +478,14 @@ function registerIpc(): void {
   ipcMain.handle('currentLane', () => engine.currentLane());
   ipcMain.handle('championLanes', (_e, id: number) => engine.championLanes(Number(id)));
   ipcMain.handle('listChampions', () => engine.listChampions());
+  ipcMain.handle('poolReport', () => engine.poolReport());
   ipcMain.handle('balanceChanges', () => engine.balanceChanges());
+  ipcMain.handle('relaunch', () => {
+    if (!canRelaunch(engine.state.phase)) return { ok: false, message: 'Partie en cours : relance après la partie.' };
+    app.relaunch();
+    app.quit();
+    return { ok: true, message: '' };
+  });
   ipcMain.handle('cardReader', async (_e, test: boolean | 'request' | 'settings') => {
     if (test === 'settings') {
       await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
@@ -539,6 +581,10 @@ async function smokeTest(): Promise<void> {
     if (h) engine.setHeadliner(h.info, 'écran', h.text);
     await new Promise((r) => setTimeout(r, 600));
   }
+  if (process.env.ARAM_SMOKE_SKILLS && engine.state.build) {
+    engine.state.build.skills = { order: process.env.ARAM_SMOKE_SKILLS.split(''), max: ['Q', 'W', 'E'], source: 'OP.GG, ARAM' };
+    await new Promise((r) => setTimeout(r, 2500));
+  }
   const tab = process.env.ARAM_SMOKE_TAB;
   if (tab) {
     await mainWin!.webContents.executeJavaScript(`window.__setTab && window.__setTab(${JSON.stringify(tab)})`);
@@ -603,6 +649,7 @@ app.whenReady().then(async () => {
   if (!SMOKE) cardReader.start();
   if (!engine.state.settings.phoneToken) await engine.setSettings({ phoneToken: randomBytes(12).toString('hex') });
   await syncPhone();
+  startUpdateCheck();
 
   globalShortcut.register('CommandOrControl+Shift+A', () => {
     overlayHidden = !overlayHidden;

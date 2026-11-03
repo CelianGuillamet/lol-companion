@@ -6,6 +6,7 @@
 import { computed, ref } from 'vue';
 import { state, championIcon, hideBroken } from '../store';
 import { purchaseOf } from '../purchase';
+import ElixirLine from '../ui/ElixirLine.vue';
 
 withDefaults(defineProps<{ emphasize?: boolean }>(), { emphasize: true });
 
@@ -42,9 +43,15 @@ const teamOpen = ref(false);
       <article v-if="purchase && next" class="next" :class="{ reco: emphasize && purchase.canBuy }">
         <img @error="hideBroken" :src="purchase.item.icon ?? ''" width="48" height="48" class="ic big" alt="" />
         <div class="what">
-          <div class="action-label">{{ purchase.canBuy ? 'Acheter maintenant' : purchase.kind === 'saving' ? 'À économiser' : 'Prix indisponible' }}</div>
+          <div class="action-label">{{ purchase.sell ? 'Vendre, puis acheter' : purchase.canBuy ? 'Acheter maintenant' : purchase.kind === 'full' ? 'Inventaire plein' : purchase.kind === 'saving' ? 'À économiser' : 'Prix indisponible' }}</div>
           <div class="name">{{ purchase.item.name }}</div>
           <div class="why">{{ next.why }}</div>
+          <div v-if="purchase.sell" class="goal sell">
+            <img v-for="s in purchase.sells" :key="s.id" @error="hideBroken" :src="s.icon ?? ''" width="20" height="20" class="ic" alt="" />
+            <span v-if="purchase.gain">Vends {{ purchase.sellNames }} : +{{ fmt(purchase.gain) }} or, l'achat passe.</span>
+            <span v-else>Vends d'abord {{ purchase.sell.name }} : ton sac est plein, la boutique refuserait l'achat.</span>
+          </div>
+          <div v-if="purchase.kind === 'full'" class="goal">Plus de composant à vendre. Cet item demande d'en remplacer un fini : à toi de juger.</div>
           <div v-if="purchase.kind === 'component'" class="goal">Composant pour {{ purchase.target.name }}</div>
           <div v-if="purchase.kind === 'unknown'" class="goal">Vérifie le coût dans la boutique.</div>
         </div>
@@ -58,7 +65,8 @@ const teamOpen = ref(false);
       <p v-if="purchase?.kind === 'component' && purchase.missing != null" class="goal-note">
         Objectif : {{ purchase.target.name }} · encore {{ fmt(purchase.missing) }} or à économiser pour le terminer.
       </p>
-      <p v-else-if="!next" class="faint small">Aucun achat conseillé pour cet inventaire. Le build complet reste consultable ci-dessous.</p>
+      <ElixirLine v-if="nb.elixir" :elixir="nb.elixir" />
+      <p v-if="!next && !nb.elixir" class="faint small">Aucun achat conseillé pour cet inventaire. Le build complet reste consultable ci-dessous.</p>
 
       <div class="path" aria-label="Ton build : achetés puis à venir">
         <div v-for="(s, i) in plan" :key="i" class="slot" :class="{ owned: s?.owned, now: i === nextIndex, empty: !s }" :title="s ? `${s.item.name}${s.owned ? ' (acheté)' : s.why ? ` — ${s.why}` : ''}` : ''">
@@ -153,6 +161,7 @@ h3 { margin: 8px 0 0; }
 .action-label { font-size: 11px; color: var(--gold); margin-bottom: 4px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
 .next .why { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .goal { font-size: 12px; color: var(--text); margin-top: 5px; }
+.goal.sell { display: flex; gap: 6px; align-items: center; color: var(--warn); }
 .goal-note { margin: 0; color: var(--muted); font-size: 12px; }
 .price { text-align: right; font-size: 14px; font-weight: 700; }
 .price s { font-weight: 500; font-size: 11.5px; }
