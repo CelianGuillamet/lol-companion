@@ -1,5 +1,4 @@
 import { EnemyPositionTracker } from './enemy-position';
-import { EnemySpellTracker } from './enemy-spell';
 import { FogOfWarIntelligenceEngine } from './fog-of-war';
 import type { AcquisitionResult, AcquiredPlayer, IntelligenceCapability, IntelligenceState } from './types';
 
@@ -14,8 +13,6 @@ function capabilities(roster: boolean, events: boolean): IntelligenceCapability[
     { id: 'events', label: 'Événements rapportés', status: events ? 'partial' : 'unavailable', reason: events ? 'Événements Live Client uniquement ; exhaustivité et visibilité non établies.' : 'Flux d’événements non acquis.' },
     { id: 'positions', label: 'Positions X/Y', status: 'unavailable', reason: 'Aucune source de coordonnées ennemies acquise.' },
     { id: 'visibility', label: 'Brouillard de guerre', status: 'unavailable', reason: 'La source ne rapporte pas la visibilité des champions.' },
-    { id: 'casts', label: 'Lancements ennemis', status: 'unavailable', reason: 'Aucun flux vérifié de lancements de sorts ennemis.' },
-    { id: 'cooldowns', label: 'Délais de récupération', status: 'unavailable', reason: 'Lancements, rangs, accélérations et resets non acquis.' },
   ];
 }
 
@@ -31,7 +28,6 @@ export class RealTimeIntelligenceStore {
   private lastGameTime: number | null = null;
   private rosterKey: string | null = null;
   private readonly positions = new EnemyPositionTracker();
-  private readonly spells = new EnemySpellTracker();
   private readonly fog = new FogOfWarIntelligenceEngine();
 
   get snapshot(): IntelligenceState { return this.current; }
@@ -77,7 +73,7 @@ export class RealTimeIntelligenceStore {
         championId: context.championId?.(p.championAlias) ?? null, level: p.level, isDead: p.isDead,
         freshness: 'current', observedGameTime: incoming.gameTime,
         position: this.positions.snapshot(), visibility: 'unknown', movement: 'unknown',
-        spells: this.spells.snapshot(p),
+        spells: p.summonerSpells.flatMap((name, i) => (name ? [{ slot: i === 0 ? ('D' as const) : ('F' as const), name }] : [])),
         lastEvent: [...events].reverse().find((event) => event.enemyIds.includes(p.id)) ?? null,
       })),
       events, capabilities: capabilities(!!me?.team && enemies.length > 0, incoming.eventsAvailable),

@@ -49,7 +49,7 @@ describe('collecte ponctuelle réutilisable par Electron', () => {
     expect(report.live.acquisitionStatus).toBe('connected');
     expect(report.live.fields).toContain('allPlayers[].summonerSpells');
     expect(report.capabilities.reportedEvents).toBe('field-present');
-    expect(report.capabilities.enemySpellCasts).toBe('unvalidated');
+    expect('enemySpellCasts' in report.capabilities).toBe(false);
     expect(report.capabilities.enemyCoordinates).toBe('unvalidated');
     expect(report.lcu.status).toBe('received');
     expect(report.liveSchema.swaggerFallback).toBeUndefined();

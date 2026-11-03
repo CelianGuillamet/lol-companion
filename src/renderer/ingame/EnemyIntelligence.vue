@@ -59,11 +59,10 @@ const observedAt = (seconds: number | null) => {
           <div><dt>Visibilité</dt><dd>Inconnue</dd></div>
           <div><dt>Déplacement</dt><dd>Inconnu</dd></div>
         </dl>
-        <ul class="enemy-spells" :aria-label="`Sorts de ${enemy.championName}`">
-          <li v-for="spell in enemy.spells" :key="spell.slot" :title="spell.reason">
+        <ul v-if="enemy.spells.length" class="enemy-spells" :aria-label="`Sorts de ${enemy.championName}`">
+          <li v-for="spell in enemy.spells" :key="spell.slot">
             <span class="spell-slot">{{ spell.slot }}</span>
-            <span v-if="spell.name !== spell.slot" class="spell-name">{{ spell.name }}</span>
-            <span class="spell-status">État inconnu</span>
+            <span class="spell-name">{{ spell.name }}</span>
           </li>
         </ul>
         <p class="last-event">
@@ -126,7 +125,6 @@ const observedAt = (seconds: number | null) => {
 .enemy-spells li { min-width: 0; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; padding: 5px 6px; background: var(--surface-2); border: 1px solid var(--border); }
 .spell-slot { font-weight: 650; font-size: var(--fs-xs); }
 .spell-name { font-size: var(--fs-xs); overflow-wrap: anywhere; min-width: 0; }
-.spell-status { flex-basis: 100%; color: var(--muted); font-size: var(--fs-xs); }
 .last-event { margin: 8px 0 0; color: var(--muted); font-size: var(--fs-xs); }
 .event-details { font-size: var(--fs-xs); color: var(--muted); border-top: 1px solid var(--border); padding: 10px 0; line-height: 1.5; }
 .event-details summary { cursor: pointer; min-height: 28px; color: var(--text); }

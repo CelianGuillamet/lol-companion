@@ -39,8 +39,6 @@ function httpApi(): Api {
     relaunch: readOnly,
     pickChampion: readOnly,
     hoverBan: readOnly,
-    markEnemySpell: async (id, slot, action, delta) =>
-      (await fetch(`/api/spell?t=${encodeURIComponent(t)}&c=${id}&s=${slot}&a=${action}&d=${delta ?? 0}`, { method: 'POST' })).json(),
     applyLoadout: readOnly,
     setSettings: async () => (await get<AppState>('/api/state')).settings,
     refreshData: async () => undefined,

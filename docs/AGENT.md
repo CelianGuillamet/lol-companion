@@ -20,7 +20,9 @@ Code :
 ## Règles non négociables
 
 1. **Politique Riot** : API officielles seulement (LCU locale, Live Client Data API port 2999, Data Dragon,
-   CommunityDragon). Pas de lecture mémoire, pas d'injection, pas de timers automatiques (relics, sorts ennemis),
+   CommunityDragon). Pas de lecture mémoire, pas d'injection, **aucun timer ni suivi des cooldowns ennemis** (sorts d'invocateur, ultimes), ni automatique ni manuel :
+   la doc League de Riot l'interdit (« automatically or manually allowing tracking enemy ultimate cooldowns »), retirés en
+   v1.93 ; pas de timers de relics ou de camps,
    pas d'automatisation de gameplay. La lecture de l'écran (OCR des 3 cartes d'augments) est autorisée par Celian
    depuis le 28 oct. 2026 (v1.39), en lecture seule, sans rien garder ni envoyer. Toute décision produit suit
    docs/ux-discovery/2026-10-28-aram-companion-discovery.md (job prioritaire J1, principes de design).
@@ -263,11 +265,9 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - Zéro effet sur le classement (`rowValue`, `bestOffered`). `protectCombos` retire seulement les cibles de relance. `assumedBefore` exclut le choix en cours : un tirage relu ne compte pas comme pris.
 - arammayhem.com : WebFetch passe (page tronquée à 65-70 Ko, le CSV tient en entier), `curl` refusé par le proxy du conteneur et du shell du Mac. Capture : écrire un CSV de plus de 100 lignes dans `$ARAM_DATA_DIR/cache/arammayhem-combos.csv` et `ARAM_SMOKE_CARDS="Goliath|Firebrand|Outlaw's Grit"` avec `dist/demo.mjs ingame` (Leona).
 
-## Timers en ARAM et Mayhem (v1.84)
-- `ARAM_SUMMONER_HASTE` (cooldowns.ts) s'ajoute à la haste des objets pour les sorts d'invocateur, `balanceHaste` d'`EnemyInput` à celle de l'ultime. `withHaste` borne le total à 0. Les 2 entrent dans la haste du timer : `rescale` reste juste quand un objet change.
-- Mayhem : `hidden` vaut 0, `runeTrees: null` y veut dire « pas de runes ». ARAM : `null` reste « rune inconnue ».
-- Pour lire les règles d'un mode : page ARAM du wiki, puis ARAM:_Mayhem, qui renvoie à la première. `https://guides-factory.com/guides/lol-aram-mayhem-guide` passe en WebFetch et donne des chiffres, à recouper. nerfplz.com/lol-pbe-changes/ reste figée sur le 26.17.
-- `liveclient-choix*` : `gameTime` absent, `activeplayer.championStats.abilityHaste` présent. Au choix 1, niveau 1 et stats à 0. Fichier temporel : l'epoch ms du nom.
+## Timers de sorts ennemis : retirés (v1.93)
+- `enemyspells.ts`, `intelligence/enemy-spell.ts`, `intelligence/advanced-cooldown.ts`, `EnemySpells.vue`, `EnemyPanelDialog.vue`, `EnemyWindow.vue`, ⌘⇧E, `POST /api/spell` et `markEnemySpell` n'existent plus. Ne pas les recréer, même « à la main » : interdit par Riot (règle 1). L'équipe ennemie garde ses sorts d'invocateur **équipés** (`intelligence.enemies[].spells`, ce que montre le tableau des scores), sans disponibilité.
+- `cooldowns.ts` reste pour Data Dragon (prix de revente, items par carte) ; ses fonctions de haste d'ultime et d'invocateur ne servent plus.
 
 ## Élixirs (v1.85)
 - `src/core/elixir.ts` est pur et testé. `Engine.elixirPanel` tourne à chaque tick dans `nextBuyPanel`. `idle` = pas de ligne de conseil, ou `room.sell === null`. Rôle : `buildRole` du champion, remplacé par `compFromItems(...).built` si le build est net (`state.counters` peut être nul).

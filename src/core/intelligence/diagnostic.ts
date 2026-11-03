@@ -36,8 +36,6 @@ export interface IntelligenceDiagnosticReport {
     reportedEvents: 'field-present' | 'unavailable';
     enemyCoordinates: 'unvalidated';
     enemyVisibility: 'unvalidated';
-    enemySpellCasts: 'unvalidated';
-    enemyCooldowns: 'unvalidated';
   };
 }
 
@@ -193,8 +191,6 @@ export async function collectIntelligenceDiagnostic(
       reportedEvents: live.snapshot?.eventsAvailable ? 'field-present' : 'unavailable',
       enemyCoordinates: 'unvalidated',
       enemyVisibility: 'unvalidated',
-      enemySpellCasts: 'unvalidated',
-      enemyCooldowns: 'unvalidated',
     },
   };
 }

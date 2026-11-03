@@ -50,7 +50,7 @@ app.on('browser-window-created', (_event, win) => {
       const raw = readFileSync(reportPath, 'utf8');
       const output = JSON.parse(raw);
       if (output.version !== 1 || !output.createdAt || !output.report?.live) throw new Error('Structure du rapport invalide');
-      if (output.report.capabilities.enemyCoordinates !== 'unvalidated' || output.report.capabilities.enemySpellCasts !== 'unvalidated') throw new Error('Validation cachée inventée');
+      if (output.report.capabilities.enemyCoordinates !== 'unvalidated') throw new Error('Validation cachée inventée');
       if (/Celian#|Enemy[0-9]#|Authorization|Basic |remoting-auth-token/.test(raw)) throw new Error('Valeur personnelle ou secret dans le rapport');
       if (dialogs !== 2) throw new Error('Annulation et enregistrement non exercés');
       console.log('Diagnostic IPC/export assertions passed');

@@ -62,13 +62,10 @@ export interface UnknownPosition {
   reason: string;
 }
 
+/** Sort d'invocateur équipé, tel que le montre le tableau des scores. Aucun cooldown ennemi n'est suivi (règles Riot). */
 export interface EnemySpell {
-  slot: 'Q' | 'W' | 'E' | 'R' | 'D' | 'F';
+  slot: 'D' | 'F';
   name: string;
-  quality: 'unknown';
-  rank: null;
-  remainingSeconds: null;
-  reason: string;
 }
 
 export interface EnemyIntelligence {
@@ -88,7 +85,7 @@ export interface EnemyIntelligence {
 }
 
 export interface IntelligenceCapability {
-  id: 'roster' | 'events' | 'positions' | 'visibility' | 'casts' | 'cooldowns';
+  id: 'roster' | 'events' | 'positions' | 'visibility';
   label: string;
   status: 'available' | 'partial' | 'unavailable';
   reason: string;

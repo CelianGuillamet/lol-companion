@@ -1,8 +1,7 @@
 // Panneau sur téléphone / tablette : petit serveur HTTP sur le réseau local qui sert l'interface « second écran »
 // en lecture seule. Utile avec un seul écran, quand le jeu en plein écran cache tout.
 // Sécurité : jeton aléatoire obligatoire pour l'API, fichiers servis uniquement depuis le dossier de l'interface.
-// Une seule action possible : signaler un sort ennemi (POST /api/spell), parce qu'en plein écran le téléphone est
-// le seul endroit où taper « Flash » sans quitter le jeu. Ni choix de champion, ni réglages.
+// Aucune action : ni choix de champion, ni réglages, ni timers de sorts ennemis (interdits par les règles Riot).
 
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -14,7 +13,6 @@ export interface PhoneDeps {
   state: () => unknown;
   history: () => unknown;
   detail: (gameId: number) => Promise<unknown>;
-  markSpell?: (championId: number, slot: 'R' | 'D' | 'F', action: 'cast' | 'clear' | 'shift', delta: number) => Promise<unknown>;
 }
 
 const TYPES: Record<string, string> = {
@@ -105,15 +103,6 @@ export class PhoneServer {
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify(data));
     };
-    if (req.method === 'POST' && url.pathname === '/api/spell') {
-      if (!this.authorized(req)) return json({ error: 'jeton invalide' }, 403);
-      const slot = url.searchParams.get('s');
-      const action = url.searchParams.get('a');
-      const id = Number(url.searchParams.get('c'));
-      if (!this.deps.markSpell || !id || (slot !== 'R' && slot !== 'D' && slot !== 'F') || (action !== 'cast' && action !== 'clear' && action !== 'shift'))
-        return json({ ok: false, message: 'requête invalide' }, 400);
-      return json(await this.deps.markSpell(id, slot, action, Number(url.searchParams.get('d')) || 0));
-    }
     if (req.method !== 'GET') return json({ error: 'lecture seule' }, 405);
 
     if (url.pathname.startsWith('/api/')) {

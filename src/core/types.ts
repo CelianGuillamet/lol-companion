@@ -415,48 +415,6 @@ export interface SkillNext {
   source: string | null;
 }
 
-/** Emplacement suivi : ultime, ou sort d'invocateur 1 / 2 (D / F par défaut). */
-export type EnemySpellSlot = 'R' | 'D' | 'F';
-
-/** Fiabilité d'un timer : calculé (données du patch + objets vus), approximatif (une part inconnue), inconnu (pas de donnée). */
-export type SpellReliability = 'calculé' | 'approx' | 'inconnu';
-
-export interface EnemySpellTimer {
-  slot: EnemySpellSlot;
-  name: string;
-  icon: string | null;
-  /** Cooldown complet avec la haste visible maintenant, en secondes ; null si inconnu ou pas encore débloqué. */
-  cooldown: number | null;
-  /** Temps de jeu (s) où le sort revient, si tu l'as signalé lancé ; null = disponible ou jamais signalé. */
-  readyAt: number | null;
-  /** Retour au plus tôt si une rune ou un augment invisible raccourcit le cooldown ; null si rien de caché. */
-  earliest: number | null;
-  reliability: SpellReliability;
-  /** Ce que le calcul compte, en clair (« 300 s, 10 haste des bottes »). */
-  detail: string;
-  /** Ultime pas encore débloqué au niveau actuel. */
-  locked?: boolean;
-}
-
-export interface EnemySpellRow {
-  championId: number;
-  championName: string;
-  level: number;
-  dead: boolean;
-  spells: EnemySpellTimer[];
-}
-
-/** Sorts ennemis signalés à la main : les timers démarrent quand TU les déclares, jamais tout seuls. */
-export interface EnemySpellPanel {
-  /** Horloge : temps de jeu = Date.now() / 1000 − clockOffset (recalé si le jeu est en pause). */
-  clockOffset: number;
-  enemies: EnemySpellRow[];
-  /** Raison si les cooldowns ne peuvent pas être calculés (Data Dragon injoignable…). */
-  warning: string | null;
-}
-
-export type EnemySpellAction = 'cast' | 'clear' | 'shift';
-
 export interface GoldGapPlayer {
   championId: number;
   championName: string;
@@ -512,7 +470,6 @@ export interface AppState {
   /** Le prochain sort à monter, en partie. */
   skillNext?: SkillNext | null;
   /** Timers des sorts ennemis signalés à la main, en partie. */
-  enemySpells?: EnemySpellPanel | null;
   /** Valeur des objets des deux équipes, en partie. */
   goldGap?: GoldGapPanel | null;
   /** Choix d'augment en cours d'après ton niveau en jeu (1 à 4), null hors partie. */
@@ -534,7 +491,6 @@ export interface Api {
   pickChampion(championId: number): Promise<{ ok: boolean; message: string }>;
   hoverBan(championId: number): Promise<{ ok: boolean; message: string }>;
   /** Signale un sort ennemi : lancé (`cast`), à annuler (`clear`), ou à décaler de `delta` secondes (`shift`, négatif = signalé en retard). */
-  markEnemySpell(championId: number, slot: EnemySpellSlot, action: EnemySpellAction, delta?: number): Promise<{ ok: boolean; message: string }>;
   applyLoadout(): Promise<{ ok: boolean; message: string }>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   refreshData(): Promise<void>;

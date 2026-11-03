@@ -137,13 +137,12 @@ describe.skipIf(!dir)('répétition générale sur les vraies données', () => {
         await engine.tick();
         frames++;
         const e = engine.state;
-        expect(e.enemySpells?.enemies.length, `sorts ${gameId}`).toBe(5);
+        expect('enemySpells' in e, `pas de timers de sorts ennemis ${gameId}`).toBe(false);
         if (cap.me.items.some((it: { consumable: boolean }) => !it.consumable)) {
           expect(e.goldGap, `écart ${gameId}`).toBeTruthy();
           if (e.goldGap!.unknown) withUnknown++;
         }
-        const slots = e.enemySpells!.enemies.flatMap((x) => x.spells).filter((sp) => sp.slot !== 'R');
-        report.push(`${gameId} choix${cap.round} next=${e.nextBuy?.rows[0]?.item?.name ?? '-'} gap=${e.goldGap?.gap ?? '-'} inconnus=${e.goldGap?.unknown ?? '-'} sorts=${[...new Set(slots.map((x) => `${x.name}:${x.cooldown ?? x.reliability}`))].join(',')}`);
+        report.push(`${gameId} choix${cap.round} next=${e.nextBuy?.rows[0]?.item?.name ?? '-'} gap=${e.goldGap?.gap ?? '-'} inconnus=${e.goldGap?.unknown ?? '-'}`);
       }
       played++;
       st.phase = 'None';

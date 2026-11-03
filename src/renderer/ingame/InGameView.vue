@@ -1,17 +1,15 @@
 <script setup lang="ts">
 // En partie : ce qu'il faut décider quand tu es mort, en un coup d'œil.
 // Large : augments à gauche, achat + contre-équipe à droite. Étroit (téléphone) : deux onglets.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { state, championIcon, pct, hideBroken, ROUND_LABEL } from '../store';
 import AugmentChooser from './AugmentChooser.vue';
 import BuyPanel from './BuyPanel.vue';
 import SkillNext from './SkillNext.vue';
-import EnemySpells from './EnemySpells.vue';
 import GoldGap from './GoldGap.vue';
 import GoldGapTable from './GoldGapTable.vue';
 import BuildView from '../views/BuildView.vue';
 import EnemyIntelligence from './EnemyIntelligence.vue';
-import EnemyPanelDialog from './EnemyPanelDialog.vue';
 
 const panel = computed(() => state.value?.augments ?? null);
 const build = computed(() => state.value?.build ?? null);
@@ -23,29 +21,15 @@ const narrow = ref(mq.matches);
 const onMq = () => (narrow.value = mq.matches);
 mq.addEventListener('change', onMq);
 onBeforeUnmount(() => mq.removeEventListener('change', onMq));
-const spells = computed(() => !!state.value?.enemySpells?.enemies.length);
-const enemyAvailable = computed(() => spells.value || !!intelligence.value);
-const view = ref<'augs' | 'buy' | 'spells' | 'enemy'>(panel.value ? 'augs' : champ.value ? 'buy' : spells.value ? 'spells' : 'enemy');
+const enemyAvailable = computed(() => !!intelligence.value);
+const view = ref<'augs' | 'buy' | 'enemy'>(panel.value ? 'augs' : champ.value ? 'buy' : 'enemy');
 const activeView = computed(() => {
-  if ((view.value === 'augs' && panel.value) || (view.value === 'buy' && champ.value) ||
-    (view.value === 'spells' && spells.value) || (view.value === 'enemy' && intelligence.value)) return view.value;
-  return panel.value ? 'augs' : champ.value ? 'buy' : spells.value ? 'spells' : 'enemy';
+  if ((view.value === 'augs' && panel.value) || (view.value === 'buy' && champ.value) || (view.value === 'enemy' && intelligence.value)) return view.value;
+  return panel.value ? 'augs' : champ.value ? 'buy' : 'enemy';
 });
 const showBuild = ref(false);
 const showGap = ref(false);
 const headliner = computed(() => state.value?.headliner ?? null);
-const enemyPanelOpen = ref(false);
-watch(enemyAvailable, (value) => { if (!value) enemyPanelOpen.value = false; });
-function onKey(event: KeyboardEvent) {
-  if (!enemyAvailable.value || enemyPanelOpen.value || !document.hasFocus() || event.defaultPrevented || event.repeat ||
-    event.key !== 'Tab' || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey || document.querySelector('dialog[open], [role="dialog"]')) return;
-  const target = event.target instanceof Element ? event.target : document.activeElement;
-  if (target?.closest('input, textarea, select, button, a, summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="textbox"], [tabindex]')) return;
-  event.preventDefault();
-  enemyPanelOpen.value = true;
-}
-onMounted(() => window.addEventListener('keydown', onKey));
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
@@ -65,11 +49,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         </div>
       </div>
       <GoldGap class="gap-chip" @toggle="showGap = !showGap" :open="showGap" />
-      <button v-if="enemyAvailable" class="btn enemy-access" title="Tab dans cette fenêtre · En jeu : ⌘⇧E sur Mac, Ctrl⇧E sur Windows/Linux" aria-haspopup="dialog" :aria-expanded="enemyPanelOpen" @click="enemyPanelOpen = true">Sorts ennemis <kbd>Tab</kbd></button>
       <nav v-if="narrow && (panel || enemyAvailable)" class="tabs" aria-label="Informations en partie">
         <button v-if="panel" :aria-pressed="activeView === 'augs'" :class="{ on: activeView === 'augs' }" @click="view = 'augs'">Augments</button>
         <button v-if="champ" :aria-pressed="activeView === 'buy'" :class="{ on: activeView === 'buy' }" @click="view = 'buy'">Achat</button>
-        <button v-if="spells" :aria-pressed="activeView === 'spells'" :class="{ on: activeView === 'spells' }" @click="view = 'spells'">Sorts</button>
         <button v-if="intelligence" :aria-pressed="activeView === 'enemy'" :class="{ on: activeView === 'enemy' }" @click="view = 'enemy'">Ennemis</button>
       </nav>
     </header>
@@ -83,10 +65,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
     <div class="cols" :class="{ single: !panel }">
       <AugmentChooser v-if="panel && (!narrow || activeView === 'augs')" :panel="panel" class="left" />
-      <EnemySpells v-if="narrow && activeView === 'spells'" />
       <EnemyIntelligence v-if="narrow && activeView === 'enemy'" />
       <div v-if="!narrow || activeView === 'buy'" class="right">
-        <EnemySpells v-if="!narrow" />
         <SkillNext />
         <BuyPanel v-if="champ" :emphasize="!panel || narrow" />
         <EnemyIntelligence v-if="!narrow && intelligence" />
@@ -96,7 +76,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         </div>
       </div>
     </div>
-    <EnemyPanelDialog :open="enemyPanelOpen" @close="enemyPanelOpen = false" />
   </div>
 </template>
 
@@ -112,8 +91,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .ingame { height: 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .head { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: 12px; align-items: center; padding: 14px 18px 12px; border-bottom: 1px solid var(--border); background: var(--surface-1); }
 .who h1 { font-size: 22px; line-height: 1.1; }
-.enemy-access { margin-left: 0; flex: none; -webkit-app-region: no-drag; }
-.enemy-access kbd { margin-left: 5px; }
 .sub { display: flex; gap: 10px; font-size: 12px; margin-top: 2px; }
 .round { color: var(--blue); font-weight: 650; }
 .gap-chip { margin-left: auto; }

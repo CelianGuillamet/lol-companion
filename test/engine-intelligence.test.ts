@@ -41,7 +41,8 @@ describe('observations ennemies : transport HTTPS → moteur → état IPC', () 
     expect(intelligence.gameTime).toBe(120);
     expect(intelligence.enemies).toHaveLength(5);
     expect(intelligence.enemies[0]).toMatchObject({ championId: 103, visibility: 'unknown', position: { x: null, y: null, quality: 'unknown' } });
-    expect(intelligence.enemies[0].spells[4]).toMatchObject({ name: 'Flash', remainingSeconds: null, quality: 'unknown' });
+    expect(intelligence.enemies[0].spells[0]).toEqual({ slot: 'D', name: 'Flash' }); // équipé, aucun cooldown suivi
+    expect('enemySpells' in engine.state).toBe(false);
     expect(intelligence.events[1]).toMatchObject({ gameTime: 100.125, enemyIds: ['Enemy0#TEST'], visibility: 'unknown' });
     expect(mock.calls.filter((c) => c.path === '/liveclientdata/allgamedata')).toHaveLength(1);
     await engine.tick();

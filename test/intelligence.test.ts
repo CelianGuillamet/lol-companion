@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameDataAcquisitionEngine, normalizeLiveSnapshot } from '../src/core/intelligence/acquisition';
 import { RealTimeIntelligenceStore } from '../src/core/intelligence/store';
-import { EnemySpellTracker } from '../src/core/intelligence/enemy-spell';
-import { AdvancedCooldownEngine } from '../src/core/intelligence/advanced-cooldown';
 
 /** Réponse synthétique documentée : teste le traitement, pas une acquisition en vraie partie. */
 function payload(gameTime = 120) {
@@ -29,12 +27,12 @@ describe('acquisition Live Client et état ennemi', () => {
     expect(state.gameTime).toBe(120);
     expect(state.enemies).toHaveLength(1);
     expect(state.enemies[0]).toMatchObject({ championName: 'Ahri', championId: 103, level: 9, isDead: false, visibility: 'unknown', movement: 'unknown', position: { quality: 'unknown', x: null, y: null } });
-    expect(state.enemies[0].spells.map((s) => s.name)).toEqual(['Q', 'W', 'E', 'R', 'Flash', 'Ignite']);
-    expect(state.enemies[0].spells.every((s) => s.remainingSeconds === null && s.rank === null && s.quality === 'unknown')).toBe(true);
+    // Sorts d'invocateur équipés seulement (ce que montre le tableau des scores), aucun cooldown ennemi
+    expect(state.enemies[0].spells).toEqual([{ slot: 'D', name: 'Flash' }, { slot: 'F', name: 'Ignite' }]);
     expect(state.enemies[0].lastEvent).toMatchObject({ id: 7, gameTime: 110, enemyIds: ['Ennemi#EUW'], quality: 'exact', visibility: 'unknown' });
     expect(result.diagnostic.fields).toContain('allPlayers[].position');
     expect(result.diagnostic.fields.join(' ')).not.toContain('Moi#EUW');
-    expect(state.capabilities.find((c) => c.id === 'casts')?.status).toBe('unavailable');
+    expect(state.capabilities.map((c) => c.id)).not.toContain('cooldowns');
   });
 
   it('déduplique le journal cumulatif et ne transforme pas un champ SpellCast en lancement acquis', async () => {
@@ -44,7 +42,7 @@ describe('acquisition Live Client et état ennemi', () => {
     store.update(await read(raw));
     const state = store.update(await read(raw));
     expect(state.events).toHaveLength(2);
-    expect(state.enemies[0].spells.every((s) => s.remainingSeconds === null)).toBe(true);
+    expect(state.enemies[0].spells.every((s) => !('remainingSeconds' in s))).toBe(true);
   });
 
   it('refuse une équipe active inconnue ou une identité ambiguë', async () => {
@@ -165,15 +163,5 @@ describe('acquisition Live Client et état ennemi', () => {
     expect((await retry.poll()).status).toBe('unavailable');
     failed = false;
     expect((await retry.poll()).status).toBe('connected');
-  });
-});
-
-describe('liaison du moteur de sorts au calculateur', () => {
-  it('ne calcule rien sans lancement acquis, même avec une règle disponible', () => {
-    const engine = new AdvancedCooldownEngine();
-    engine.register({ patch: 'synthetic', mode: 'test', champion: 'Test', spell: 'Q', category: 'ability', baseCooldowns: [10], form: 'standard', startsOn: 'cast', source: 'Fixture synthétique' });
-    const tracker = new EnemySpellTracker(engine);
-    expect(tracker.cooldownFor(null)).toEqual({ calculation: { quality: 'unknown', reasons: expect.any(Array) }, timer: null });
-    expect(tracker.cooldownFor({ castAt: 100, input: { patch: 'synthetic', mode: 'test', champion: 'Test', spell: 'Q', rank: 1, abilityHaste: 100, ultimateHaste: null, summonerHaste: null, modifiersComplete: true, modifiers: [] } })).toMatchObject({ calculation: { quality: 'calculated', durationSeconds: 5 }, timer: { startedAt: 100, readyAt: 105 } });
   });
 });

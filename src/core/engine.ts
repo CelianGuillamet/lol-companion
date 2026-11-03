@@ -35,10 +35,9 @@ import { fitWithAlternatives, openCores, preferredCore, type TakenAugment } from
 import { boundFit, boundItems, boundTarget, unknownBound } from './itembound';
 import { banOptions } from './bans';
 import { CooldownData, ddragonCandidates } from './cooldowns';
-import { EnemySpellTracker, type EnemyInput } from './enemyspells';
 import { goldGap, probePlayers, sampleSlot, type GapInput } from './goldgap';
 import type { AppUpdate } from './appversion';
-import type { EnemySpellAction, EnemySpellPanel, EnemySpellSlot, GoldGapPanel } from './types';
+import type { GoldGapPanel } from './types';
 import { type OpggMode, OpggClient, OpggData, buildArgs, laneOf, LANE_LABEL, matchupFrom, counterPicksFrom, type Lane, type OpggAnalysis } from './opgg';
 import type { Candidate, MatchupView, SrBans, SrSelect, AppState, CounterPanel, NextBuyPanel, AugmentPanel, AugmentRow, BuildPanel, ChampSelectView, ComboNote, GameDetail, HistoryEntry, HistoryGame, ItemStat, LogEntry, Mode, Rarity, Settings, SkillNext, StatItem } from './types';
 
@@ -78,7 +77,6 @@ interface DrawTrack {
 export class Engine extends EventEmitter {
   state: AppState;
   private cooldowns: CooldownData;
-  private spellTracker: EnemySpellTracker;
   private lcu: LcuClient | null = null;
   private meta: Arammeta;
   private balance: Balance;
@@ -177,7 +175,6 @@ export class Engine extends EventEmitter {
     this.opggData = new OpggData(this.opgg);
     this.usage = new Usage(opts.probeDir ? join(opts.probeDir, 'usage.json') : null);
     this.cooldowns = new CooldownData(join(opts.dataDir, 'cache'), opts.ddragonFetcher);
-    this.spellTracker = new EnemySpellTracker(this.cooldowns);
     this.discover = opts.discover ?? discoverCredentials;
     this.state = {
       connection: 'searching',
@@ -654,8 +651,6 @@ export class Engine extends EventEmitter {
       this.deferredThisGame.clear();
       this.skippedBuys.clear();
       this.probedRounds.clear();
-      this.spellTracker.reset();
-      this.state.enemySpells = null;
       this.state.goldGap = null;
       this.goldSamples.clear();
       this.lastGameTime = null;
@@ -708,9 +703,7 @@ export class Engine extends EventEmitter {
       this.state.nextBuy = null;
       this.state.skillNext = null;
       this.skillTrack = null;
-      this.state.enemySpells = null;
       this.state.goldGap = null;
-      this.spellTracker.reset();
       this.state.augRound = null;
       this.state.liveLevel = null;
       this.state.headliner = null;
@@ -741,9 +734,7 @@ export class Engine extends EventEmitter {
     this.state.counters = null;
     this.state.nextBuy = null;
     this.state.skillNext = null;
-    this.state.enemySpells = null;
     this.state.goldGap = null;
-    this.spellTracker.reset();
   }
 
   /** Le serveur du jeu peut rester accessible pendant une reconnexion du client LCU. */
@@ -1039,51 +1030,15 @@ export class Engine extends EventEmitter {
     this.state.counters = await this.counterPanel(id, snap);
     this.state.nextBuy = await this.nextBuyPanel(snap);
     this.state.skillNext = this.skillPanel(snap);
-    this.state.enemySpells = await this.enemySpellPanel(snap);
+    this.lastGameTime = await this.gameTime();
     this.state.goldGap = this.goldGapPanel(snap);
   }
 
-  /**
-   * Sorts ennemis : sorts équipés, niveau, objets et arbres de runes via l'API Live Client (ce que montre le tableau
-   * des scores). Les timers ne démarrent que quand tu signales un sort (`markEnemySpell`), jamais d'eux-mêmes.
-   * Data Dragon se charge en arrière-plan : un tick sans données n'attend pas le réseau.
-   */
-  private async enemySpellPanel(snap: LiveSnap | null): Promise<EnemySpellPanel | null> {
-    if (!snap?.mine?.team) return this.state.enemySpells ?? null;
+  /** Temps de jeu (API Live Client `gamestats`) ; null hors partie ou API muette. */
+  private async gameTime(): Promise<number | null> {
     const live = this.opts.live;
     const stats = await liveClient<{ gameTime?: number }>('gamestats', live?.port, live?.host);
-    if (typeof stats?.gameTime !== 'number') return this.state.enemySpells ?? null;
-    this.lastGameTime = stats.gameTime;
-    void this.cooldowns.loadAny(ddragonCandidates(this.state.data.clientPatch, this.game.ddragonVersion));
-    const enemies: EnemyInput[] = snap.players
-      .filter((p) => p.team && p.team !== snap.mine!.team)
-      .map((p): EnemyInput => {
-        const id = snap.champOf(p);
-        const trees = [p.runes?.primaryRuneTree?.id, p.runes?.secondaryRuneTree?.id].filter((x): x is number => typeof x === 'number');
-        return {
-          championId: id,
-          championName: this.game.championName(id, p.championName),
-          alias: this.game.championAlias(id) ?? '',
-          level: p.level ?? 1,
-          dead: !!p.isDead,
-          items: (p.items ?? []).map((i) => i.itemID),
-          spells: [p.summonerSpells?.summonerSpellOne?.rawDisplayName ?? null, p.summonerSpells?.summonerSpellTwo?.rawDisplayName ?? null],
-          spellNames: [p.summonerSpells?.summonerSpellOne?.displayName ?? null, p.summonerSpells?.summonerSpellTwo?.displayName ?? null],
-          runeTrees: trees.length ? trees : null,
-          balanceHaste: this.balanceHaste(id),
-        };
-      })
-      .filter((e) => e.championId > 0);
-    if (this.cooldowns.ready) for (const e of enemies) if (e.alias) void this.cooldowns.loadChampion(e.alias);
-    return this.spellTracker.update(enemies, stats.gameTime, this.state.mode);
-  }
-
-  /** Accélération d'équilibrage du champion dans le mode en cours. La Faille n'en a pas. */
-  private balanceHaste(id: number): number {
-    const mode = this.state.mode;
-    if (mode !== 'aram' && mode !== 'mayhem') return 0;
-    const m = this.meta.champion(id);
-    return this.balance.forChampion([m?.name_en ?? '', m?.alias ?? '', this.game.championName(id, '')].filter(Boolean), mode)?.ability_haste ?? 0;
+    return typeof stats?.gameTime === 'number' ? stats.gameTime : null;
   }
 
   /** Temps de jeu de la dernière lecture de `gamestats`, null hors partie. */
@@ -1114,18 +1069,6 @@ export class Engine extends EventEmitter {
       if (slot > 0 && !this.goldSamples.has(slot)) this.goldSamples.set(slot, { t: Math.round(this.lastGameTime), gap: panel.gap, levels: panel.levelGap });
     }
     return panel;
-  }
-
-  /** Tu signales un sort ennemi (fenêtre, second écran ou téléphone). Le temps de jeu est relu au moment du clic. */
-  async markEnemySpell(championId: number, slot: EnemySpellSlot, action: EnemySpellAction, delta = 0): Promise<{ ok: boolean; message: string }> {
-    if (!['R', 'D', 'F'].includes(slot) || !['cast', 'clear', 'shift'].includes(action)) return { ok: false, message: 'Action inconnue' };
-    const live = this.opts.live;
-    const stats = await liveClient<{ gameTime?: number }>('gamestats', live?.port, live?.host);
-    if (typeof stats?.gameTime !== 'number') return { ok: false, message: 'Pas de partie en cours (API Live Client muette)' };
-    const r = this.spellTracker.mark(Number(championId), slot, action, stats.gameTime, Number.isFinite(delta) ? Math.max(-120, Math.min(120, delta)) : 0);
-    this.state.enemySpells = this.spellTracker.panel();
-    this.emitIfChanged();
-    return r;
   }
 
   /** Ordre des points pris pendant la partie, pour `skills_taken`. `partial` : app lancée en cours de partie, le début manque. */

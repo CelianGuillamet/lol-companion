@@ -19,7 +19,7 @@ import { headlinerFromText } from '../src/core/headliner';
 import { CardReader, permission as screenPermission } from './cardreader';
 import { displayOfApp, displayLabel, windowBounds, GAME_BUNDLE, CLIENT_BUNDLE } from './displays';
 import { fitWindowBounds } from './window-fit';
-import type { AppState, EnemySpellAction, EnemySpellSlot, Settings } from '../src/core/types';
+import type { AppState, Settings } from '../src/core/types';
 
 const RENDERER = join(__dirname, '..', 'renderer');
 const SMOKE = process.env.ARAM_SMOKE === '1'; // test automatique : capture d'écran puis fermeture
@@ -27,7 +27,6 @@ const SMOKE = process.env.ARAM_SMOKE === '1'; // test automatique : capture d'é
 let mainWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
 let secondWin: BrowserWindow | null = null; // mode « fenêtre sur un autre écran »
-let enemyWin: BrowserWindow | null = null;
 let engine: Engine;
 let cardReader: CardReader;
 let overlayHidden = false;
@@ -258,33 +257,8 @@ async function showSecond(): Promise<string> {
   return label;
 }
 
-/** Ouverture volontaire et interactive sur l'écran du pointeur, sans détourner Tab du jeu. */
-function toggleEnemyWindow(): void {
-  if (enemyWin && !enemyWin.isDestroyed() && enemyWin.isVisible()) {
-    enemyWin.hide();
-    return;
-  }
-  const a = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-  const bounds = fitWindowBounds({ x: a.x + (a.width - 820) / 2, y: a.y + (a.height - 700) / 2, width: 820, height: 700 }, a);
-  if (!enemyWin || enemyWin.isDestroyed()) {
-    enemyWin = new BrowserWindow({
-      ...bounds, type: 'panel', frame: false, show: false,
-      minWidth: Math.min(360, bounds.width), minHeight: Math.min(300, bounds.height),
-      title: 'ARAM Companion — sorts ennemis', backgroundColor: '#050d16',
-      acceptFirstMouse: true, fullscreenable: false,
-      webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
-    });
-    enemyWin.on('closed', () => { enemyWin = null; });
-    void enemyWin.loadFile(join(RENDERER, 'index.html'), { hash: 'enemies' });
-  }
-  enemyWin.setMinimumSize(Math.min(360, bounds.width), Math.min(300, bounds.height));
-  enemyWin.setBounds(bounds);
-  pinOverlay(enemyWin);
-  enemyWin.show(); // le raccourci demande explicitement une fenêtre interactive
-}
-
 function fitOpenWindows(): void {
-  for (const win of [mainWin, secondWin, overlayWin, enemyWin]) {
+  for (const win of [mainWin, secondWin, overlayWin]) {
     if (!win || win.isDestroyed() || win.isFullScreen()) continue;
     const bounds = fitWindowBounds(win.getBounds(), screen.getDisplayMatching(win.getBounds()).workArea);
     const [minW, minH] = win.getMinimumSize();
@@ -296,7 +270,6 @@ function fitOpenWindows(): void {
 function updateOverlay(s: AppState): void {
   if (!overlayWin) return;
   const inGame = s.phase === 'InProgress' || s.phase === 'GameStart' || s.phase === 'Reconnect';
-  if (wasInGame && !inGame) enemyWin?.close();
   const windowMode = s.settings.panelMode === 'window';
   if (inGame && !wasInGame && windowMode && s.settings.overlay && s.mode) {
     void showSecond();
@@ -355,7 +328,6 @@ async function syncPhone(): Promise<void> {
     state: () => engine.state,
     history: () => engine.getHistory(),
     detail: (id) => engine.gameDetail(id),
-    markSpell: (id, slot, action, delta) => engine.markEnemySpell(id, slot, action, delta),
   });
   try {
     await phone.start(s.phonePort);
@@ -369,7 +341,7 @@ async function syncPhone(): Promise<void> {
 
 function broadcast(s: AppState): void {
   phone?.push(s);
-  for (const w of [mainWin, overlayWin, secondWin, enemyWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
+  for (const w of [mainWin, overlayWin, secondWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
   updateOverlay(s);
   notifyChampSelect(s);
   notifyAugmentRound(s);
@@ -511,7 +483,6 @@ function registerIpc(): void {
   ipcMain.handle('getState', () => engine.state);
   ipcMain.handle('pickChampion', (_e, id: number) => engine.pickChampion(Number(id)));
   ipcMain.handle('hoverBan', (_e, id: number) => engine.hoverBan(Number(id)));
-  ipcMain.handle('markEnemySpell', (_e, id: number, slot: EnemySpellSlot, action: EnemySpellAction, delta?: number) => engine.markEnemySpell(Number(id), slot, action, Number(delta) || 0));
   ipcMain.handle('applyLoadout', () => engine.applyLoadout(true));
   ipcMain.handle('setSettings', async (_e, patch: Partial<Settings>) => {
     const r = await engine.setSettings(patch);
@@ -765,7 +736,6 @@ app.whenReady().then(async () => {
   // Lire les cartes d'augments maintenant (si la lecture automatique les a ratées)
   globalShortcut.register('CommandOrControl+Shift+R', () => void cardReader.scanNow().then((r) => r.read && engine.setOffered(r.read, r.context)));
   globalShortcut.register('CommandOrControl+Shift+M', cycleOverlayDisplay); // panneau sur l'écran suivant
-  if (!globalShortcut.register('CommandOrControl+Shift+E', toggleEnemyWindow)) engine.note('warning', 'Le raccourci des sorts ennemis ⌘⇧E est indisponible. Utilise le bouton en partie.');
   // Fenêtre second écran : l'afficher / la masquer à tout moment
   globalShortcut.register('CommandOrControl+Shift+S', async () => {
     if (secondWin && !secondWin.isDestroyed() && secondWin.isVisible()) secondWin.hide();

@@ -1,5 +1,12 @@
 # Journal des versions
 
+## v1.93 — 3 nov. 2026 — timers de sorts ennemis retirés (règles Riot)
+- **Retiré** : les timers des sorts ennemis (Flash, autres sorts d'invocateur, ultimes), avec tout ce qui les servait : le bouton « Sorts ennemis » et la touche Tab en partie, la fenêtre ⌘⇧E, l'onglet Sorts et le bouton « Flash » du téléphone, le calcul des cooldowns ennemis. La doc League de Riot interdit de suivre les cooldowns ennemis, « automatically or manually » : un timer démarré à la main y est aussi.
+- **Gardé** : l'équipe ennemie en partie (roster, niveaux, sorts d'invocateur **équipés**, événements publiés), c'est ce que montre déjà le tableau des scores du jeu. Aucune disponibilité n'y est affichée.
+- **Panneau téléphone** : il n'a plus aucune action, il est en lecture seule.
+- **Pour les sessions automatiques** : la règle 1 d'AGENT.md disait « pas de timers automatiques », ce qui laissait croire que les timers manuels étaient permis. Elle interdit maintenant tout suivi des cooldowns ennemis, et la roadmap abandonne les positions hors vision et les lancements ennemis.
+- Tests : les tests des timers sont retirés ; de nouveaux vérifient qu'aucun timer, aucune action et aucun raccourci ne restent (`intelligence-smoke.cjs`, `phone.test.ts`, `engine-intelligence.test.ts`). **496 tests passent**, typage, build et scénarios Electron grand écran et 390 px réussis.
+
 ## v1.92 — 3 nov. 2026 — téléchargements qui ne bloquent plus l'app
 - **Corrigé, données en ligne** : arammeta, OP.GG, le wiki des augments, les changements d'équilibrage, les combos et les temps de recharge passaient chacun par leur propre code de téléchargement, avec le même défaut que le client League corrigé en v1.90. Un téléchargement coupé en cours de route (Wi-Fi qui saute, serveur qui ferme) pouvait rester en attente pour toujours ou faire tomber l'app. Les six passent maintenant par un seul module (`src/core/http.ts`) : une coupure devient une erreur normale, l'app garde son cache et réessaie plus tard.
 - Petit ménage dans `usage.ts` (commentaires de la v1.91 remis devant le bon type).
