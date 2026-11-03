@@ -675,6 +675,14 @@ async function smokeTest(): Promise<void> {
     engine.state.build.skills = { order: process.env.ARAM_SMOKE_SKILLS.split(''), max: ['Q', 'W', 'E'], source: 'OP.GG, ARAM' };
     await new Promise((r) => setTimeout(r, 2500));
   }
+  if (process.env.ARAM_SMOKE_THREAT && engine.state.build && engine.state.nextBuy?.rows[0]) {
+    // Menace repoussée après le build (mêmes valeurs que test/engine-threat.test.ts)
+    const plan = engine.state.nextBuy.rows[0].item.id;
+    engine.state.build.itemStats = [{ id: 6662, winrate: 0.5064, games: 1090 }, { id: plan, winrate: 0.5693, games: 22411 }];
+    const panel = { gameKey: 'smoke', role: 'tank', enemies: engine.state.counters?.enemies ?? [], threats: [{ key: 'armor', title: 'Armure', why: '3 ennemis font surtout des dégâts physiques', champions: [], urgent: true, items: [{ id: 6662, name: 'Iceborn Gauntlet', icon: null }] }] };
+    (engine as unknown as { counterPanel: () => Promise<unknown> }).counterPanel = async () => panel;
+    await new Promise((r) => setTimeout(r, 2500));
+  }
   const tab = process.env.ARAM_SMOKE_TAB;
   if (tab) {
     await mainWin!.webContents.executeJavaScript(`window.__setTab && window.__setTab(${JSON.stringify(tab)})`);

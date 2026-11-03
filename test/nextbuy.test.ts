@@ -394,3 +394,45 @@ describe('sac plein', () => {
     expect(consumedBy(1, [9], c)).toEqual([]);
   });
 });
+
+describe('menace qui coûte plus que le build', () => {
+  const [RIFT, ICE, HEART, SV, DD] = [4633, 6662, 3084, 3065, 6333];
+  const base = { boots: [], allBoots: new Set<number>(), price: () => 3000 };
+  // Chiffres de la partie Tahm Kench du 3 nov.
+  const tahm = (v: Record<number, { winrate: number; games: number }>) => (id: number) => v[id] ?? null;
+  const measured = { [RIFT]: { winrate: 0.5693, games: 22411 }, [ICE]: { winrate: 0.5064, games: 1090 } };
+
+  it('Iceborn 50,6 % ne passe plus devant Riftmaker 56,9 %, et reste au plan', () => {
+    const r = nextBuys({ ...base, owned: [HEART], gold: 3000, cores: [{ core: [HEART], options: [{ id: RIFT, winrate: 0.57 }] }], counters: [{ key: 'armor', title: 'Armure', items: [ICE], urgent: true }], value: tahm(measured) }, 6);
+    expect(r.rows.map((x) => x.id)).toEqual([RIFT, ICE]);
+    expect(r.rows[1].why).toBe('contre leur équipe : armure · après le build, 6 pts de moins');
+    expect(r.deferred).toEqual([{ key: 'armor', id: ICE, title: 'Armure', by: RIFT, value: 0.5064, byValue: 0.5693 }]);
+  });
+
+  it('une menace non urgente ne passe pas non plus devant les options', () => {
+    const r = nextBuys({ ...base, owned: [HEART], gold: 3000, cores: [{ core: [HEART], options: [{ id: RIFT, winrate: 0.57 }] }], counters: [{ title: 'Armure', items: [ICE] }], value: tahm(measured) }, 6);
+    expect(r.rows.map((x) => x.id)).toEqual([RIFT, ICE]);
+  });
+
+  it('item bien placé : la menace garde sa place (Spirit Visage 61,8 % sur Yasuo, 3 nov.)', () => {
+    const r = nextBuys({ ...base, owned: [HEART], gold: 3000, cores: [{ core: [HEART], options: [{ id: DD, winrate: 0.58 }] }], counters: [{ title: 'RM', items: [SV], urgent: true }], value: tahm({ [SV]: { winrate: 0.6175, games: 4253 }, [DD]: { winrate: 0.58, games: 20000 } }) }, 6);
+    expect(r.rows.map((x) => x.id)).toEqual([SV, DD]);
+    expect(r.deferred).toEqual([]);
+  });
+
+  it('écart incertain ou item non mesuré : rien ne change', () => {
+    const counters = [{ title: 'Armure', items: [ICE], urgent: true }];
+    const cores = [{ core: [HEART], options: [{ id: RIFT, winrate: 0.57 }] }];
+    const few = nextBuys({ ...base, owned: [HEART], gold: 3000, cores, counters, value: tahm({ ...measured, [ICE]: { winrate: 0.5, games: 40 } }) }, 6);
+    expect(few.rows[0].id).toBe(ICE);
+    const unknown = nextBuys({ ...base, owned: [HEART], gold: 3000, cores, counters, value: tahm({ [RIFT]: measured[RIFT] }) }, 6);
+    expect(unknown.rows[0].id).toBe(ICE);
+    expect(nextBuys({ ...base, owned: [HEART], gold: 3000, cores, counters }, 6).rows[0].id).toBe(ICE);
+  });
+
+  it('les bottes contre une menace ne se comparent pas : pas de winrate au même titre', () => {
+    const r = nextBuys({ ...base, boots: [], allBoots: new Set([3111]), owned: [HEART], gold: 3000, cores: [{ core: [HEART, RIFT], options: [] }], counters: [{ title: 'RM', items: [3111], urgent: true }], value: tahm({ ...measured, 3111: { winrate: 0.4, games: 50000 } }) }, 6);
+    expect(r.rows.map((x) => x.id)).toContain(3111);
+    expect(r.deferred).toEqual([]);
+  });
+});

@@ -15,7 +15,7 @@ export interface NextBuyInput {
   gold: number;
   cores: BuildCore[]; // dans l'ordre d'affichage (le meilleur d'abord)
   boots: number[]; // bottes conseillées, la meilleure d'abord
-  counters: { title: string; items: number[]; urgent?: boolean }[];
+  counters: { key?: string; title: string; items: number[]; urgent?: boolean }[];
   allBoots: Set<number>; // toutes les bottes (pour savoir si tu en as déjà)
   price: (id: number) => number | null;
   components?: (id: number) => number[]; // composants directs (items.json du client)
@@ -37,6 +37,39 @@ export interface NextBuyInput {
   bag?: number[];
   /** Or rendu à la revente (Data Dragon). `null` : valeur inconnue, l'objet ne compte pas dans l'or disponible. */
   sellValue?: (id: number) => number | null;
+  /** Winrate d'un item, source unique (arammeta `singleItems`, OP.GG au rang). `null` : pas mesuré, rien à comparer. */
+  value?: (id: number) => { winrate: number; games: number } | null;
+}
+
+/** Marge au-delà de l'incertitude : même point d'écart que la revue (`MIN_LOST`), un item seul n'est pas une mesure parfaite. */
+const THREAT_MARGIN = 0.01;
+
+/** Menace dont l'item coûte clairement plus que le build : repoussée après le build, pas retirée. */
+export interface DeferredThreat {
+  key?: string;
+  id: number;
+  title: string;
+  /** Le meilleur item du plan à sa place. */
+  by: number;
+  value: number;
+  byValue: number;
+}
+
+/**
+ * L'item d'une menace mesuré nettement sous un item du plan encore à acheter. Vu sur 4 parties du 3 nov. : 0 des 9 items conseillés
+ * contre l'équipe acheté tel quel, dont Iceborn Gauntlet (50,6 % sur 1 090) devant Riftmaker (56,9 % sur 22 411) sur Tahm Kench.
+ * Il faut que tout l'intervalle de Wilson soit en dessous : sans mesure, ou si l'écart est incertain, la menace garde sa place.
+ */
+export function threatCost(id: number, others: number[], value: NonNullable<NextBuyInput['value']>): { by: number; value: number; byValue: number } | null {
+  const mine = value(id);
+  if (!mine) return null;
+  const hi = wilson(mine.winrate, mine.games).hi;
+  let best: { by: number; value: number; byValue: number } | null = null;
+  for (const by of others) {
+    const v = by === id ? null : value(by);
+    if (v && hi + THREAT_MARGIN < wilson(v.winrate, v.games).lo && (!best || v.winrate > best.byValue)) best = { by, value: mine.winrate, byValue: v.winrate };
+  }
+  return best;
 }
 
 /** Places du sac. La relique et le Poro-Snax de Mayhem (`slot` 6 et plus) n'en prennent pas. */
@@ -250,7 +283,7 @@ export function optionsForSlot<O extends { id: number; winrate: number; games?: 
   return rows.length >= 2 ? rows : options;
 }
 
-export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: NextBuyRow[]; plan: PlanSlot[] } {
+export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: NextBuyRow[]; plan: PlanSlot[]; deferred: DeferredThreat[] } {
   const owned = new Set(expandOwned(i.owned, i.specialRecipe));
   // Le build suivi : celui qui recoupe le plus tes items (sinon le meilleur)
   let coreIndex = 0;
@@ -291,9 +324,17 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
   // plus — vu en vraie partie, l'app reconseillait Oblivion Orb juste après l'achat de Morello)
   const counterItem = (t: { items: number[] }) =>
     t.items.some((x) => owned.has(x) && !i.allBoots.has(x)) ? undefined : t.items.find((x) => !owned.has(x) && !(i.allBoots.has(x) && bootsPlanned()));
+  const others = c ? [...c.core, ...c.options.map((o) => o.id)].filter((id) => !owned.has(id) && !i.allBoots.has(id)) : [];
+  const deferred: DeferredThreat[] = [];
+  const costly = (t: NextBuyInput['counters'][number], id: number) => {
+    if (deferred.some((d) => d.id === id)) return true;
+    const cost = i.value && !i.allBoots.has(id) ? threatCost(id, others, i.value) : null;
+    if (cost) deferred.push({ ...(t.key ? { key: t.key } : {}), id, title: t.title, ...cost });
+    return cost != null;
+  };
   for (const t of i.counters.filter((t) => t.urgent)) {
     const id = counterItem(t);
-    if (id) {
+    if (id && !costly(t, id)) {
       push(id, `contre leur équipe : ${lowerFirst(t.title)}`);
       must.add(id);
     }
@@ -301,9 +342,10 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
   if (c) for (const id of c.core.filter((id) => !owned.has(id)).slice(1)) push(id, i.labels?.core ?? 'build le plus gagnant');
   for (const t of i.counters) {
     const id = counterItem(t);
-    if (id) push(id, `contre leur équipe : ${lowerFirst(t.title)}`);
+    if (id && !costly(t, id)) push(id, `contre leur équipe : ${lowerFirst(t.title)}`);
   }
   if (c) for (const o of [...c.options].sort((a, b) => score(b) - score(a))) push(o.id, `${i.labels?.option ?? '3e item'} (${Math.round(o.winrate * 100)} %)`);
+  for (const d of deferred) push(d.id, `contre leur équipe : ${lowerFirst(d.title)} · après le build, ${Math.round((d.byValue - d.value) * 100)} pts de moins`);
   // Sac plein : la boutique refuse tout ce qui ne consomme pas un item du sac. Terminer un composant passe donc avant.
   const parts = i.components ?? (() => []);
   const bag = i.bag;
@@ -342,6 +384,7 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
   return {
     coreIndex,
     plan,
+    deferred,
     rows: seq.slice(0, max).map((s, k) => {
       const price = i.price(s.id);
       const remaining = remainingCost(s.id, i.owned, i.price, i.components);

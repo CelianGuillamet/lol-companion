@@ -290,3 +290,9 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - `COMES_WITH_CARD` (cartes « Upgrades one of your champion's abilities », « Replace a summoner spell »), `SHORT_BURST`, `CRIT_ON_HEALS` retirent des tags de `tagsOf` ; `withoutNoise` retire les stats d'un invoqué. « base AD » ne pose plus `ad`.
 - Autre source de textes : `https://raw.githubusercontent.com/kiwiiiii-eth/aram-mayhem-analyzer/main/data/augments.json` (curl passe, 223 cartes, texte brut, une sans `description`, à relire comme une donnée). Pour un contrôle seulement : `tagsOf` lit aussi ce texte brut. Le dépôt a ses propres tags (`ability_upgrade`, `ranged_only`, `needs_cc`…), non utilisés.
 - `cards_seen.noText` : noms de cartes sans texte dans le wiki chargé. Le test moteur remplace `augInfo` : les faux modules de test ont moins de 50 entrées et `size` reste à 0.
+
+## Menaces et coût (v1.91)
+- `threatCost` (nextbuy.ts, pur et testé) : `NextBuyInput.value` = `itemValues` d'`itemStats`, ou `slotStats` au rang en Faille, la même source que `withValues`. Ne jamais comparer avec les `options` : leur winrate est mesuré dans le cluster. Bottes jamais comparées, item non mesuré jamais repoussé, seul l'item choisi par `counterItem` est testé : pas de repli sur le contre générique suivant, souvent non mesuré.
+- `nextBuys` rend `deferred` ; `key` de la menace relie `nextBuy.deferred` à `counters.threats` (BuyPanel). Capture : `ARAM_SMOKE_THREAT=1` avec `dist/demo.mjs purchase`.
+- `probe-output/wiki-mayhem-augments.lua` : copie du module chargé, écrite à chaque `refreshData`. Le texte brut des cartes s'y lit sans dépendre du wiki.
+- `~` vaut `/root` dans le conteneur, le shell démarre dans `/home/claude`. `buys.lines[].why` de `historique.json` suffit à compter les conseils quand `usage.json` est vide.

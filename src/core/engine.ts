@@ -276,6 +276,14 @@ export class Engine extends EventEmitter {
     this.persistLog(level, text);
   }
 
+  /** Copie du texte des augments dans probe-output/ : les sessions n'ont pas accès au cache, hors du dossier du projet. */
+  private async mirrorAugmentTexts(): Promise<void> {
+    if (!this.opts.probeDir || !this.augInfo.size) return;
+    const { copyFile, mkdir } = await import('node:fs/promises');
+    await mkdir(this.opts.probeDir, { recursive: true }).catch(() => undefined);
+    await copyFile(this.augInfo.file, join(this.opts.probeDir, 'wiki-mayhem-augments.lua')).catch(() => undefined);
+  }
+
   /** Journal gardé dans probe-output/journal.txt (pour relire une partie après coup ; 1 Mo max). */
   private journalChecked = false;
   private persistLog(level: string, text: string): void {
@@ -320,6 +328,7 @@ export class Engine extends EventEmitter {
     }
     await this.balance.load(force).catch(() => undefined);
     await this.augInfo.load(force).catch(() => undefined);
+    await this.mirrorAugmentTexts();
     await this.combos.load(force).catch(() => undefined);
     this.panelCache.clear(); // les avis sont dans le panneau
     this.state.data.combos = `${this.combos.source === 'site' ? 'arammayhem.com' : 'instantané embarqué du 3 nov. (site injoignable)'}, ${this.combos.rows.length} combos`;
@@ -642,6 +651,7 @@ export class Engine extends EventEmitter {
       this.state.headliner = null;
       this.lastBuy = null;
       this.buysThisGame = [];
+      this.deferredThisGame.clear();
       this.skippedBuys.clear();
       this.probedRounds.clear();
       this.spellTracker.reset();
@@ -1289,6 +1299,7 @@ export class Engine extends EventEmitter {
       const to = b.cores[lean.index].name;
       if (this.leanThisGame?.to !== to) this.leanThisGame = { from: b.cores[lean.base].name, to, items, augments: lean.augments.map((a) => a.id), bought: false };
     }
+    const itemWinrates = itemValues(b.slotStats?.[slot]?.length ? b.slotStats[slot] : b.itemStats, buyable);
     const r = nextBuys({
       owned,
       bag,
@@ -1298,7 +1309,8 @@ export class Engine extends EventEmitter {
       cores,
       bound,
       boots: b.boots.map((x) => x.id),
-      counters: (this.state.counters?.threats ?? []).map((t) => ({ title: named(t), items: t.items.map((x) => buyable(x.id)), urgent: t.urgent })),
+      counters: (this.state.counters?.threats ?? []).map((t) => ({ key: t.key, title: named(t), items: t.items.map((x) => buyable(x.id)), urgent: t.urgent })),
+      value: (id) => itemWinrates.get(id) ?? null,
       allBoots: new Set([...b.boots.map((x) => x.id), 1001, 3006, 3009, 3020, 3047, 3111, 3158, 3008, ...[...this.game.items.keys()].filter((id) => this.game.isBoots(id))]),
       price: (id) => this.game.itemPrice(id) ?? this.meta.tierList?.itemLut?.[String(id)]?.p ?? null,
       components: (id) => this.game.components(id),
@@ -1353,11 +1365,18 @@ export class Engine extends EventEmitter {
       this.usage.add({ type: 'resale', at: Date.now(), championId: this.myChampionId, gold: Math.floor(me.currentGold), reco: reco!, gap: Math.ceil(r.rows[0].missing), gain: resale.gain, sell: resale.sell, full: (bag?.length ?? 0) >= BAG_SLOTS, level: me.level ?? null });
     }
     this.lastResale = resaleKey;
+    for (const d of r.deferred) {
+      if (this.deferredThisGame.has(d.id)) continue;
+      this.deferredThisGame.add(d.id);
+      this.persistLog('jeu', `Menace après le build : ${itemOf(d.id).name} ${Math.round(d.value * 100)} % contre ${itemOf(d.by).name} ${Math.round(d.byValue * 100)} % (${d.title})`);
+      this.usage.add({ type: 'threat_deferred', at: Date.now(), championId: this.myChampionId, key: d.key ?? '', id: d.id, by: d.by, value: d.value, byValue: d.byValue });
+    }
     this.lastBuy = { owned, reco, plan: r.rows.map((x) => x.id), why: r.rows[0]?.why };
     const elixir = this.elixirPanel(snap, owned, !r.rows.length || (r.rows[0].room?.sell === null && !r.rows[0].room.held), (id) => isDone(id));
     return {
       gold: Math.floor(me.currentGold),
       elixir,
+      ...(r.deferred.length ? { deferred: r.deferred.map((d) => ({ key: d.key ?? '', item: itemOf(d.id), by: itemOf(d.by), value: d.value, byValue: d.byValue })) } : {}),
       plan: r.plan.map((p) => ({ item: itemOf(p.id), owned: p.owned, ...(p.why ? { why: p.why } : {}) })),
       respawn: snap.mine?.isDead ? Math.ceil(snap.mine.respawnTimer ?? 0) : null,
       buildName: b.cores[r.coreIndex]?.name ?? null,
@@ -1456,6 +1475,8 @@ export class Engine extends EventEmitter {
     return (this.state.counters?.threats ?? []).some((t) => t.items.some((x) => x.id === id) && t.items.some((x) => x.id === reco));
   }
 
+  /** Menaces déjà notées cette partie (`threat_deferred`, une ligne par item). */
+  private deferredThisGame = new Set<number>();
   private probedGames = new Set<number>();
   private probedLive = new Set<number>();
 
@@ -1970,6 +1991,7 @@ export class Engine extends EventEmitter {
     const buys = reviewBuys(this.buysThisGame.filter((e) => e.championId === game.championId), (id) => this.itemName(id));
     if (buys) game.buys = buys;
     this.buysThisGame = [];
+    this.deferredThisGame.clear();
     await this.history.add(game);
     this.recordPicks(gameId, game.augments, game.win);
     const played = this.lastCandidates.find((c) => c.championId === game.championId);

@@ -207,8 +207,12 @@ export class AugmentInfo {
     return this.map.size;
   }
 
+  get file(): string {
+    return join(this.cacheDir, 'wiki-mayhem-augments.lua');
+  }
+
   async load(force = false): Promise<void> {
-    const file = join(this.cacheDir, 'wiki-mayhem-augments.lua');
+    const file = this.file;
     let text: string | null = null;
     try {
       const s = await stat(file);

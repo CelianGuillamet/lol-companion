@@ -30,8 +30,10 @@ export type UsageEvent =
   | ItemBought
   /** Score du champion joué et son détail : pour mesurer si synergie et compo prédisent vraiment la victoire. */
   | ChampScored
-  /** Points de sort dans l'ordre où tu les as pris, et ceux pris hors de l'ordre conseillé (absent : ordre inconnu). */
+  /** Item d'une menace passé après le build, parce qu'il gagne nettement moins qu'un item du plan. */
+  | { type: 'threat_deferred'; at: number; championId: number; key: string; id: number; by: number; value: number; byValue: number }
   | { type: 'gold_gap'; at: number; gameId: number; mode: string; samples: { t: number; gap: number; levels: number }[]; win: boolean }
+  /** Points de sort dans l'ordre où tu les as pris, et ceux pris hors de l'ordre conseillé (absent : ordre inconnu). */
   | { type: 'skills_taken'; at: number; gameId: number; championId: number; taken: string; plan?: string; off?: number; partial: boolean; win: boolean };
 
 export interface ItemBought {

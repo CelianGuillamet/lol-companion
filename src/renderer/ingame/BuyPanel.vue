@@ -26,6 +26,8 @@ const DMG: Record<string, string> = { AD: 'physique', AP: 'magique', mixte: 'mix
 // En partie, la lecture courte d'abord : ce qui change ton build, puis leur équipe en une ligne ; le détail
 // (dégâts, rôles, items de chacun) se déplie.
 const teamOpen = ref(false);
+const deferred = (key: string) => nb.value?.deferred?.find((d) => d.key === key) ?? null;
+const pct = (v: number) => `${Math.round(v * 100)} %`;
 </script>
 
 <template>
@@ -99,8 +101,10 @@ const teamOpen = ref(false);
       <ul v-if="ct.threats.length || ct.notes?.length" class="reads">
         <li v-for="t in ct.threats" :key="t.key" :class="{ urgent: t.urgent }">
           <div>
-            <span v-if="t.urgent" class="badge">prioritaire</span>
+            <span v-if="deferred(t.key)" class="badge later">après le build</span>
+            <span v-else-if="t.urgent" class="badge">prioritaire</span>
             <b>{{ t.title }}</b> : {{ t.why }}<template v-if="t.champions.length"> ({{ t.champions.map((c) => c.name).join(', ') }})</template>.
+            <div v-if="deferred(t.key)" class="faint small">{{ deferred(t.key)!.item.name }} {{ pct(deferred(t.key)!.value) }}, {{ deferred(t.key)!.by.name }} {{ pct(deferred(t.key)!.byValue) }} : le build d'abord.</div>
           </div>
           <div class="its">
             <img v-for="it in t.items.slice(0, 3)" :key="it.id" @error="hideBroken" :src="it.icon ?? ''" :title="it.name" width="24" height="24" class="ic" alt="" />
@@ -189,6 +193,7 @@ h3 { margin: 8px 0 0; }
 .its { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }
 .reads li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); background: var(--surface-1); font-size: var(--fs-sm); }
 .reads li.urgent { border-left: 3px solid var(--gold); }
+.badge.later { background: var(--surface-3); color: var(--muted); }
 .badge { display: inline-block; margin-right: 6px; padding: 0 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0a1520; background: var(--gold); border-radius: 2px; }
 .strip { display: flex; gap: 6px; align-items: center; width: 100%; padding: 6px 8px; border: 1px solid var(--border); background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .strip:hover { background: var(--surface-1); }

@@ -144,6 +144,8 @@ export interface NextBuyPanel {
   respawn?: number | null;
   /** Rien d'autre à acheter : l'élixir de ton build (`left` = secondes d'effet, `buy` = à racheter maintenant). */
   elixir?: { item: IconItem; perk: string; price: number; left: number | null; buy: boolean } | null;
+  /** Menaces repoussées après le build : leur item gagne nettement moins qu'un item du plan (`key` = clé de la menace). */
+  deferred?: { key: string; item: IconItem; by: IconItem; value: number; byValue: number }[];
 }
 
 export interface CounterPanel {

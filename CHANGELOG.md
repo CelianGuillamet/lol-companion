@@ -1,5 +1,14 @@
 # Journal des versions
 
+## v1.91 — 3 nov. 2026 — une menace ne passe plus devant ton build quand elle coûte clairement plus
+- **Lecture de ta partie de ce soir (Yasuo, K/DA, victoire) et des 3 d'avant** : sur 4 parties, 9 achats avec un conseil « contre leur équipe » en tête (bottes à part), aucun n'a pris l'item conseillé. Tu as raison au moins une fois : sur Tahm Kench, Iceborn Gauntlet (50,6 % sur 1 090 parties) passait devant Riftmaker (56,9 % sur 22 411).
+- **Corrigé, achats** : l'item d'une menace passe après le build si son winrate est nettement sous un item encore prévu : tout l'intervalle de confiance en dessous, plus 1 pt de marge. Il reste au plan et dans « Contre leur équipe », avec le badge « Après le build » et les 2 chiffres. Vrai aussi pour une menace non prioritaire, qui passait devant les options.
+- **Ce qui ne change pas** : sans winrate mesuré pour cet item, ou si l'écart est incertain, la menace garde sa place. Spirit Visage sur Yasuo (61,8 %) et Iceborn sur Xin Zhao (59,8 %) restent conseillés : leur chiffre est bon. Les bottes ne sont pas comparées.
+- **Limite** : un winrate d'item seul avantage les items achetés tard. Seuls les écarts nets jouent, et l'app note chaque cas (`threat_deferred` dans `usage.json`, ligne « Menace après le build » au journal).
+- **Mesures** : les cartes sans texte de la v1.88 (Get Jinxed, Lonely Warrior) ont bien un texte sur ton Mac, mais je ne peux pas le lire d'ici. L'app le copie maintenant dans `probe-output/`, la prochaine session relira leurs tags.
+- **À savoir** : `usage.json` et le journal repartent de 17 h 43 UTC ce soir, à la création du clone git. Les anciennes mesures n'y sont plus (l'historique des parties, lui, est complet : 141 parties). Si tu as gardé l'ancien dossier `probe-output`, son `usage.json` vaut la peine d'être remis à part.
+- Tests : `test/nextbuy.test.ts`, `test/engine-threat.test.ts`. **527 tests passent**, 5 ignorés, typage et build réussis, rendu Electron vérifié (badge, ligne des 2 chiffres, conseil en tête). Pas encore vu en vraie partie.
+
 ## v1.90 — 3 nov. 2026 — revue de code : historique protégé, app qui ne gèle plus
 - **Corrigé, historique** : si `history.json` devient illisible, l'app en garde maintenant une copie (`history.json.illisible-…`) et le signale dans le journal. Avant, elle repartait d'une liste vide et l'écrasait à la partie suivante. Les sauvegardes se font l'une après l'autre : deux écritures en même temps (fin de partie + import) pouvaient abîmer le fichier. Réglages écrits de la même façon, sans fichier à moitié écrit.
 - **Corrigé, client League et jeu** : une réponse coupée en cours de route (client ou jeu qui se ferme) pouvait bloquer la lecture pour de bon ou faire tomber l'app. Elle compte maintenant comme « client injoignable » et la lecture continue. Toute erreur interne non gérée est notée dans le journal au lieu de fermer l'app.
