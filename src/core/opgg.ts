@@ -5,7 +5,7 @@
 // Le schéma exact des outils n'est pas documenté publiquement : on le lit au démarrage (tools/list), on construit
 // les arguments d'après ce schéma, et on garde une copie brute des réponses dans probe-output/ pour vérifier.
 
-import https from 'node:https';
+import { httpsText } from './http';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -21,25 +21,12 @@ export interface McpTool {
 type Post = (body: object, headers: Record<string, string>) => Promise<{ status: number; headers: Record<string, string>; text: string }>;
 
 function post(body: object, headers: Record<string, string>): ReturnType<Post> {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(body);
-    const req = https.request(
-      ENDPOINT,
-      {
-        method: 'POST',
-        timeout: 30000,
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'Content-Length': Buffer.byteLength(data), 'User-Agent': 'aram-companion (usage perso)', ...headers },
-      },
-      (res) => {
-        let text = '';
-        res.setEncoding('utf8');
-        res.on('data', (c) => (text += c));
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: Object.fromEntries(Object.entries(res.headers).map(([k, v]) => [k.toLowerCase(), String(v)])), text }));
-      },
-    );
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('délai dépassé')));
-    req.end(data);
+  const data = JSON.stringify(body);
+  return httpsText(ENDPOINT, {
+    method: 'POST',
+    timeoutMs: 30000,
+    body: data,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'Content-Length': String(Buffer.byteLength(data)), ...headers },
   });
 }
 

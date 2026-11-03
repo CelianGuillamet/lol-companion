@@ -296,3 +296,8 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - `nextBuys` rend `deferred` ; `key` de la menace relie `nextBuy.deferred` à `counters.threats` (BuyPanel). Capture : `ARAM_SMOKE_THREAT=1` avec `dist/demo.mjs purchase`.
 - `probe-output/wiki-mayhem-augments.lua` : copie du module chargé, écrite à chaque `refreshData`. Le texte brut des cartes s'y lit sans dépendre du wiki.
 - `~` vaut `/root` dans le conteneur, le shell démarre dans `/home/claude`. `buys.lines[].why` de `historique.json` suffit à compter les conseils quand `usage.json` est vide.
+
+## Réseau et fichiers (v1.92)
+- Toute requête HTTPS vers une source de données passe par `src/core/http.ts` (`download`, `httpsText`) : une réponse coupée y rejette au lieu de rester en attente ou de lever une erreur orpheline. Ne pas réécrire de `https.get` à la main. Client local (LCU, port 2999) : `localRequest` dans `lcu.ts`, même garantie.
+- `History.save` et `saveSettings` écrivent à la suite et de façon atomique. Un `history.json` illisible est copié (`history.json.illisible-…`) avant toute réécriture : ne jamais remettre un `catch` qui repart d'un historique vide sans copie.
+- `electron/main.ts` : liens `http(s)` seulement (`isWebUrl`), aucune navigation hors de l'interface, `unhandledRejection` journalisé. Second lancement : la fenêtre revient devant, sauf avec `--background` (agent launchd).

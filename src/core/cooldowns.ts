@@ -2,7 +2,7 @@
 // Rien n'est lu dans le jeu au-delà de l'API Live Client : objets, niveau, sorts équipés et arbres de runes visibles.
 // Le lancement d'un sort ennemi n'est jamais détecté : c'est toi qui le signales (politique Riot, docs/AGENT.md).
 
-import https from 'node:https';
+import { download as fetchText } from './http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -119,21 +119,7 @@ export const SUMMONER_FALLBACK: Record<string, { name: string; cooldown: number 
 };
 
 function download(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 15000, headers: { 'User-Agent': 'aram-companion (usage perso)' } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        reject(new Error(`HTTP ${res.statusCode} (${url})`));
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => (body += c));
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error(`délai dépassé (${url})`)));
-  });
+  return fetchText(url, 15000, url);
 }
 
 interface DdItem {

@@ -1,5 +1,10 @@
 # Journal des versions
 
+## v1.92 — 3 nov. 2026 — téléchargements qui ne bloquent plus l'app
+- **Corrigé, données en ligne** : arammeta, OP.GG, le wiki des augments, les changements d'équilibrage, les combos et les temps de recharge passaient chacun par leur propre code de téléchargement, avec le même défaut que le client League corrigé en v1.90. Un téléchargement coupé en cours de route (Wi-Fi qui saute, serveur qui ferme) pouvait rester en attente pour toujours ou faire tomber l'app. Les six passent maintenant par un seul module (`src/core/http.ts`) : une coupure devient une erreur normale, l'app garde son cache et réessaie plus tard.
+- Petit ménage dans `usage.ts` (commentaires de la v1.91 remis devant le bon type).
+- Tests : `test/robustness.test.ts` (téléchargement coupé). **528 tests passent**, typage, build et démarrage Electron réussis. Rien ne change à l'écran.
+
 ## v1.91 — 3 nov. 2026 — une menace ne passe plus devant ton build quand elle coûte clairement plus
 - **Lecture de ta partie de ce soir (Yasuo, K/DA, victoire) et des 3 d'avant** : sur 4 parties, 9 achats avec un conseil « contre leur équipe » en tête (bottes à part), aucun n'a pris l'item conseillé. Tu as raison au moins une fois : sur Tahm Kench, Iceborn Gauntlet (50,6 % sur 1 090 parties) passait devant Riftmaker (56,9 % sur 22 411).
 - **Corrigé, achats** : l'item d'une menace passe après le build si son winrate est nettement sous un item encore prévu : tout l'intervalle de confiance en dessous, plus 1 pt de marge. Il reste au plan et dans « Contre leur équipe », avec le badge « Après le build » et les 2 chiffres. Vrai aussi pour une menace non prioritaire, qui passait devant les options.

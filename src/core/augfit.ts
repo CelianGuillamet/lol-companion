@@ -5,7 +5,7 @@
 // Ce que fait chaque augment : description du wiki LoL (Module:MayhemAugmentData/data, CC BY-SA), lue par mots-clés.
 // C'est une heuristique, pas une mesure : l'écart reste petit et la raison est toujours affichée.
 
-import https from 'node:https';
+import { download as fetchText } from './http';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -177,21 +177,7 @@ export function fitOf(tags: Set<FitTag>, profile: Record<FitTag, number>, itemsS
 }
 
 function download(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 30000, headers: { 'User-Agent': 'aram-companion (usage perso)' } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => (body += c));
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('délai dépassé')));
-  });
+  return fetchText(url, 30000);
 }
 
 /** Descriptions des augments Mayhem (wiki, cache 24 h). Sans réseau ni cache : pas de correction, rien d'inventé. */

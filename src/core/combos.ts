@@ -4,7 +4,7 @@
 // embarqué (data/combos-snapshot.json, relevé le 3 nov. 2026 : « champion augment|augment type|type », « - » = sans type).
 // Une ligne à 1 augment = interaction champion + augment. Une ligne à plusieurs = un plan : ces augments vont ensemble.
 
-import https from 'node:https';
+import { download as fetchText } from './http';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import snapshot from './data/combos-snapshot.json';
@@ -113,21 +113,7 @@ export function protectCombos(advice: RerollAdvice | null, notes: Record<number,
 }
 
 function download(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 20000, headers: { 'User-Agent': 'aram-companion (usage perso)' } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => (body += c));
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('délai dépassé')));
-  });
+  return fetchText(url, 20000);
 }
 
 export class Combos {

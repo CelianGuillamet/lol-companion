@@ -64,3 +64,30 @@ describe('réglages', () => {
     expect((await loadSettings(file)).phonePort).toBe(8003);
   });
 });
+
+import { httpsText } from '../src/core/http';
+
+describe('sources de données (arammeta, OP.GG, wiki…) : réponse coupée', () => {
+  it('rejette proprement au lieu de rester en attente ou de lever une erreur orpheline', async () => {
+    const tls = mkdtempSync(join(tmpdir(), 'tls-'));
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1',
+      '-keyout', join(tls, 'key.pem'), '-out', join(tls, 'cert.pem')], { stdio: 'ignore' });
+    const cert = readFileSync(join(tls, 'cert.pem'));
+    const server = https.createServer({ key: readFileSync(join(tls, 'key.pem')), cert }, (req, res) => {
+      if (req.url === '/ok') return void res.end('bonjour');
+      res.writeHead(200, { 'Content-Length': '1000' });
+      res.write('début…');
+      setTimeout(() => res.socket?.destroy(), 20);
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const base = `https://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const agent = new https.Agent({ ca: cert });
+    expect((await httpsText(`${base}/ok`, { timeoutMs: 2000, agent })).text).toBe('bonjour');
+    const cut = await Promise.race([
+      httpsText(`${base}/coupe`, { timeoutMs: 2000, agent }).then(() => 'résolu', (e: Error) => e.message),
+      new Promise((r) => setTimeout(() => r('bloqué'), 3000)),
+    ]);
+    server.close();
+    expect(cut).toBe('réponse interrompue');
+  });
+});

@@ -6,7 +6,7 @@
 // Affichage seulement : les winrates arammeta sont déjà mesurés avec ces modificateurs, les ajouter au score
 // les compterait deux fois.
 
-import https from 'node:https';
+import { download as fetchText } from './http';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import snapshot from './data/aram-balance.json';
@@ -110,21 +110,7 @@ export function badges(mods: Mods | null | undefined): BalanceBadge[] {
 }
 
 function download(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 30000, headers: { 'User-Agent': 'aram-companion (usage perso)' } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => (body += c));
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('délai dépassé')));
-  });
+  return fetchText(url, 30000);
 }
 
 export interface BalanceChange {

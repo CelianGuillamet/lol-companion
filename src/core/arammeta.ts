@@ -1,7 +1,7 @@
 // Données ARAM: Mayhem publiques d'arammeta.com (projet Lanternko/ARAM-Mayhem-Database, MIT).
 // tier-list.json : champions, augments, modèle de composition ; champions/{id}.json : détail par champion.
 
-import https from 'node:https';
+import { download as fetchText } from './http';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -104,21 +104,7 @@ const BASE = 'https://arammeta.com';
 const MAX_AGE_MS = 12 * 3600 * 1000;
 
 function download(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 30000, headers: { 'User-Agent': 'aram-companion (usage perso)' } }, (res) => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        reject(new Error(`HTTP ${res.statusCode} (${url})`));
-        return;
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => (body += c));
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error(`délai dépassé (${url})`)));
-  });
+  return fetchText(url, 30000, url);
 }
 
 export class Arammeta {
