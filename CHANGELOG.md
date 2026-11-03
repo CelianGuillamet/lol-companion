@@ -1,5 +1,14 @@
 # Journal des versions
 
+## v1.90 — 3 nov. 2026 — revue de code : historique protégé, app qui ne gèle plus
+- **Corrigé, historique** : si `history.json` devient illisible, l'app en garde maintenant une copie (`history.json.illisible-…`) et le signale dans le journal. Avant, elle repartait d'une liste vide et l'écrasait à la partie suivante. Les sauvegardes se font l'une après l'autre : deux écritures en même temps (fin de partie + import) pouvaient abîmer le fichier. Réglages écrits de la même façon, sans fichier à moitié écrit.
+- **Corrigé, client League et jeu** : une réponse coupée en cours de route (client ou jeu qui se ferme) pouvait bloquer la lecture pour de bon ou faire tomber l'app. Elle compte maintenant comme « client injoignable » et la lecture continue. Toute erreur interne non gérée est notée dans le journal au lieu de fermer l'app.
+- **Corrigé, panneau téléphone** : une adresse mal formée envoyée par un appareil du réseau ne fait plus planter le serveur. Jeton comparé à temps constant.
+- **Sécurité** : seuls les liens `http(s)` s'ouvrent, dans le navigateur, depuis toutes les fenêtres (avant : n'importe quel protocole, et seulement depuis la fenêtre principale). Aucune fenêtre ne peut naviguer hors de l'interface.
+- **Relancer l'app déjà ouverte** (double-clic sur `ARAM Companion.app`) ramène la fenêtre devant, recalée dans l'écran, même si elle était derrière d'autres fenêtres ou sur un écran débranché. Le lancement automatique (client League) reste discret : il ne vole pas le focus. Si tu l'utilises, réactive-le une fois dans Réglages pour prendre la nouvelle version de l'agent.
+- **Lanceur `ARAM Companion.app` recréé** (il n'était pas sur GitHub) : il ne ferme plus l'app déjà ouverte, il la ramène.
+- Tests : `test/robustness.test.ts` (réponse coupée, historique illisible, sauvegardes simultanées, réglages), `test/phone.test.ts`, `test/autolaunch.test.ts` ; ces tests échouent sur la v1.89. **520 tests passent**, 5 ignorés (dont 1 test de permissions impossible en root). Typage, build et démarrage Electron réussis.
+
 ## v1.89 — 3 nov. 2026 — sorts accessibles et fenêtres dans l’écran
 - **Sorts ennemis accessibles depuis l’en-tête** : le panneau compact reprend les timers manuels existants de Flash, des autres sorts d’invocateur et de l’ultime. Il reste dans l’écran, avec défilement intérieur. Échap ferme le panneau et rend le focus au bouton.
 - **Raccourcis** : Tab ouvre le panneau quand le compagnon est actif, sans détourner la navigation dans les champs et boutons. **⌘⇧E** ouvre une fenêtre interactive sur l’écran du pointeur pendant le jeu. Tab global dans League n’est pas intercepté ; le tableau des scores conserve sa touche. Affichage au-dessus de League plein écran macOS encore à vérifier.

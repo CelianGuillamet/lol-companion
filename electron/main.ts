@@ -9,7 +9,7 @@ import { collectIntelligenceDiagnostic } from '../src/core/intelligence/diagnost
 import { writeFile } from 'node:fs/promises';
 import { Balance } from '../src/core/balance';
 import { PhoneServer } from './phone';
-import { applyAutoLaunch } from './autolaunch';
+import { applyAutoLaunch, BACKGROUND_ARG } from './autolaunch';
 import { recap } from '../src/renderer/insights';
 import { canRelaunch, parseChangelog, shouldNudge, updateFrom, type AppVersionEntry } from '../src/core/appversion';
 import { randomBytes } from 'node:crypto';
@@ -34,6 +34,34 @@ let overlayHidden = false;
 let overlayTestUntil = 0;
 let wasInGame = false;
 let overlayDisplayId: number | null = null; // écran utilisé pour la partie en cours
+
+// ---------------------------------------------------------------- sécurité des fenêtres
+
+/** Seuls les liens web s'ouvrent, dans le navigateur ; jamais `file:`, `smb:` ni un autre protocole système. */
+export const isWebUrl = (url: string): boolean => /^https?:\/\//i.test(url);
+
+// Toutes les fenêtres (présentes et futures) : aucune nouvelle fenêtre Electron, aucune navigation hors de l'interface.
+app.on('web-contents-created', (_e, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isWebUrl(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  contents.on('will-navigate', (event, url) => {
+    if (url.startsWith('file://')) return; // pages de l'interface
+    event.preventDefault();
+    if (isWebUrl(url)) void shell.openExternal(url);
+  });
+});
+
+// Une promesse rejetée sans gestionnaire (réseau, fichier, outil système) ne doit jamais faire tomber l'app en partie.
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  try {
+    engine?.note('warning', `Erreur interne ignorée : ${msg}`);
+  } catch {
+    console.error('unhandledRejection', reason);
+  }
+});
 
 const OVERLAY_W = 310;
 const OVERLAY_H = 600;
@@ -88,10 +116,6 @@ function createMain(): BrowserWindow {
   });
   win.loadFile(join(RENDERER, 'index.html'));
   rememberBounds('main', win);
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
-    return { action: 'deny' };
-  });
   return win;
 }
 
@@ -529,7 +553,11 @@ function registerIpc(): void {
     });
     if (r.canceled || !r.filePath) return { ok: false, message: 'Sauvegarde annulée' };
     const games = engine.rawHistory();
-    writeFileSync(r.filePath, JSON.stringify({ version: 1, exportedAt: Date.now(), games }, null, 1));
+    try {
+      await writeFile(r.filePath, JSON.stringify({ version: 1, exportedAt: Date.now(), games }, null, 1), 'utf8');
+    } catch {
+      return { ok: false, message: 'Sauvegarde impossible : vérifie le dossier choisi puis réessaie.' };
+    }
     return { ok: true, message: `${games.length} parties sauvegardées` };
   });
   ipcMain.handle('gameDetail', (_e, id: number) => engine.gameDetail(Number(id)));
@@ -687,9 +715,18 @@ const ICON = join(__dirname, '..', '..', 'build', 'icon', 'icon.png');
 
 // Une seule instance : un 2e lancement (agent launchd, double-clic) ramène simplement la fenêtre existante.
 if (!SMOKE && !app.requestSingleInstanceLock()) app.quit();
-app.on('second-instance', () => {
-  // Pas de vol du focus : l'agent launchd relance aussi l'app quand le client se ferme (le lockfile disparaît)
-  if (mainWin && !mainWin.isDestroyed() && (!mainWin.isVisible() || mainWin.isMinimized())) mainWin.showInactive();
+app.on('second-instance', (_e, argv) => {
+  if (!mainWin || mainWin.isDestroyed()) return;
+  // Agent launchd (client League qui s'ouvre ou se ferme) : pas de vol du focus, la fenêtre revient seulement si cachée.
+  if (argv.includes(BACKGROUND_ARG)) {
+    if (!mainWin.isVisible() || mainWin.isMinimized()) mainWin.showInactive();
+    return;
+  }
+  // Double-clic sur le lanceur : la fenêtre revient devant, recalée dans l'écran (elle a pu rester sur un écran débranché).
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.setBounds(fitWindowBounds(mainWin.getBounds(), screen.getDisplayMatching(mainWin.getBounds()).workArea));
+  mainWin.show();
+  app.focus({ steal: true });
 });
 
 app.whenReady().then(async () => {

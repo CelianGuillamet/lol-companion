@@ -144,7 +144,8 @@ describe('mise à jour précompilée : vrai moteur de fichiers, sans exécution 
     expect(g.run('--verify').stderr).toContain('Liste des empreintes incohérente');
   });
 
-  it('restaure les fichiers déjà remplacés et retire uniquement les nouveaux fichiers si une écriture échoue', () => {
+  // chmod 555 ne bloque pas root : le scénario d'échec d'écriture n'est pas reproductible en root (conteneurs CI).
+  it.skipIf(process.getuid?.() === 0)('restaure les fichiers déjà remplacés et retire uniquement les nouveaux fichiers si une écriture échoue', () => {
     const f = fixture();
     // Véritable échec de permissions après les deux premiers déplacements atomiques.
     // Ce test Linux exerce les fichiers ; il ne simule pas une validation native macOS.

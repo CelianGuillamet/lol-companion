@@ -2,7 +2,7 @@
 // Les augments viennent de /lol-match-history/v1/games/{gameId} : stats.playerAugment1..6
 // (méthode d'ARAM-Mayhem-Database, MIT).
 
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { LcuClient } from './lcu';
 import type { HistoryGame, Mode, StatsView } from './types';
@@ -133,20 +133,40 @@ export class History {
 
   constructor(private file: string) {}
 
+  /** Copie de sauvegarde d'un historique illisible, s'il y en a eu une au chargement. */
+  corruptBackup: string | null = null;
+
   async load(): Promise<void> {
+    let text: string;
     try {
-      const data = JSON.parse(await readFile(this.file, 'utf8'));
+      text = await readFile(this.file, 'utf8');
+    } catch {
+      this.games = []; // pas encore d'historique
+      return;
+    }
+    try {
+      const data = JSON.parse(text);
       this.games = Array.isArray(data.games) ? data.games : [];
     } catch {
+      // Fichier illisible : on le met de côté avant que la prochaine partie ne réécrive le fichier.
+      this.corruptBackup = `${this.file}.illisible-${Date.now()}`;
+      await copyFile(this.file, this.corruptBackup).catch(() => (this.corruptBackup = null));
       this.games = [];
     }
   }
 
-  private async save(): Promise<void> {
-    await mkdir(dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    await writeFile(tmp, JSON.stringify({ version: 1, games: this.games }, null, 1));
-    await rename(tmp, this.file); // écriture atomique
+  private saving: Promise<void> = Promise.resolve();
+
+  /** Écritures à la suite (jamais deux en même temps sur le même fichier temporaire), chacune atomique. */
+  private save(): Promise<void> {
+    const run = this.saving.then(async () => {
+      await mkdir(dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.tmp`;
+      await writeFile(tmp, JSON.stringify({ version: 1, games: this.games }, null, 1));
+      await rename(tmp, this.file);
+    });
+    this.saving = run.catch(() => undefined);
+    return run;
   }
 
   has(gameId: number): boolean {

@@ -70,7 +70,15 @@ export function localRequest<T>(
   path: string,
   options: { token?: string; body?: unknown; host?: string; timeoutMs?: number } = {},
 ): Promise<LcuResponse<T>> {
-  return new Promise((resolve) => {
+  return new Promise((done) => {
+    // Une seule réponse, quoi qu'il arrive : une réponse coupée en cours de route (client ou jeu qui se ferme)
+    // émet « aborted » / « error » sur la réponse sans jamais émettre « end ».
+    let settled = false;
+    const resolve = (r: LcuResponse<T>) => {
+      if (settled) return;
+      settled = true;
+      done(r);
+    };
     const payload = options.body === undefined ? undefined : JSON.stringify(options.body);
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (options.token) headers.Authorization = 'Basic ' + Buffer.from(`riot:${options.token}`).toString('base64');
@@ -83,6 +91,11 @@ export function localRequest<T>(
       (res) => {
         let raw = '';
         res.setEncoding('utf8');
+        res.on('error', () => resolve({ status: 0, data: null }));
+        res.on('aborted', () => resolve({ status: 0, data: null }));
+        res.on('close', () => {
+          if (!res.complete) resolve({ status: 0, data: null });
+        });
         res.on('data', (c) => (raw += c));
         res.on('end', () => {
           let data: unknown = null;

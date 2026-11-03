@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Settings } from './types';
 
@@ -22,7 +22,16 @@ export async function loadSettings(file: string): Promise<Settings> {
   }
 }
 
-export async function saveSettings(file: string, s: Settings): Promise<void> {
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(s, null, 2));
+let saving: Promise<void> = Promise.resolve();
+
+/** Écriture atomique et à la suite : un arrêt brutal ne laisse jamais un fichier de réglages à moitié écrit. */
+export function saveSettings(file: string, s: Settings): Promise<void> {
+  const body = JSON.stringify(s, null, 2);
+  const run = saving.then(async () => {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(`${file}.tmp`, body);
+    await rename(`${file}.tmp`, file);
+  });
+  saving = run.catch(() => undefined);
+  return run;
 }

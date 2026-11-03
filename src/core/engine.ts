@@ -204,6 +204,7 @@ export class Engine extends EventEmitter {
   async start(): Promise<void> {
     this.state.settings = await loadSettings(this.settingsFile);
     await this.history.load();
+    if (this.history.corruptBackup) this.log('warning', `Historique illisible : copie gardée dans ${this.history.corruptBackup}, l'app repart d'un historique vide.`);
     await this.usage.load();
     this.refreshStats();
     void this.refreshData(false);

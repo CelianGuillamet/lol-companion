@@ -62,4 +62,11 @@ describe('serveur téléphone : signaler un sort ennemi', () => {
     expect(calls).toEqual([[103, 'D', 'shift', -10]]);
     expect((await fetch(`http://127.0.0.1:${s2.port}/api/state?t=tok456`, { method: 'POST' })).status).toBe(405);
   });
+
+  it('répond 400 à une URL mal formée sans faire tomber le serveur', async () => {
+    const base = `http://127.0.0.1:${srv.port}`;
+    expect((await fetch(`${base}/%E0%A4%A`)).status).toBe(400);
+    expect((await fetch(`${base}/api/state?t=tok12`)).status).toBe(403); // jeton presque juste
+    expect((await fetch(`${base}/api/state?t=tok123`)).status).toBe(200); // toujours debout
+  });
 });

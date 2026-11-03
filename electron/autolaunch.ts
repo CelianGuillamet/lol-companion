@@ -10,6 +10,8 @@ import { join } from 'node:path';
 export type AutoLaunch = 'off' | 'login' | 'league';
 
 export const AGENT_LABEL = 'fr.celian.aram-companion.autolaunch';
+/** Passé par l'agent : l'app déjà ouverte reste discrète (pas de vol du focus pendant que le client s'ouvre). */
+export const BACKGROUND_ARG = '--background';
 const LEAGUE_LOCKFILES = ['/Applications/League of Legends.app/Contents/LoL/lockfile', `${homedir()}/Applications/League of Legends.app/Contents/LoL/lockfile`];
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -30,6 +32,8 @@ export function agentPlist(mode: Exclude<AutoLaunch, 'off'>, launcherApp: string
     <string>/usr/bin/open</string>
     <string>-g</string>
     <string>${esc(launcherApp)}</string>
+    <string>--args</string>
+    <string>${BACKGROUND_ARG}</string>
   </array>
 ${trigger}  <key>ThrottleInterval</key><integer>30</integer>
 </dict>

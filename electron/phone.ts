@@ -8,6 +8,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import os from 'node:os';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 export interface PhoneDeps {
   state: () => unknown;
@@ -56,7 +57,16 @@ export class PhoneServer {
 
   async start(port: number, host = '0.0.0.0'): Promise<void> {
     if (this.server) return;
-    const server = http.createServer((req, res) => void this.handle(req, res));
+    const server = http.createServer((req, res) => {
+      // Aucune requête du réseau local (URL mal formée, erreur du moteur…) ne doit remonter au processus principal.
+      this.handle(req, res).catch(() => {
+        if (res.headersSent) res.end();
+        else {
+          res.writeHead(400, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify({ error: 'requête invalide' }));
+        }
+      });
+    });
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(port, host, () => resolve());
@@ -82,7 +92,11 @@ export class PhoneServer {
 
   private authorized(req: http.IncomingMessage): boolean {
     const url = new URL(req.url ?? '/', 'http://x');
-    return url.searchParams.get('t') === this.token;
+    const given = url.searchParams.get('t');
+    if (!given || !this.token) return false;
+    // Comparaison à temps constant (empreintes de même longueur)
+    const h = (x: string) => createHash('sha256').update(x).digest();
+    return timingSafeEqual(h(given), h(this.token));
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -110,6 +124,7 @@ export class PhoneServer {
       if (m) return json(await this.deps.detail(Number(m[1])));
       if (url.pathname === '/api/events') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+        res.on('error', () => this.clients.delete(res));
         res.write(`data: ${JSON.stringify(this.deps.state())}\n\n`);
         this.clients.add(res);
         req.on('close', () => this.clients.delete(res));
