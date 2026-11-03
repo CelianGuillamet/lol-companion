@@ -7,9 +7,9 @@ sessions précédentes : tout ce qu'il faut savoir est ici, dans `docs/ROADMAP.m
 
 App compagnon League of Legends pour tous les modes 5v5 (ARAM, ARAM: Mayhem, Faille), **macOS uniquement**, usage perso de Celian (dev Vue/TS).
 Electron 44 + Vue 3 + Vite + TypeScript, tests vitest. Source de vérité : ce dossier sur le Mac de Celian
-(`~/Documents/aram-companion`). Pas de git dans ce dossier (le dossier connecté interdit les suppressions, ce qui
-casse git) : l'historique, ce sont les archives `.install/aram-companion-vX.Y.tgz` et `CHANGELOG.md`. Le code est
-publié sur le dépôt public GitHub `CelianGuillamet/lol-companion` : ne jamais y mettre `probe-output/`.
+(`~/Documents/aram-companion`), qui est un clone git du dépôt public GitHub `CelianGuillamet/lol-companion`
+(branche `main`). L'historique, ce sont git, les archives `.install/aram-companion-vX.Y.tgz` et `CHANGELOG.md`.
+Ne jamais mettre `probe-output/` sur GitHub.
 
 Code :
 - `src/core/` : logique sans Electron (LCU, arammeta, conseiller, champ select, runes/sorts, historique, moteur).
@@ -52,7 +52,7 @@ dans le conteneur cloud**, pas sur le Mac.
 
 1. Lire `docs/AGENT.md`, `docs/ROADMAP.md`, `CHANGELOG.md`.
 2. Snapshot des sources côté Mac :
-   `cd ~/mnt/Documents/aram-companion && tar czf .install/src-snapshot.tgz --exclude=node_modules --exclude=dist --exclude=.install --exclude='ARAM Companion.app' --exclude=probe-output .`
+   `cd ~/mnt/Documents/aram-companion && tar czf .install/src-snapshot.tgz --exclude=.git --exclude=node_modules --exclude=dist --exclude=.install --exclude='ARAM Companion.app' --exclude=probe-output .`
    puis `device_stage_files` sur ce fichier, et extraction dans un dossier de travail du conteneur.
 3. Dans le conteneur : `npm ci` (ou `npm install`), puis `npm test && npm run typecheck && npm run build` pour
    partir d'une base verte.
@@ -73,7 +73,16 @@ dans le conteneur cloud**, pas sur le Mac.
    plutôt que dépendre d'un `npm install` sur le Mac.
 6. Mettre à jour `CHANGELOG.md` (version, date, ce qui change pour Celian) et `docs/ROADMAP.md` (cocher, ajuster,
    ajouter ce qu'on a appris). Ces deux fichiers font partie de l'archive.
-7. Résumé final en français, court : ce qui a été ajouté, comment le voir, ce qu'il doit vérifier en partie.
+7. Publier sur GitHub **depuis le conteneur**, jamais avec git sur le Mac (les suppressions y sont interdites pendant
+   les sessions planifiées, git y laisserait des `.lock` qui bloquent aussi Celian) :
+   `add_repo` `CelianGuillamet/lol-companion` en accès `push`, cloner dans le conteneur, y copier les sources du
+   dossier de travail (`rsync -a --exclude=.git --exclude=node_modules --exclude=dist --exclude=.install --exclude=probe-output --exclude='ARAM Companion.app' --exclude=launch.log`),
+   relire `git diff --stat` (aucun `probe-output`, aucun pseudo, aucun jeton), puis commit `vX.Y : <résumé>` et push
+   sur `main`. Si le push échoue, le dire dans le résumé, sans annuler le déploiement.
+8. Résumé final en français, court : ce qui a été ajouté, comment le voir, ce qu'il doit vérifier en partie.
+
+Pour aligner le git du Mac sur GitHub après une session (à faire par Celian, pas par une session planifiée) :
+`git fetch && git reset origin/main`. Les fichiers ne bougent pas, seul l'historique local est mis à jour.
 
 ## Données réelles disponibles pour calibrer
 

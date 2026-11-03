@@ -7,3 +7,5 @@ data/cache/
 .install/
 dist/
 /test/probe-output/
+launch.log
+ARAM Companion.app/
