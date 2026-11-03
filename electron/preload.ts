@@ -14,6 +14,7 @@ const api: Api = {
   refreshData: () => ipcRenderer.invoke('refreshData'),
   importHistory: () => ipcRenderer.invoke('importHistory'),
   exportHistory: () => ipcRenderer.invoke('exportHistory'),
+  exportIntelligenceDiagnostic: () => ipcRenderer.invoke('exportIntelligenceDiagnostic'),
   listDisplays: () => ipcRenderer.invoke('listDisplays'),
   testOverlay: () => ipcRenderer.invoke('testOverlay'),
   phoneInfo: () => ipcRenderer.invoke('phoneInfo'),

@@ -5,6 +5,8 @@ import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, N
 import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Engine } from '../src/core/engine';
+import { collectIntelligenceDiagnostic } from '../src/core/intelligence/diagnostic';
+import { writeFile } from 'node:fs/promises';
 import { Balance } from '../src/core/balance';
 import { PhoneServer } from './phone';
 import { applyAutoLaunch } from './autolaunch';
@@ -15,6 +17,7 @@ import { matchCards } from '../src/core/cardmatch';
 import { headlinerFromText } from '../src/core/headliner';
 import { CardReader, permission as screenPermission } from './cardreader';
 import { displayOfApp, displayLabel, windowBounds, GAME_BUNDLE, CLIENT_BUNDLE } from './displays';
+import { fitWindowBounds } from './window-fit';
 import type { AppState, Settings } from '../src/core/types';
 
 const RENDERER = join(__dirname, '..', 'renderer');
@@ -23,6 +26,7 @@ const SMOKE = process.env.ARAM_SMOKE === '1'; // test automatique : capture d'é
 let mainWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
 let secondWin: BrowserWindow | null = null; // mode « fenêtre sur un autre écran »
+let enemyWin: BrowserWindow | null = null;
 let engine: Engine;
 let cardReader: CardReader;
 let overlayHidden = false;
@@ -43,15 +47,11 @@ try {
 } catch {
   /* première fois */
 }
-/** Position enregistrée, seulement si elle tombe encore sur un écran branché. */
+/** Récupère aussi une fenêtre d'un écran débranché et la recale entièrement dans la zone utile. */
 function restoredBounds(key: string): Bounds | null {
   const b = savedBounds[key];
-  if (!b) return null;
-  const visible = screen.getAllDisplays().some((d) => {
-    const a = d.workArea;
-    return b.x < a.x + a.width - 80 && b.x + b.width > a.x + 80 && b.y < a.y + a.height - 80 && b.y + b.height > a.y;
-  });
-  return visible ? b : null;
+  if (!b || ![b.x, b.y, b.width, b.height].every(Number.isFinite)) return null;
+  return fitWindowBounds(b, screen.getDisplayMatching(b).workArea);
 }
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function rememberBounds(key: string, win: BrowserWindow): void {
@@ -73,12 +73,12 @@ function rememberBounds(key: string, win: BrowserWindow): void {
 
 function createMain(): BrowserWindow {
   const restored = SMOKE ? null : restoredBounds('main');
+  const a = screen.getPrimaryDisplay().workArea;
+  const bounds = restored ?? fitWindowBounds({ x: a.x + (a.width - 1180) / 2, y: a.y + (a.height - 780) / 2, width: 1180, height: 780 }, a);
   const win = new BrowserWindow({
-    width: restored?.width ?? 1180,
-    height: restored?.height ?? 780,
-    ...(restored ? { x: restored.x, y: restored.y } : {}),
-    minWidth: 900,
-    minHeight: 620,
+    ...bounds,
+    minWidth: Math.min(900, bounds.width),
+    minHeight: Math.min(620, bounds.height),
     title: 'ARAM Companion',
     backgroundColor: '#050d16', // = --bg : pas de flash d'une autre teinte à l'ouverture
     titleBarStyle: 'hiddenInset',
@@ -133,7 +133,7 @@ function placeOverlay(d: Display): void {
   if (!overlayWin) return;
   const a = d.workArea;
   overlayDisplayId = d.id;
-  overlayWin.setBounds({ x: a.x + a.width - OVERLAY_W - 16, y: a.y + 80, width: OVERLAY_W, height: OVERLAY_H });
+  overlayWin.setBounds(fitWindowBounds({ x: a.x + a.width - OVERLAY_W - 16, y: a.y + 80, width: OVERLAY_W, height: OVERLAY_H }, a));
 }
 
 /** Choisit l'écran : réglage manuel, sinon écran de la fenêtre du jeu, sinon écran du curseur. */
@@ -177,11 +177,12 @@ function applySecondOnTop(): void {
 
 function ensureSecond(): BrowserWindow {
   if (secondWin && !secondWin.isDestroyed()) return secondWin;
+  const a = screen.getPrimaryDisplay().workArea;
+  const bounds = fitWindowBounds({ x: a.x + (a.width - 980) / 2, y: a.y + (a.height - 1000) / 2, width: 980, height: 1000 }, a);
   secondWin = new BrowserWindow({
-    width: 980,
-    height: 1000,
-    minWidth: 420,
-    minHeight: 500,
+    ...bounds,
+    minWidth: Math.min(420, bounds.width),
+    minHeight: Math.min(500, bounds.height),
     title: 'ARAM Companion — en jeu',
     backgroundColor: '#050d16', // = --bg : pas de flash d'une autre teinte à l'ouverture
     titleBarStyle: 'hiddenInset',
@@ -218,19 +219,59 @@ async function showSecond(): Promise<string> {
   const h = Math.min(1000, a.height - 40);
   // On ne redéplace pas une fenêtre que tu as déjà placée toi-même sur cet écran (ni celle d'une session précédente).
   const saved = restoredBounds('second');
-  if (!win.isVisible() && saved && screen.getDisplayMatching(saved).id === display.id) win.setBounds(saved);
+  let next = win.getBounds();
+  if (!win.isVisible() && saved && screen.getDisplayMatching(saved).id === display.id) next = saved;
   else if (!win.isVisible() || screen.getDisplayMatching(win.getBounds()).id !== display.id) {
-    win.setBounds({ x: Math.round(a.x + (a.width - w) / 2), y: Math.round(a.y + (a.height - h) / 2), width: w, height: h });
+    next = { x: Math.round(a.x + (a.width - w) / 2), y: Math.round(a.y + (a.height - h) / 2), width: w, height: h };
   }
+  const fitted = fitWindowBounds(next, a);
+  win.setMinimumSize(Math.min(420, fitted.width), Math.min(500, fitted.height));
+  win.setBounds(fitted);
   win.showInactive();
   const label = displayLabel(display, screen.getAllDisplays().findIndex((d) => d.id === display.id));
   engine.note('info', `Fenêtre en jeu : ${label} (${how})`);
   return label;
 }
 
+/** Ouverture volontaire et interactive sur l'écran du pointeur, sans détourner Tab du jeu. */
+function toggleEnemyWindow(): void {
+  if (enemyWin && !enemyWin.isDestroyed() && enemyWin.isVisible()) {
+    enemyWin.hide();
+    return;
+  }
+  const a = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const bounds = fitWindowBounds({ x: a.x + (a.width - 820) / 2, y: a.y + (a.height - 700) / 2, width: 820, height: 700 }, a);
+  if (!enemyWin || enemyWin.isDestroyed()) {
+    enemyWin = new BrowserWindow({
+      ...bounds, type: 'panel', frame: false, show: false,
+      minWidth: Math.min(360, bounds.width), minHeight: Math.min(300, bounds.height),
+      title: 'ARAM Companion — sorts ennemis', backgroundColor: '#050d16',
+      acceptFirstMouse: true, fullscreenable: false,
+      webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    enemyWin.on('closed', () => { enemyWin = null; });
+    void enemyWin.loadFile(join(RENDERER, 'index.html'), { hash: 'enemies' });
+  }
+  enemyWin.setMinimumSize(Math.min(360, bounds.width), Math.min(300, bounds.height));
+  enemyWin.setBounds(bounds);
+  pinOverlay(enemyWin);
+  enemyWin.show(); // le raccourci demande explicitement une fenêtre interactive
+}
+
+function fitOpenWindows(): void {
+  for (const win of [mainWin, secondWin, overlayWin, enemyWin]) {
+    if (!win || win.isDestroyed() || win.isFullScreen()) continue;
+    const bounds = fitWindowBounds(win.getBounds(), screen.getDisplayMatching(win.getBounds()).workArea);
+    const [minW, minH] = win.getMinimumSize();
+    win.setMinimumSize(Math.min(minW, bounds.width), Math.min(minH, bounds.height));
+    win.setBounds(bounds);
+  }
+}
+
 function updateOverlay(s: AppState): void {
   if (!overlayWin) return;
   const inGame = s.phase === 'InProgress' || s.phase === 'GameStart' || s.phase === 'Reconnect';
+  if (wasInGame && !inGame) enemyWin?.close();
   const windowMode = s.settings.panelMode === 'window';
   if (inGame && !wasInGame && windowMode && s.settings.overlay && s.mode) {
     void showSecond();
@@ -302,7 +343,7 @@ async function syncPhone(): Promise<void> {
 
 function broadcast(s: AppState): void {
   phone?.push(s);
-  for (const w of [mainWin, overlayWin, secondWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
+  for (const w of [mainWin, overlayWin, secondWin, enemyWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
   updateOverlay(s);
   notifyChampSelect(s);
   notifyAugmentRound(s);
@@ -424,6 +465,26 @@ function registerIpc(): void {
   ipcMain.handle('refreshData', () => engine.refreshData(true));
   ipcMain.handle('importHistory', () => engine.importHistory());
   ipcMain.handle('getHistory', () => engine.getHistory());
+  ipcMain.handle('exportIntelligenceDiagnostic', async () => {
+    try {
+      const r = await dialog.showSaveDialog(mainWin!, {
+        title: 'Enregistrer le diagnostic des données du jeu',
+        defaultPath: join(app.getPath('documents'), 'aram-companion-diagnostic-jeu.json'),
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (r.canceled || !r.filePath) return { ok: false, message: 'Enregistrement annulé.' };
+      const report = await collectIntelligenceDiagnostic();
+      await writeFile(r.filePath, JSON.stringify({ version: 1, createdAt: new Date().toISOString(), platform: process.platform, report }, null, 2), 'utf8');
+      return {
+        ok: true,
+        message: report.status === 'live-acquisition-verified'
+          ? 'Rapport enregistré. Données Live Client reçues ; positions cachées et lancements ennemis toujours non validés.'
+          : 'Rapport enregistré. Aucune acquisition Live Client : recommence sur le Mac pendant une partie.',
+      };
+    } catch {
+      return { ok: false, message: 'Le diagnostic n’a pas pu être enregistré. Vérifie le dossier choisi puis réessaie.' };
+    }
+  });
   ipcMain.handle('exportHistory', async () => {
     const day = new Date().toISOString().slice(0, 10);
     const r = await dialog.showSaveDialog(mainWin!, {
@@ -611,6 +672,7 @@ app.whenReady().then(async () => {
   // Lire les cartes d'augments maintenant (si la lecture automatique les a ratées)
   globalShortcut.register('CommandOrControl+Shift+R', () => void cardReader.scanNow().then((r) => r.read && engine.setOffered(r.read, r.context)));
   globalShortcut.register('CommandOrControl+Shift+M', cycleOverlayDisplay); // panneau sur l'écran suivant
+  if (!globalShortcut.register('CommandOrControl+Shift+E', toggleEnemyWindow)) engine.note('warning', 'Le raccourci des sorts ennemis ⌘⇧E est indisponible. Utilise le bouton en partie.');
   // Fenêtre second écran : l'afficher / la masquer à tout moment
   globalShortcut.register('CommandOrControl+Shift+S', async () => {
     if (secondWin && !secondWin.isDestroyed() && secondWin.isVisible()) secondWin.hide();
@@ -620,6 +682,8 @@ app.whenReady().then(async () => {
     }
   });
   placeOverlay(screen.getPrimaryDisplay());
+  screen.on('display-metrics-changed', fitOpenWindows);
+  screen.on('display-removed', fitOpenWindows);
 
   app.on('activate', () => {
     if (!mainWin || mainWin.isDestroyed()) mainWin = createMain();

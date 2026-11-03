@@ -2,6 +2,8 @@
 // Aucune dépendance à Electron : testable avec un faux client (voir test/engine.test.ts).
 
 import { EventEmitter } from 'node:events';
+import { GameDataAcquisitionEngine } from './intelligence/acquisition';
+import { RealTimeIntelligenceStore } from './intelligence/store';
 import { join } from 'node:path';
 import { LcuClient, discoverCredentials, liveClient, type Credentials } from './lcu';
 import { Arammeta, type ChampionDetail, type DetailRow } from './arammeta';
@@ -46,6 +48,8 @@ export class Engine extends EventEmitter {
   private meta: Arammeta;
   private balance: Balance;
   private game = new GameData();
+  private readonly intelligenceStore = new RealTimeIntelligenceStore();
+  private readonly acquisition: GameDataAcquisitionEngine;
   private history: History;
   private settingsFile: string;
   private discover: () => Promise<Credentials | null>;
@@ -112,6 +116,7 @@ export class Engine extends EventEmitter {
 
   constructor(private opts: EngineOptions) {
     super();
+    this.acquisition = new GameDataAcquisitionEngine(opts.live);
     this.meta = opts.arammeta ?? new Arammeta(join(opts.dataDir, 'cache'));
     this.balance = opts.balance ?? new Balance(join(opts.dataDir, 'cache'));
     this.history = new History(join(opts.dataDir, 'history.json'));
@@ -123,6 +128,7 @@ export class Engine extends EventEmitter {
     this.discover = opts.discover ?? discoverCredentials;
     this.state = {
       connection: 'searching',
+      intelligence: null,
       phase: null,
       mode: null,
       queueId: null,
@@ -478,7 +484,7 @@ export class Engine extends EventEmitter {
     if (!this.lcu) {
       const creds = await this.discover();
       if (!creds) {
-        this.setDisconnected();
+        await this.handleClientUnavailable();
         return;
       }
       this.lcu = new LcuClient(creds);
@@ -486,15 +492,16 @@ export class Engine extends EventEmitter {
     const r = await this.lcu.request<string>('GET', '/lol-gameflow/v1/gameflow-phase');
     if (r.status === 0 || r.status === 401 || r.status === 403) {
       this.lcu = null;
-      this.setDisconnected();
+      await this.handleClientUnavailable();
       return;
     }
-    if (this.state.connection !== 'connected') await this.onConnected();
+    const reconnected = this.state.connection !== 'connected';
+    if (reconnected) await this.onConnected();
     const phase = typeof r.data === 'string' ? r.data : 'None';
-    const changed = phase !== this.state.phase;
+    const changed = reconnected || phase !== this.state.phase;
     this.state.phase = phase;
 
-    if (changed && ['Lobby', 'Matchmaking', 'ReadyCheck', 'ChampSelect', 'InProgress', 'GameStart'].includes(phase)) {
+    if (changed && ['Lobby', 'Matchmaking', 'ReadyCheck', 'ChampSelect', 'InProgress', 'GameStart', 'Reconnect'].includes(phase)) {
       await this.readQueue();
     }
 
@@ -516,6 +523,16 @@ export class Engine extends EventEmitter {
       this.probedSelect = false;
       this.state.champSelect = null;
       this.parsed = null;
+    }
+
+    if (['InProgress', 'GameStart', 'Reconnect'].includes(phase)) {
+      this.state.intelligence = this.intelligenceStore.update(await this.acquisition.poll(), {
+        sessionId: this.pendingGameId ? String(this.pendingGameId) : null,
+        championId: (alias) => this.game.championIdByAlias(alias),
+      });
+    } else {
+      this.intelligenceStore.reset();
+      this.state.intelligence = null;
     }
 
     if ((phase === 'InProgress' || phase === 'GameStart' || phase === 'Reconnect') && this.state.mode) {
@@ -555,16 +572,38 @@ export class Engine extends EventEmitter {
   }
 
   private setDisconnected(): void {
+    this.state.intelligence = null;
+    this.state.headliner = null;
+    this.state.augRound = null;
+    this.state.offered = null;
     this.readSeq++;
     this.state.player = null;
     if (this.state.connection === 'connected') this.log('info', 'Client League fermé');
     this.state.connection = 'searching';
     this.state.phase = null;
+    this.state.mode = null;
+    this.state.queueId = null;
+    this.myChampionId = 0;
+    this.lane = null;
     this.state.champSelect = null;
     this.state.augments = null;
     this.state.build = null;
     this.state.counters = null;
     this.state.nextBuy = null;
+  }
+
+  /** Le serveur du jeu peut rester accessible pendant une reconnexion du client LCU. */
+  private async handleClientUnavailable(): Promise<void> {
+    this.setDisconnected();
+    const result = await this.acquisition.poll();
+    if (result.snapshot) {
+      this.state.intelligence = this.intelligenceStore.update(result, {
+        championId: (alias) => this.game.championIdByAlias(alias),
+      });
+      this.state.phase = 'InProgress';
+    } else {
+      this.intelligenceStore.reset();
+    }
   }
 
   private async onConnected(): Promise<void> {

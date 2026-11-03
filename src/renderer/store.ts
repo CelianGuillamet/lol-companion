@@ -41,6 +41,7 @@ function httpApi(): Api {
     refreshData: async () => undefined,
     importHistory: async () => ({ added: 0 }),
     exportHistory: readOnly,
+    exportIntelligenceDiagnostic: readOnly,
     listDisplays: async () => [],
     testOverlay: readOnly,
     phoneInfo: async () => ({ running: true, url: location.href, error: null }),

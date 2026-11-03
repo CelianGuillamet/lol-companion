@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 
 export interface MockState {
+  /** Réponse synthétique explicite pour les tests du flux d'observations. */
+  allGameData?: unknown;
   /** Catalogue facultatif pour les scénarios de recettes synthétiques. */
   itemData?: unknown[];
   phase: string;
@@ -67,6 +69,7 @@ export async function startMockLcu(token = 'secret') {
         res.end(data === undefined ? '' : JSON.stringify(data));
       };
       // API Live Client du jeu (port 2999 en vrai) : pas d'authentification
+      if (path === '/liveclientdata/allgamedata') return state.allGameData ? send(200, state.allGameData) : send(404);
       if (path === '/liveclientdata/activeplayer') return (state as unknown as { live?: { me?: object } }).live?.me ? send(200, (state as unknown as { live: { me: object } }).live.me) : send(404);
       if (path === '/liveclientdata/gamestats') return send(200, { gameMode: 'KIWI', gameTime: 42, mapNumber: 12 });
       if (path === '/liveclientdata/playerlist') return (state as unknown as { live?: { players?: object } }).live?.players ? send(200, (state as unknown as { live: { players: object } }).live.players) : send(404);

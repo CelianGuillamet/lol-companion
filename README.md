@@ -19,8 +19,14 @@ Journal : `~/Library/Logs/ARAM Companion.log`. L'icône du Dock s'appelle « Ele
   achetable), items contre l'équipe adverse (qui suivent les scores), build le plus gagnant.
 - **Mes stats / Historique** : toutes tes parties, filtres, tendances, adversaires / alliés / duos, page champion,
   export.
+- **Équipe ennemie** en partie : roster, sorts d’invocateur équipés, événements publiés et horloge Live Client.
+  Provenance et indisponibilités affichées. **Positions hors vision et suivi automatique des lancements non
+  opérationnels** : aucun fournisseur de ces données n’a été vérifié. Aucun timer n’est inventé.
 
-Raccourcis : ⌘⇧A masquer l'overlay · ⌘⇧M écran suivant · ⌘⇧S fenêtre en jeu.
+Raccourcis : ⌘⇧A masquer l'overlay · ⌘⇧M écran suivant · ⌘⇧S fenêtre en jeu · ⌘⇧E sorts ennemis.
+Le bouton **Sorts ennemis** en haut de la vue en partie ouvre aussi le panneau. **Tab** fonctionne quand
+le compagnon est actif ; Tab dans League conserve le tableau des scores. Le panneau et les fenêtres sont
+recalés dans l’écran et leur contenu peut défiler. Les sorts affichés ne démarrent aucun timer au clic.
 
 ## Développement
 
@@ -33,6 +39,34 @@ npm run typecheck
 ```
 
 Code : `src/core/` (logique sans Electron), `electron/` (fenêtres, serveur téléphone), `src/renderer/` (interface).
+
+### Diagnostic des données ennemies
+
+[Audit des sources et limites](docs/intelligence-investigation.md). Le pipeline `src/core/intelligence/`
+lit `allgamedata` dans le processus principal et transmet ses observations par l’IPC existant. Le calculateur
+de cooldowns exige une règle de patch, un lancement et des statistiques acquis ; son catalogue de production
+reste vide en l’absence de données validées.
+
+Sur l’hôte qui exécute League, en partie :
+
+```bash
+./node_modules/.bin/esbuild scripts/intelligence-probe.ts --bundle --platform=node --format=esm --outfile=dist/intelligence-probe.mjs
+node dist/intelligence-probe.mjs
+```
+
+Le diagnostic affiche uniquement les statuts et structures des interfaces locales, sans valeurs de joueur
+ni jeton. Code de sortie 2 si Live Client n’est pas acquis. Les données cachées restent « non validées »
+même si le roster est acquis.
+
+Pour tester l’interface sous Linux après le build et le bundling de `test/demo.ts`, lancer
+`node dist/demo.mjs intelligence`, puis avec le port affiché et Xorg disponible :
+
+```bash
+DISPLAY=:101 ARAM_DEMO_PORT=<port> ./node_modules/.bin/electron test/intelligence-smoke.cjs --no-sandbox --disable-gpu
+```
+
+Ajouter `ARAM_TEST_COMPACT=1` pour la vue second écran à 390 px. Ce scénario utilise des données
+**synthétiques** ; il vérifie le transport et l’affichage, pas le suivi en vraie partie.
 
 ### Vérifier le choix d’augment dans Electron (cloud Linux)
 

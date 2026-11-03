@@ -28,6 +28,7 @@ beforeAll(async () => {
     discover: async () => ({ port: mock.port, token: mock.token }),
     arammeta: new Arammeta(join(dataDir, 'cache'), fixtureFetcher),
     balance: offlineBalance(),
+    augInfoFetcher: async () => { throw new Error('hors ligne'); },
     live: { port: 1 }, // pas de Live Client dans ce test
   });
   // start() lance la boucle ; on pilote les ticks à la main ensuite
@@ -261,6 +262,7 @@ describe('moteur contre un faux client League', () => {
       discover: async () => ({ port: mock.port, token: mock.token }),
       arammeta: new Arammeta(join(dataDir, 'cache2'), fixtureFetcher),
       balance: offlineBalance(),
+      augInfoFetcher: async () => { throw new Error('hors ligne'); },
       live: { port: 1 },
     });
     await fresh.refreshData(false);
@@ -398,6 +400,7 @@ describe('moteur contre un faux client League', () => {
       discover: async () => ({ port: mock.port, token: mock.token }),
       arammeta: new Arammeta(join(dataDir, 'cache3'), fixtureFetcher),
       balance: offlineBalance(),
+      augInfoFetcher: async () => { throw new Error('hors ligne'); },
       live: { port: mock.port },
     });
     await fresh.refreshData(false);

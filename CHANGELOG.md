@@ -1,5 +1,28 @@
 # Journal des versions
 
+## v1.64 — 3 nov. 2026 — accès aux sorts et fenêtres dans l’écran
+- **Sorts ennemis accessibles depuis l’en-tête** : panneau compact, taille limitée à l’écran et défilement
+  intérieur. Échap ferme et rend le focus au bouton. Tab ouvre le panneau quand le compagnon est actif,
+  sans détourner la navigation dans les champs et boutons.
+- **⌘⇧E en jeu** : ouvre une fenêtre interactive sur l’écran du pointeur. Tab global dans League n’est
+  pas intercepté ; le tableau des scores conserve sa touche. Comportement plein écran macOS à vérifier.
+- **Fenêtres récupérées** : positions sauvegardées, écran débranché ou changement de résolution sont
+  recalés dans la zone utile, avec dimensions et minimums adaptés aux petits écrans.
+- Les cases de sorts restent informatives : cette correction d’accès n’active aucun timer automatique.
+
+## v1.63 — 3 nov. 2026 — observations ennemies et provenance
+- **Panneau Équipe ennemie** dans la vue en partie et onglet Ennemis sur petit écran : identité, niveau,
+  état rapporté, sorts d’invocateur équipés, événements publiés et temps de partie.
+- **Acquisition automatique** d’`allgamedata`, normalisation, corrélation prudente des identités, journal borné,
+  déduplication et remise à zéro sur session, roster ou recul de l’horloge. Fonctionne aussi sans LCU accessible.
+- **Données inconnues explicites** : aucun fournisseur vérifié de X/Y, vision, rappels ou lancements ennemis.
+  Le suivi hors vision et les timers automatiques restent non opérationnels. Pas de prédiction de remplacement.
+- **Calculateur extensible** par patch/mode, accélérations, modificateurs, resets et charges séquentielles ;
+  refuse les entrées incomplètes. Aucune table de cooldowns ni aucun lancement fictif en production.
+- **Diagnostic local** `scripts/intelligence-probe.ts` et audit des interfaces dans
+  `docs/intelligence-investigation.md`. Validation cloud sur données synthétiques ; aucune partie réelle
+  ni validation native macOS disponible dans cet environnement.
+
 ## v1.62 — 2 nov. 2026 — conseils plus stables, synergie plafonnée
 - **Achat stable** : tant que ton inventaire ne change pas, le conseil ne change plus. Une nouvelle menace passe
   après ton prochain achat. Vraie partie du 2 nov. : Thornmail, Iceborn, puis Thornmail en 90 secondes.

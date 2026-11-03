@@ -15,6 +15,22 @@ KPI, forme, détail des 10 joueurs) · items contre l'équipe adverse · badges 
 
 ## Priorité 0 — valider sur les vraies parties (avant toute nouvelle fonction)
 
+### Mission observations ennemies (3 nov. 2026)
+
+- [x] Accès direct aux sorts depuis l’en-tête, panneau compact borné à l’écran, Tab local et ⌘⇧E global.
+  Fenêtres recalées après changement de résolution. Scénario Electron grand écran et 390 px passé ;
+  affichage au-dessus de League plein écran macOS encore à vérifier. Tab global dans League non implémenté.
+- [x] Pipeline Live Client intégré, provenance, journal d’événements borné, gestion des données inconnues
+  et panneau ennemi responsive. Tests unitaires, transport HTTPS et interface Electron Linux.
+- [x] Calculateur de cooldowns par règles explicites, sans tables de patch supposées ni faux timers.
+- [ ] Exécuter `scripts/intelligence-probe.ts` sur le Mac en partie et examiner son schéma local.
+- [ ] Identifier et vérifier une source réelle de coordonnées/visibilité et de lancements ennemis.
+  **Aucune source acquise ici** ; ces fonctions restent non opérationnelles, y compris hors vision.
+- [ ] Valider sur événements réels les rangs/haste, casts, resets et charges avant d’activer des timers.
+
+Audit détaillé : `docs/intelligence-investigation.md`. Les scénarios synthétiques ne satisfont pas ces
+trois validations en partie.
+
 Beaucoup de fonctions v1.10 → v1.23 n'ont été testées que contre le faux client. À chaque session :
 - [x] (v1.53, 29 oct.) Captures `probe-output/` vérifiées (11 parties Mayhem) : `gameData.teamOne/teamTwo`
   (puuid, championId), `activeplayer.level`, `currentGold`, `riotId` existent sous ces noms. **Aucun champ

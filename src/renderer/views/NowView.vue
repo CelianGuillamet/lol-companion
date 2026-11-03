@@ -10,7 +10,7 @@ const moment = computed(() => {
   const s = state.value;
   if (!s) return 'home';
   if (s.champSelect) return 'select';
-  if (['InProgress', 'GameStart', 'Reconnect'].includes(s.phase ?? '') && (s.augments || s.build)) return 'game';
+  if (['InProgress', 'GameStart', 'Reconnect'].includes(s.phase ?? '') && (s.augments || s.build || s.intelligence)) return 'game';
   return 'home';
 });
 </script>

@@ -8,6 +8,20 @@ import Notice from '../ui/Notice.vue';
 
 const s = computed(() => state.value!);
 const refreshing = ref(false);
+const diagnosing = ref(false);
+const diagnosticMsg = ref<{ ok: boolean; message: string } | null>(null);
+async function exportDiagnostic() {
+  if (diagnosing.value) return;
+  diagnosing.value = true;
+  diagnosticMsg.value = null;
+  try {
+    diagnosticMsg.value = await window.api.exportIntelligenceDiagnostic();
+  } catch {
+    diagnosticMsg.value = { ok: false, message: 'Le diagnostic est indisponible. Relance l’app avec sa dernière version.' };
+  } finally {
+    diagnosing.value = false;
+  }
+}
 
 const OPTIONS: { key: 'autoRunes' | 'autoSpells' | 'autoItemSet' | 'overlay' | 'notifications' | 'autoAccept' | 'augmentNotify' | 'secondOnTop' | 'readCards'; label: string; hint: string }[] = [
   { key: 'readCards', label: 'Lire les cartes d’augments à l’écran (Mayhem)', hint: 'Reconnaît tes 3 cartes et met la meilleure en avant, avec une notification « Prends … ». Seulement quand des cartes peuvent être proposées. L’image est lue puis effacée : rien n’est gardé ni envoyé. ⌘⇧R : relire maintenant.' },
@@ -226,6 +240,14 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2
         </div>
         <button class="btn" :disabled="refreshing" @click="refresh">{{ refreshing ? 'Chargement…' : 'Rafraîchir' }}</button>
       </div>
+    </section>
+
+    <section class="card" aria-labelledby="diagnostic-title">
+      <h2 id="diagnostic-title">Diagnostic des données du jeu</h2>
+      <p class="small">Pendant une partie, sur le Mac qui exécute League, exporte le rapport pour vérifier les données réellement accessibles.</p>
+      <p class="faint small">Le fichier contient les statuts et la structure des interfaces, sans nom de joueur ni jeton. Il reste sur ton Mac ; rien n’est envoyé automatiquement.</p>
+      <button class="btn" :disabled="diagnosing" :aria-busy="diagnosing" @click="exportDiagnostic">{{ diagnosing ? 'Diagnostic en cours…' : 'Exporter le diagnostic du jeu' }}</button>
+      <Notice v-if="diagnosticMsg" :kind="diagnosticMsg.ok ? 'info' : 'warn'"><p>{{ diagnosticMsg.message }}</p></Notice>
     </section>
 
     <section class="card">

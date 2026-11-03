@@ -1,4 +1,5 @@
 import type { GameReview } from './review';
+import type { IntelligenceState } from './intelligence/types';
 // Types partagés entre le processus principal (Electron) et l'interface (Vue).
 
 export type Mode = 'aram' | 'mayhem' | 'sr';
@@ -351,6 +352,8 @@ export interface PlayerCard {
 }
 
 export interface AppState {
+  /** Observations Live Client ; les données non acquises restent explicitement inconnues. */
+  intelligence?: IntelligenceState | null;
   /** Nombre d'anciennes parties notées par la revue depuis le lancement (recharge l'historique affiché). */
   reviews?: number;
   connection: Connection;
@@ -385,6 +388,7 @@ export interface Api {
   refreshData(): Promise<void>;
   importHistory(): Promise<{ added: number }>;
   exportHistory(): Promise<{ ok: boolean; message: string }>;
+  exportIntelligenceDiagnostic(): Promise<{ ok: boolean; message: string }>;
   listDisplays(): Promise<{ id: string; label: string }[]>;
   testOverlay(): Promise<{ ok: boolean; message: string }>;
   phoneInfo(): Promise<{ running: boolean; url: string | null; error: string | null }>;

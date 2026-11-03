@@ -26,6 +26,7 @@ beforeAll(async () => {
     discover: async () => ({ port: mock.port, token: mock.token }),
     arammeta: new Arammeta(join(dataDir, 'cache'), async (url) => readFileSync(join(fixtures, url.replace('https://arammeta.com/api/', '')), 'utf8')),
     balance: new Balance(mkdtempSync(join(tmpdir(), 'bal-')), async () => { throw new Error('hors ligne'); }),
+    augInfoFetcher: async () => { throw new Error('hors ligne : descriptions Mayhem hors périmètre de ce test Faille'); },
     live: { port: 1 },
   });
   (engine as unknown as { opggData: object }).opggData = {

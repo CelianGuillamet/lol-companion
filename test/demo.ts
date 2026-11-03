@@ -1,9 +1,10 @@
 // Faux client League pour démo / captures : node demo.cjs <scenario>
 // Scénarios : champselect | ingame | purchase (recette synthétique) | stats | sr | sringame
 import { startMockLcu, game, PUUID } from './mock-lcu';
+import { intelligenceFixture } from './intelligence-fixture';
 
 const scenario = process.argv[2] || 'champselect';
-const inGame = scenario === 'ingame' || scenario === 'purchase';
+const inGame = scenario === 'ingame' || scenario === 'purchase' || scenario === 'intelligence';
 
 const mock = await startMockLcu('demo');
 const s = mock.state;
@@ -68,6 +69,10 @@ if (scenario === 'purchase') {
   const live = (s as unknown as { live: { me: { currentGold: number }; players: { items: { itemID: number }[] }[] } }).live;
   live.me.currentGold = Number(process.env.ARAM_DEMO_GOLD ?? 600);
   live.players[0].items = [3084, 3111, 1033].map((itemID) => ({ itemID }));
+}
+if (scenario === 'intelligence') {
+  // Transport/UI seulement : aucune prétention de tracking en vraie partie.
+  s.allGameData = intelligenceFixture();
 }
 // Faille (classée solo, mid) : champ select Ahri survolée contre Lux, puis en partie avec les rôles du Live Client
 if (scenario === 'sr' || scenario === 'sringame') {
