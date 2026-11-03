@@ -224,10 +224,10 @@ describe('revente comptée dans l’or disponible', () => {
     expect(nextBuys({ ...input, gold: 2200, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0].resale).toBeUndefined();
   });
 
-  it('avec de la place, vend seulement un composant sans usage', () => {
+  it('avec de la place, un composant reste : sur 10 ventes réelles, 7 visaient l’item que Celian finissait', () => {
     const bag = [300, 900, 101];
     const r = nextBuys({ ...input, gold: 2600, owned: bag, bag, cores: [{ core: [201], options: [] }] }).rows[0];
-    expect(r.resale).toEqual({ sell: [101], gain: 245 });
+    expect(r.resale).toBeUndefined();
     expect(r.room).toBeUndefined();
   });
 
@@ -257,7 +257,69 @@ describe('revente comptée dans l’or disponible', () => {
   });
 
   it('resaleFor retire aussi la bonne copie d’un composant en double', () => {
-    expect(resaleFor(200, 500, [100, 100], [200], null, () => false, () => false, (id) => P[id] ?? null, comps, (id) => SELL[id] ?? null)).toEqual({ sell: [100], gain: 612 });
+    expect(resaleFor(200, 500, [100, 100, 300, 301, 302, 900], [200], null, finished, (id) => id === 900, (id) => P[id] ?? null, comps, (id) => SELL[id] ?? null)).toEqual({ sell: [100], gain: 612 });
+  });
+});
+
+describe('revente, parties du 3 nov. (Jhin, Tahm Kench)', () => {
+  // Vrais prix et recettes. L'app conseillait de vendre Last Whisper (1 450) pour acheter Executioner's Calling (800), puis l'Executioner's qu'elle venait de faire acheter.
+  const EXEC = 3123, MORTAL = 3033, WHISPER = 3035, DOMINIK = 3036, CLOAK = 1018, BF = 1038, IE = 3031, MAW = 3156, COLLECTOR = 6676, HUBRIS = 126697, BOOTS = 3009, DIRK = 3134, DAWN = 3072, POTION = 2003;
+  const P: Record<number, number> = { [EXEC]: 800, [MORTAL]: 3200, [WHISPER]: 1450, [DOMINIK]: 3100, [CLOAK]: 600, [BF]: 1300, [IE]: 3500, [MAW]: 3100, [COLLECTOR]: 3000, [HUBRIS]: 3000, [BOOTS]: 900, [DIRK]: 1000, [DAWN]: 3400, [POTION]: 50 };
+  const recipe: Record<number, number[]> = { [MORTAL]: [EXEC, WHISPER], [DOMINIK]: [WHISPER], [IE]: [BF, CLOAK], [EXEC]: [] };
+  const comps = (id: number) => recipe[id] ?? [];
+  const finished = (id: number) => (P[id] ?? 0) >= 2000;
+  const input = { boots: [], allBoots: new Set([BOOTS]), price: (id: number) => P[id] ?? null, components: comps, complete: finished, sellValue: (id: number) => (P[id] ? Math.floor(P[id] * 0.7) : null) };
+  const antiheal = { title: 'Anti-soins', items: [EXEC, MORTAL], urgent: true };
+  const cores = [{ core: [COLLECTOR, HUBRIS], options: [{ id: IE, winrate: 0.5 }, { id: MAW, winrate: 0.5 }] }];
+
+  it('ne vend pas Last Whisper pour un composant moins cher (15 h 15)', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, WHISPER];
+    const r = nextBuys({ ...input, gold: 154, owned: bag, bag, cores, counters: [antiheal] }).rows[0];
+    expect(r.id).toBe(EXEC);
+    expect(r.resale).toBeUndefined();
+  });
+
+  it('sac plein : B. F. Sword et Cloak restent pour Infinity Edge (15 h 19)', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, CLOAK, BF];
+    const r = nextBuys({ ...input, gold: 380, owned: bag, bag, cores, counters: [antiheal] }).rows[0];
+    expect(r.id).toBe(IE);
+    expect(r.room).toBeUndefined();
+    expect(r.resale).toBeUndefined();
+  });
+
+  it('sac plein sans item à finir : le composant visé attend, sans vente', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, CLOAK, BF];
+    const r = nextBuys({ ...input, gold: 380, owned: bag, bag, cores: [{ core: [COLLECTOR], options: [] }], counters: [antiheal] }).rows[0];
+    expect(r.id).toBe(EXEC);
+    expect(r.room).toEqual({ sell: null, held: true });
+  });
+
+  it('sac plein : une potion peut céder sa place à un composant', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, BF, POTION];
+    const r = nextBuys({ ...input, gold: 380, owned: bag, bag, cores: [{ core: [COLLECTOR], options: [] }], counters: [antiheal] }).rows[0];
+    expect(r.room).toEqual({ sell: POTION });
+  });
+
+  it('garde le composant qui couvre une menace et propose son item fini (15 h 24)', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, IE, EXEC];
+    const r = nextBuys({ ...input, gold: 2562, owned: bag, bag, cores, counters: [antiheal, { title: 'Résistance magique', items: [MAW], urgent: true }] }).rows[0];
+    expect(r.id).toBe(MORTAL);
+    expect(r.why).toBe('termine ton item contre anti-soins');
+    expect(r.room).toBeUndefined();
+    expect(r.resale).toBeUndefined();
+  });
+
+  it('la couverture tient aussi sans item à finir : rien à vendre', () => {
+    const bag = [COLLECTOR, HUBRIS, BOOTS, DOMINIK, IE, EXEC];
+    const r = nextBuys({ ...input, gold: 2562, owned: bag, bag, cores, counters: [{ title: 'Anti-soins', items: [EXEC] }, { title: 'Résistance magique', items: [MAW], urgent: true }] }).rows[0];
+    expect(r.id).toBe(MAW);
+    expect(r.room).toEqual({ sell: null });
+  });
+
+  it('avec de la place, une potion peut combler les derniers sous d’un item fini', () => {
+    const bag = [DIRK, BOOTS, POTION, CLOAK];
+    const r = nextBuys({ ...input, gold: 2980, owned: bag, bag, cores: [{ core: [COLLECTOR], options: [] }], counters: [] }).rows[0];
+    expect(r.resale).toEqual({ sell: [POTION], gain: 35 });
   });
 });
 

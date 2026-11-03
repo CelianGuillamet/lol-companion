@@ -83,12 +83,13 @@ describe.skipIf(!dir)('répétition générale sur les vraies données', () => {
       .sort((a, b) => a.at - b.at);
     const games = hist as unknown as { gameId: number; championId: number; createdAt: number; durationSec: number }[];
     // Catalogue du vrai client absent d'ici : les objets normaux lus ont un prix, les ids de mode (> 100000) non, comme en vrai.
-    const seenIds = new Set<number>(choix.flatMap((c) => (c.me?.items ?? []).map((i: { itemID: number }) => i.itemID)));
+    const seenIds = new Set<number>(choix.flatMap((c) => [...(c.me?.items ?? []).map((i: { itemID: number }) => i.itemID), ...(c.players ?? []).flatMap((p: { items: number[] }) => p.items)]));
     mock.state.itemData = [...seenIds].filter((id) => id < 100000).map((id) => ({ id, name: `Objet ${id}`, priceTotal: 1000 + (id % 2000) }));
     await engine.refreshData(true);
     let played = 0;
     let frames = 0;
     let withUnknown = 0;
+    let realPlayers = 0;
     for (const f of sessions) {
       const s = real(f);
       const gameId = s.gameData?.gameId as number;
@@ -106,6 +107,19 @@ describe.skipIf(!dir)('répétition générale sur les vraies données', () => {
       st.selections = sel;
       st.teams = { teamOne: s.gameData.teamOne, teamTwo: s.gameData.teamTwo };
       for (const [i, cap] of caps.entries()) {
+        // Depuis la v1.78 la capture garde les 10 vrais joueurs, avant les 9 autres sont des copies de toi. Le nom réel ne donne pas
+        // l'id ici : chaque joueur prend la place d'un champion de la bonne équipe, ce qui suffit pour les totaux (écart d'objets).
+        type Real = { champion: string; team: string; items: number[]; level: number; position: string };
+        const real10 = (cap.players ?? []) as Real[];
+        const myTeam = real10.find((p) => p.champion === cap.me.championName)?.team;
+        const pools = [real10.filter((p) => p.team === myTeam && p.champion !== cap.me.championName), real10.filter((p) => p.team !== myTeam)];
+        const meOne = inOne.has(mine);
+        const realOf = new Map<number, Real>();
+        for (const p of sel) {
+          const r = p.championId !== mine && pools[inOne.has(p.championId) === meOne ? 0 : 1].shift();
+          if (r) realOf.set(p.championId, r);
+        }
+        if (realOf.size) realPlayers++;
         const players = sel.map((p) => ({
           ...cap.me,
           riotId: p.championId === mine ? 'Moi#X' : `J${p.championId}#X`,
@@ -115,6 +129,7 @@ describe.skipIf(!dir)('répétition générale sur les vraies données', () => {
           rawChampionName: `game_character_displayname_C${p.championId}`,
           team: inOne.has(p.championId) ? 'ORDER' : 'CHAOS',
           skinName: p.championId === mine ? cap.me.skinName : '',
+          ...(realOf.has(p.championId) ? { level: realOf.get(p.championId)!.level, position: realOf.get(p.championId)!.position, items: realOf.get(p.championId)!.items.map((itemID, slot) => ({ itemID, slot, count: 1, consumable: false, price: 0, displayName: '' })) } : {}),
         }));
         st.live = { gameTime: 180 + i * 300, me: { ...cap.activeplayer, riotId: 'Moi#X', riotIdGameName: 'Moi', summonerName: 'Moi' }, players };
         await engine.tick();

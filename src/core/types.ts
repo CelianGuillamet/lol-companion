@@ -136,7 +136,7 @@ export interface NextBuyPanel {
   /** D'où vient le build : winrate et parties (arammeta, Mayhem), nombre de builds fréquents pour ce champion. */
   buildInfo?: { winrate: number; games: number; count: number; adapted: string[] } | null;
   // step.price = dépense immédiate, après déduction des sous-composants possédés.
-  rows: { item: IconItem; why: string; price: number | null; remaining?: number | null; missing: number; step?: { item: IconItem; price: number }; room?: { sell: IconItem | null }; resale?: { items: IconItem[]; gain: number } }[];
+  rows: { item: IconItem; why: string; price: number | null; remaining?: number | null; missing: number; step?: { item: IconItem; price: number }; room?: { sell: IconItem | null; held?: boolean }; resale?: { items: IconItem[]; gain: number } }[];
   /** Ton parcours sur 6 places : items finis déjà achetés, puis la suite prévue. */
   plan?: { item: IconItem; owned: boolean; why?: string }[];
   /** Mort : secondes avant de réapparaître (le shop est ouvert). */

@@ -24,7 +24,7 @@ const fmt = (n: number) => n.toLocaleString('fr-FR');
             En attendant : {{ r.step.item.name }} ({{ fmt(r.step.price) }})
           </div>
           <div v-if="r.resale" class="room">Vends {{ r.resale.items.map((x) => x.name).join(' et ') }} : +{{ fmt(r.resale.gain) }} or, l'achat passe</div>
-          <div v-else-if="r.room" class="room">{{ r.room.sell ? `Sac plein : vends d'abord ${r.room.sell.name}` : 'Sac plein : plus de composant à vendre' }}</div>
+          <div v-else-if="r.room" class="room">{{ r.room.sell ? `Sac plein : vends d'abord ${r.room.sell.name}` : r.room.held ? 'Sac plein : termine d\'abord tes composants' : 'Sac plein : plus de composant à vendre' }}</div>
         </div>
         <div v-if="r.price != null" class="price num">
           <div>{{ fmt(r.price) }}</div>

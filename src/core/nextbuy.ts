@@ -48,6 +48,12 @@ const SELL_MAX = 1500;
 /** Jamais proposés à la vente : ils portent une progression (quête de support, charges de Dark Seal et Mejai, mana du Tear). */
 const KEEP_IN_BAG = new Set([3865, 3866, 3867, 1082, 3041, 3070]);
 
+/**
+ * Sous ce prix, c'est une potion ou un consommable, pas un composant : la seule chose qu'on vend sans y être forcé.
+ * Vu sur 10 ventes conseillées (3 nov., Tahm Kench et Jhin) : 7 visaient un composant que Celian a terminé dans les 5 minutes.
+ */
+const SPARE_MAX = 200;
+
 /** Une ou deux reventes, pas plus : au-delà, ce n'est plus une consigne qu'on suit le temps d'un retour en base. */
 const RESALE_MAX = 2;
 
@@ -86,7 +92,7 @@ export interface NextBuyRow {
   missing: number; // or manquant (0 si achetable)
   step?: { id: number; price: number }; // composant à acheter maintenant si l'item complet est trop cher
   /** Sac plein et l'item ne consomme rien : `sell` = ce qu'il faut vendre d'abord, `null` = plus de composant à vendre. */
-  room?: { sell: number | null };
+  room?: { sell: number | null; held?: boolean };
   /** Sans ces ventes l'or manque, avec elles l'achat passe (`gain` = or rendu, somme des `gold.sell`). */
   resale?: Resale;
 }
@@ -175,27 +181,33 @@ export function consumedBy(target: number, bag: number[], components: (id: numbe
   return used;
 }
 
+const NOTHING: ReadonlySet<number> = new Set();
+
 /** Prix connu et bas exigés : un objet Mayhem absent du catalogue n'est pas noté fini, il ne doit pas passer pour un composant. */
-function sellable(bag: number[], isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null): number[] {
+function sellable(bag: number[], isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null, keep: ReadonlySet<number> = NOTHING): number[] {
   const cheap = (id: number) => {
     const p = price(id);
     return p != null && p > 0 && p < SELL_MAX;
   };
-  return bag.filter((id) => cheap(id) && !isFinished(id) && !isBoots(id) && !KEEP_IN_BAG.has(id) && !ELIXIR_IDS.has(id));
+  return bag.filter((id) => cheap(id) && !isFinished(id) && !isBoots(id) && !KEEP_IN_BAG.has(id) && !ELIXIR_IDS.has(id) && !keep.has(id));
 }
 
 /**
  * Plus petite vente qui comble `gap`. En ARAM on n'achète qu'en base : un item terminé à ce passage plutôt qu'au suivant
  * vaut plus que le composant perdu. Jamais un composant de `target` (l'item coûterait plus cher d'autant) ni d'un autre
- * achat prévu, sauf `forced`, la vente déjà imposée par le sac plein.
+ * achat prévu, sauf `forced`, la vente déjà imposée par le sac plein. `keep` : ce qu'il faut garder quoi qu'il arrive.
+ * Seul un item fini justifie une vente, et avec de la place dans le sac on ne vend qu'un consommable : un composant
+ * absent du plan est le plus souvent celui de l'item que tu construis, le plan ne suit pas tout ce que tu fais.
  */
-export function resaleFor(target: number, gap: number, bag: number[], planned: number[], forced: number | null, isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null, components: (id: number) => number[], sellValue: (id: number) => number | null): Resale | null {
+export function resaleFor(target: number, gap: number, bag: number[], planned: number[], forced: number | null, isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null, components: (id: number) => number[], sellValue: (id: number) => number | null, keep: ReadonlySet<number> = NOTHING): Resale | null {
+  if (!isFinished(target)) return null;
+  const roomy = bag.length < BAG_SLOTS;
   const left = [...bag];
   for (const id of consumedBy(target, bag, components)) left.splice(left.indexOf(id), 1);
   if (forced != null) left.splice(left.indexOf(forced), 1);
   const needed = new Set(planned.filter((id) => id !== target).flatMap((id) => consumedBy(id, left, components)));
-  const rows = sellable(left, isFinished, isBoots, price)
-    .filter((id) => !needed.has(id) && (sellValue(id) ?? 0) > 0)
+  const rows = sellable(left, isFinished, isBoots, price, keep)
+    .filter((id) => !needed.has(id) && (sellValue(id) ?? 0) > 0 && (!roomy || (price(id) ?? 0) < SPARE_MAX))
     .sort((a, b) => sellValue(a)! - sellValue(b)!);
   const base = forced == null ? [] : [forced];
   const worth = (ids: number[]) => ids.reduce((sum, id) => sum + (sellValue(id) ?? 0), 0);
@@ -209,10 +221,11 @@ export function resaleFor(target: number, gap: number, bag: number[], planned: n
 /**
  * Ce qu'il faut vendre pour faire une place : un composant ou une potion, jamais un item fini ni des bottes.
  * D'abord ce qui ne sert à aucun achat prévu, puis le moins cher (la revente rend moins que le prix payé).
+ * `keep` : ce qu'il faut garder quoi qu'il arrive (le seul item qui couvre une menace).
  */
-export function itemToSell(bag: number[], planned: number[], isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null, components: (id: number) => number[]): number | null {
+export function itemToSell(bag: number[], planned: number[], isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null, components: (id: number) => number[], keep: ReadonlySet<number> = NOTHING): number | null {
   const needed = new Set(planned.flatMap((id) => consumedBy(id, bag, components)));
-  const rows = sellable(bag, isFinished, isBoots, price);
+  const rows = sellable(bag, isFinished, isBoots, price, keep);
   rows.sort((a, b) => Number(needed.has(a)) - Number(needed.has(b)) || (price(a) ?? 0) - (price(b) ?? 0));
   return rows[0] ?? null;
 }
@@ -296,8 +309,20 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
   const bag = i.bag;
   const full = bag != null && bag.length >= BAG_SLOTS;
   const fits = (id: number) => !full || consumedBy(id, bag, parts).length > 0;
+  const finished = i.complete ?? ((id: number) => (i.price(id) ?? 0) >= 2000);
+  const isBoots = (id: number) => i.allBoots.has(id);
+  // Le composant qui couvre une menace reste : le vendre rouvre la menace que l'app vient de faire couvrir.
+  const guard = new Set(i.counters.flatMap((t) => t.items).filter((id) => owned.has(id) && !i.allBoots.has(id)));
   if (full) {
-    const rank = (id: number) => (must.has(id) ? 0 : fits(id) ? 1 : 2);
+    // L'item fini qui part de ce composant : c'est la seule façon de libérer sa place sans perdre la couverture.
+    for (const t of i.counters) {
+      const upgrade = t.items.find((x) => !owned.has(x) && finished(x) && consumedBy(x, bag, parts).some((c) => guard.has(c)));
+      if (upgrade) push(upgrade, `termine ton item contre ${lowerFirst(t.title)}`);
+    }
+    // Une menace forte ne fait passer devant que ce qui tient : un composant de plus dans un sac plein ne tient pas,
+    // ni un item fini s'il n'y a rien à vendre pour lui faire de la place.
+    const hasRoom = itemToSell(bag, [], finished, isBoots, i.price, parts, guard) != null;
+    const rank = (id: number) => (must.has(id) && (fits(id) || (finished(id) && hasRoom)) ? 0 : fits(id) ? 1 : 2);
     seq.sort((a, b) => rank(a.id) - rank(b.id));
   }
   // Tu as déjà passé ce conseil 2 fois : on ne te le remet pas en tête, il passe après le reste
@@ -321,11 +346,12 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
       const price = i.price(s.id);
       const remaining = remainingCost(s.id, i.owned, i.price, i.components);
       const missing = remaining == null ? 0 : Math.max(0, remaining - i.gold);
-      const finished = i.complete ?? ((id: number) => (i.price(id) ?? 0) >= 2000);
-      const isBoots = (id: number) => i.allBoots.has(id);
-      const room = !fits(s.id) ? { sell: itemToSell(bag!, seq.map((x) => x.id), finished, isBoots, i.price, parts) } : null;
       const planned = seq.map((x) => x.id);
-      const resale = k === 0 && missing > 0 && bag && i.sellValue && (!room || room.sell != null) ? resaleFor(s.id, missing, bag, planned, room?.sell ?? null, finished, isBoots, i.price, parts, i.sellValue) : null;
+      // Un composant de plus ne vaut pas de vendre un composant : seul un consommable peut lui laisser sa place.
+      const sold = fits(s.id) ? null : itemToSell(bag!, planned, finished, isBoots, i.price, parts, guard);
+      const held = sold != null && !finished(s.id) && (i.price(sold) ?? 0) >= SPARE_MAX;
+      const room = fits(s.id) ? null : held ? { sell: null, held } : { sell: sold };
+      const resale = k === 0 && missing > 0 && bag && i.sellValue && (!room || room.sell != null) ? resaleFor(s.id, missing, bag, planned, room?.sell ?? null, finished, isBoots, i.price, parts, i.sellValue, guard) : null;
       // Terminer l'item à ce passage vaut mieux qu'un composant « en attendant ».
       const step = !resale && k === 0 && missing > 0 && i.components ? bestComponent(s.id, i.gold, i.owned, i.price, i.components, fits) : null;
       return { ...s, price, remaining, missing, ...(step ? { step } : {}), ...(room ? { room } : {}), ...(resale ? { resale } : {}) };

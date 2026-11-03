@@ -241,10 +241,16 @@ describe('moteur contre un faux client League', () => {
     const firstPool = draw.pool!.length;
     const later = golds.slice(-3);
     expect(later.map((a) => a.id).some((id) => [1, 2, 3, 4].some((n) => golds[n].id === id))).toBe(false);
+    const withInfo = engine as unknown as { augInfo: unknown };
+    const realInfo = withInfo.augInfo;
+    withInfo.augInfo = { size: 1, has: (n: string) => n !== later[1].name, tags: () => new Set() };
     engine.setOffered({ ids: later.map((a) => a.id), names: later.map((a) => a.name), rarity: 'kGold', unsure: null, misses: [] }, ctx);
+    withInfo.augInfo = realInfo;
     expect((engine as unknown as { draw: { pool?: number[] } }).draw.pool?.length).toBe(firstPool - 4);
     const seenEvent = engine.usage.events.filter((e) => e.type === 'cards_seen').at(-1);
     expect(seenEvent).toMatchObject({ reroll: { pool: firstPool - 4 } });
+    // cartes dont le wiki n'a pas le texte : notées, car elles n'ont aucune correction selon le build
+    expect((seenEvent as unknown as { noText?: string[] }).noText).toEqual([later[1].name]);
     // un augment d'un tirage précédent lu à l'écran : lecture partielle, pas de conseil, tirage intact (Giant Slayer, 3 nov.)
     const laterIds = later.map((a) => a.id);
     engine.setOffered({ ids: [golds[2].id, laterIds[1], laterIds[2]], names: [golds[2].name, later[1].name, later[2].name], rarity: 'kGold', unsure: null, misses: [] }, ctx);

@@ -51,7 +51,7 @@ const teamOpen = ref(false);
             <span v-if="purchase.gain">Vends {{ purchase.sellNames }} : +{{ fmt(purchase.gain) }} or, l'achat passe.</span>
             <span v-else>Vends d'abord {{ purchase.sell.name }} : ton sac est plein, la boutique refuserait l'achat.</span>
           </div>
-          <div v-if="purchase.kind === 'full'" class="goal">Plus de composant à vendre. Cet item demande d'en remplacer un fini : à toi de juger.</div>
+          <div v-if="purchase.kind === 'full'" class="goal">{{ purchase.held ? 'Pas de vente : tes composants sont gardés pour ce que tu construis.' : "Plus de composant à vendre. Cet item demande d'en remplacer un fini : à toi de juger." }}</div>
           <div v-if="purchase.kind === 'component'" class="goal">Composant pour {{ purchase.target.name }}</div>
           <div v-if="purchase.kind === 'unknown'" class="goal">Vérifie le coût dans la boutique.</div>
         </div>

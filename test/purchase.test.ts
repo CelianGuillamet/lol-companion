@@ -97,6 +97,7 @@ describe('sac plein', () => {
     expect(purchaseOf(panel({ room: { sell: sold } }))).toMatchObject({ kind: 'saving', sell: null });
   });
   it('6 items finis : ni achat ni économie', () => {
+    expect(purchaseOf(panel({ remaining: 400, room: { sell: null, held: true } }))).toMatchObject({ kind: 'full', held: true, title: 'Inventaire plein : termine tes composants avant Force de la nature', sell: null });
     const buy = purchaseOf(panel({ remaining: 400, room: { sell: null } }));
     expect(buy).toMatchObject({ kind: 'full', canBuy: false, cost: null, missing: null, goldAfter: null });
     expect(buy!.title).toMatch(/^Inventaire plein/);

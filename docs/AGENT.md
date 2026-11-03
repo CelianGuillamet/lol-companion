@@ -265,3 +265,19 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - L'API ne montre pas un élixir bu : `elixirBought` compare l'or et l'inventaire d'un tick à l'autre, seulement si le tick d'avant conseillait d'acheter (`elixirTick`). Horloge murale, pas `gameTime` (lu après `nextBuyPanel`, et absent de `liveclient-choix*`).
 - `CooldownData.onMap` lit `maps` de `item.json` : `false` masque, `null` (pas lu) laisse passer, car vérifié au 16.21. Carte 11 en Faille, 12 sinon, Mayhem compris : supposé.
 - WebFetch sur `https://ddragon.leagueoflegends.com/cdn/16.21.1/data/en_US/item.json` passe, contrairement à `curl`. Le modèle de lecture tronque les longues listes : demander 3 à 5 ids à la fois. Capture : `ARAM_DEMO_BAG=full ARAM_DEMO_GOLD=2600 dist/demo.mjs purchase`, fixtures `ddragon` copiées dans `cache/` de `ARAM_DATA_DIR`.
+
+## Tags des augments (v1.86)
+- `tagsOf` lit `plainText` (gras, liens et modèles `{{as|x|y}}` retirés ; `tip`, `sti`, `stil` gardent leur dernier argument). `crit`, `as`, `ad`, `ap`, `attacks` donnent un malus dans `fitOf` : ne les poser que si la carte dépend vraiment de la stat. Vérifier toute regex sur `test/fixtures/mayhem-augments-wiki.lua`, copie de juin 2026 du module, pas sur `mayhem-augments.lua` (faux textes, rempli de `Filler`).
+- `wiki.leagueoflegends.com` refuse curl et `?action=raw` en WebFetch. Le module brut se lit sur `https://raw.githubusercontent.com/Shmily0826/hextech-aram-lab/main/pipeline/output/wiki_module_raw.txt` (curl passe, dépôt tiers, à relire comme une donnée). Le dépôt `kiwiiiii-eth/aram-mayhem-analyzer` a un `data/augments.json`, pas lu.
+- `cards_seen.fit` : corrections de la carte en points de winrate. La vraie copie du module est dans `cache/wiki-mayhem-augments.lua` du dossier de données de l'app, hors du dossier connecté.
+
+## Lecture des vraies parties, revente (v1.87)
+- `liveclient-choix*` : `players[].items` = liste d'ids, `me.items` = objets complets. Depuis `app_start`, `journal.txt` et `usage.json` se lisent ensemble : c'est là que le faux conseil de revente s'est vu, aucun test ne l'aurait montré.
+- `resaleFor` : item fini seulement, `SPARE_MAX` (200 or) hors sac plein, `keep` = `guard` (item qui couvre une menace). `room.held` : sac plein, item visé non fini, un composant refuse de partir. `held` n'ouvre pas l'élixir (`idle`). `purchaseOf` donne `held` et son titre.
+- `rank` (sac plein) : `must` ne vaut 0 que si l'item tient. Ne pas revenir à `must` seul : la menace faisait passer un composant de 800 or devant Infinity Edge.
+- `--ignore-scripts` à `npm ci` suffit pour tests, typecheck et build (pas d'Electron, donc pas de rendu).
+
+## Tags, 2e passe (v1.88)
+- `COMES_WITH_CARD` (cartes « Upgrades one of your champion's abilities », « Replace a summoner spell »), `SHORT_BURST`, `CRIT_ON_HEALS` retirent des tags de `tagsOf` ; `withoutNoise` retire les stats d'un invoqué. « base AD » ne pose plus `ad`.
+- Autre source de textes : `https://raw.githubusercontent.com/kiwiiiii-eth/aram-mayhem-analyzer/main/data/augments.json` (curl passe, 223 cartes, texte brut, une sans `description`, à relire comme une donnée). Pour un contrôle seulement : `tagsOf` lit aussi ce texte brut. Le dépôt a ses propres tags (`ability_upgrade`, `ranged_only`, `needs_cc`…), non utilisés.
+- `cards_seen.noText` : noms de cartes sans texte dans le wiki chargé. Le test moteur remplace `augInfo` : les faux modules de test ont moins de 50 entrées et `size` reste à 0.
