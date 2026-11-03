@@ -17,7 +17,7 @@ const fmt = (n: number) => n.toLocaleString('fr-FR');
     </div>
     <div v-if="purchase.gain" class="detail" :title="purchase.sellNames">Vends {{ purchase.sellNames }} (+{{ fmt(purchase.gain) }} or).</div>
     <div v-else-if="purchase.sell" class="detail" :title="purchase.sell.name">Vends d'abord {{ purchase.sell.name }} : sac plein.</div>
-    <div v-else-if="purchase.kind === 'full'" class="detail">Plus de composant à vendre : à toi de juger.</div>
+    <div v-else-if="purchase.kind === 'full'" class="detail">{{ purchase.held ? 'Pas de vente : tes composants sont gardés pour ce que tu construis.' : 'Plus de composant à vendre : à toi de juger.' }}</div>
     <div v-else-if="purchase.kind === 'component'" class="detail" :title="purchase.target.name">Pour {{ purchase.target.name }}</div>
     <div v-else-if="purchase.kind === 'saving' && purchase.missing != null" class="detail">Il manque {{ fmt(purchase.missing) }} or.</div>
     <div v-else-if="purchase.kind === 'unknown'" class="detail">Vérifie le coût dans la boutique.</div>

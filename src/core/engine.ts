@@ -1302,7 +1302,7 @@ export class Engine extends EventEmitter {
     const reco = r.rows[0]?.id ?? null;
     if (reco !== this.lastBuy?.reco && reco != null) {
       const room = r.rows[0].room;
-      const roomNote = room ? (room.sell != null ? ` · sac plein, vendre ${itemOf(room.sell).name}` : ' · sac plein, rien à vendre') : '';
+      const roomNote = room ? (room.sell != null ? ` · sac plein, vendre ${itemOf(room.sell).name}` : room.held ? ' · sac plein, composants gardés' : ' · sac plein, rien à vendre') : '';
       this.persistLog('jeu', `Achat conseillé : ${itemOf(reco).name} (${r.rows[0].why}) · or ${Math.floor(me.currentGold)} · inventaire ${owned.map((i) => itemOf(i).name).join(', ') || 'vide'}${roomNote}`);
       if (bag && bag.length >= BAG_SLOTS) this.usage.add({ type: 'bag_full', at: Date.now(), championId: this.myChampionId, gold: Math.floor(me.currentGold), reco, sell: room?.sell ?? null, blocked: Boolean(room), bag, level: me.level ?? null });
     }
@@ -1314,7 +1314,7 @@ export class Engine extends EventEmitter {
     }
     this.lastResale = resaleKey;
     this.lastBuy = { owned, reco, plan: r.rows.map((x) => x.id), why: r.rows[0]?.why };
-    const elixir = this.elixirPanel(snap, owned, !r.rows.length || r.rows[0].room?.sell === null, (id) => isDone(id));
+    const elixir = this.elixirPanel(snap, owned, !r.rows.length || (r.rows[0].room?.sell === null && !r.rows[0].room.held), (id) => isDone(id));
     return {
       gold: Math.floor(me.currentGold),
       elixir,
@@ -1337,7 +1337,7 @@ export class Engine extends EventEmitter {
         remaining: x.remaining,
         missing: Math.ceil(x.missing),
         ...(x.step ? { step: { item: this.game.item(x.step.id), price: x.step.price } } : {}),
-        ...(x.room ? { room: { sell: x.room.sell != null ? itemOf(x.room.sell) : null } } : {}),
+        ...(x.room ? { room: { sell: x.room.sell != null ? itemOf(x.room.sell) : null, ...(x.room.held ? { held: true } : {}) } } : {}),
         ...(x.resale ? { resale: { items: x.resale.sell.map(itemOf), gain: x.resale.gain } } : {}),
       })),
     };
@@ -2306,8 +2306,9 @@ export class Engine extends EventEmitter {
     if (Object.keys(combos).length) this.state.offered.combos = combos;
     const reroll = read.unsure || kind !== 'augment' ? null : protectCombos(this.rerollAdvice(read), combos);
     this.state.offered.reroll = reroll;
+    const noText = this.augInfo.size && kind === 'augment' ? read.names.filter((n) => !this.augInfo.has(n)) : [];
     this.persistLog('jeu', `Cartes lues (choix ${round ?? '?'}) : ${read.names.join(' · ')}${read.unsure ? ` — ${read.unsure}` : best != null ? ` → conseil : ${this.augName(best)}` : ''}${reroll && reroll.kind !== 'keep' ? ` ; relance : ${reroll.targets.map((id) => this.augName(id)).join(', ')} (+${(reroll.gain * 100).toFixed(1)} pt)` : ''}${Object.keys(combos).length ? ` ; combos : ${Object.entries(combos).map(([id, c]) => `${this.augName(Number(id))} (${c.label})`).join(', ')}` : ''}`);
-    this.usage.add({ type: 'cards_seen', at: Date.now(), championId: this.state.augments?.championId ?? 0, round, ids: read.ids, best, unsure: !!read.unsure, rarity: read.rarity, ...(Object.keys(combos).length ? { combos: Object.fromEntries(Object.entries(combos).map(([id, c]) => [id, c.kind])) } : {}), ...(reroll ? { reroll: { kind: reroll.kind, targets: reroll.targets, gain: Math.round(reroll.gain * 10000) / 10000, upgrade: reroll.upgrade, pool: this.draw?.pool?.length } } : {}) });
+    this.usage.add({ type: 'cards_seen', at: Date.now(), championId: this.state.augments?.championId ?? 0, round, ids: read.ids, best, unsure: !!read.unsure, rarity: read.rarity, ...(this.state.offered.fit ? { fit: Object.fromEntries(Object.entries(this.state.offered.fit).map(([id, f]) => [id, Math.round(f.delta * 10000) / 10000])) } : {}), ...(noText.length ? { noText } : {}), ...(Object.keys(combos).length ? { combos: Object.fromEntries(Object.entries(combos).map(([id, c]) => [id, c.kind])) } : {}), ...(reroll ? { reroll: { kind: reroll.kind, targets: reroll.targets, gain: Math.round(reroll.gain * 10000) / 10000, upgrade: reroll.upgrade, pool: this.draw?.pool?.length } } : {}) });
     // Un même niveau peut proposer 2 choix (carte headliner Pentakill, augment en plus K/DA) : on les garde
     // séparément, sinon le 2e écrasait le 1er (vu en vraie partie le 28 oct.)
     const hl = read.unsure ? null : headlinerFromCards(read.ids);

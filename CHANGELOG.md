@@ -1,5 +1,41 @@
 # Journal des versions
 
+## v1.88 — 3 nov. 2026 — 12 cartes de plus lues juste : moins de faux malus sur tes augments
+- **Corrigé, conseil sur les 3 cartes** : suite de la v1.86, sur 267 textes de cartes au lieu de 202. Ces cartes ne perdent plus de points à tort sur un build qui n'a pas la stat citée :
+  - **Get Excited!** : 15 % de vitesse d'attaque pendant 4 s après une élimination, ce n'est pas une carte à vitesse d'attaque.
+  - **Spin Me Right Round** : carte de mobilité, elle ne perd plus 4 pts sur un mage.
+  - **Lil' Extra Help, Double Strike, Mercy's Strike, Reload, Terrain'd, Ravenous Bind** : elles améliorent un de tes sorts, et le jeu ne les propose qu'aux sorts qui en profitent.
+  - **Critical Healing** : les critiques portent sur tes soins. **Dropkick** : « per 100 base AD » monte avec le niveau, pas avec tes items. **Empyrean Promise**, **Sneakerhead** : même logique.
+  - **DropBear** : la vitesse d'attaque citée est celle de Tibbers. La carte compte maintenant comme carte de puissance.
+- **Ordre de grandeur** : petit. 15 lectures sur 771 de ton journal montrent une de ces cartes (Get Excited! 5, Spin Me Right Round 4, Lil' Extra Help 4, Ravenous Bind 2), et le malus ne tombe que si ton build n'a pas la stat.
+- **Nouveau, mesure** : 24 cartes vues au journal (129 lectures sur 771 : Get Jinxed, Sap Magic, Lonely Warrior, Brass Blast…) n'ont de texte dans aucune copie lue d'ici. Sans texte, l'app ne corrige rien. Elle note maintenant ces cartes (`noText` dans `cards_seen`) : la prochaine partie dira si le wiki à jour les a.
+- **26.22** : notes officielles toujours absentes (16 h 30 UTC, page officielle refusée d'ici). Aucune partie depuis Jhin, aucune mesure n'a avancé.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse.
+- Tests : `test/augfit.test.ts`, `test/engine.test.ts`. Pas de changement d'écran, pas de nouvelle capture. Pas encore vu en vraie partie.
+
+## v1.87 — 3 nov. 2026 — tes 2 premières vraies parties : l'app ne te fait plus vendre ce que tu construis
+- **Enfin des vraies parties** : tu as relancé l'app à 14 h 41 UTC (v1.86), après 23 versions pas vues. Tahm Kench (défaite) et Jhin (victoire) sont les premières lectures en vrai de presque tout ce qui a été ajouté depuis la v1.64.
+- **Corrigé, erreur vue en partie** : sur 10 ventes conseillées, 7 visaient un composant que tu as terminé dans les 5 minutes. Le pire : vendre Last Whisper (1 450 or) pour acheter Executioner's Calling (800), juste avant ton Lord Dominik's. Puis Cloak et B. F. Sword, juste avant ton Infinity Edge. Puis l'Executioner's que l'app venait de te faire acheter, pour Maw. Tu en as suivi une seule au mieux : ton or monte de 632 juste après la vente de Giant's Belt conseillée sur Tahm Kench, et elle laissait de toute façon une place à un sac plein.
+- **Nouvelles règles** : on ne vend plus que pour finir un item, jamais pour un composant. Avec de la place dans le sac, seule une potion peut partir. L'item qui couvre une menace ne se vend plus.
+- **Sac plein** : une menace ne fait plus passer un composant devant l'item que tu peux finir. S'il n'y a rien à finir : « Inventaire plein : termine tes composants avant … », sans vente et sans élixir. Sac plein avec Executioner's dedans, l'app propose Mortal Reminder (« termine ton item contre anti-soins ») : ça libère la place sans perdre l'anti-soins. Rejoué sur tes inventaires de Jhin, avec les vrais prix et recettes.
+- **Vérifié sur ces 2 parties** : cartes lues sur 7 choix sur 8 (Upgrade Collector · escAPADe : 2 cartes seulement, aucune suite), 2 headliners lus (Cafe Cuties, Command Line), prochain sort présent en Mayhem (2 écarts sur Tahm Kench, 0 sur Jhin), collection 254 sur 254 (rien de filtré, le nombre dépasse les champions du jeu : à regarder).
+- **Écart d'objets** : les 10 inventaires changent entre deux choix, alors que tu étais mort ou en base : l'API suit bien les achats adverses, pas seulement ce que tu vois. Écarts lus : +4 175 à 5 min, +4 875 à 10 min, −1 500 à 20 min sur la victoire. Le signe n'annonce rien à ce stade.
+- **À voir** : 5 achats conseillés « contre leur équipe » sur 5 non suivis. Sur Tahm Kench, une menace passait Iceborn Gauntlet (50,6 % sur 1 090 parties) devant ton Riftmaker (56,9 % sur 22 411). Rien changé sur 2 parties, à recompter.
+- **Répétition générale refaite** sur tes vraies données, avec cette fois les 9 autres vrais joueurs : 23 parties, 97 lectures, 30 champ select, sans casse, 0 objet sans prix.
+- **26.22** : notes officielles toujours absentes.
+- Tests : `test/nextbuy.test.ts` (tes inventaires de Jhin), `test/purchase.test.ts`. Textes d'écran changés sur la ligne d'achat : pas de nouvelle capture, ces phrases n'ont pas été vues rendues.
+
+## v1.86 — 3 nov. 2026 — les augments étaient mal compris : moins de faux malus sur tes cartes
+- **Corrigé, conseil sur les 3 cartes** : l'app corrige le winrate d'une carte selon ton build (jusqu'à ±4 pts). Elle lisait la description du wiki par mots-clés, et ces mots-clés n'avaient jamais été essayés sur le vrai texte. En les passant sur les 202 descriptions du wiki, beaucoup étaient faux.
+- **Faux malus retirés** (« ne va pas avec ton build ») : « attack » comptait aussi pour attack damage, et « crit » pour critters. Goldrend, Twin Fire, Triggered Inferno, Poro Blaster, Dropkick (marchent aussi avec tes sorts), Purist Caster, ADAPt, escAPADe (conversions), Ethereal Weapon, Jeweled Gauntlet, Fey Magic, Clown College : plus pénalisés sur un mage. Deft et Blunt Force gardent leur malus, sans le doubler.
+- **Faux bonus retirés** : « health » comptait comme un soin (76 cartes marquées, 45 après correction), « (8 second cooldown) » comme de l'accélération (80, 24 après). Can't Touch This ne monte plus sur un build accélération, Erosion et Dive Bomber plus sur un tank.
+- **Effet nouveau, à surveiller** : le gras du wiki cachait les mots « bonus health » et « maximum health » : seules 11 cartes étaient vues comme des cartes de tank, 37 maintenant. Goliath, Tank Engine et les autres gagnent 1,5 à 2,5 pts sur un build tank, ce qui était prévu dès le départ mais ne marchait pas.
+- **Ordre de grandeur** : sur les 235 lectures complètes de ton journal, 80 montraient au moins une carte au mot-clé faux. Le malus ne tombait que si ton build n'avait pas la stat : **le nombre de conseils qui changent n'est pas mesuré**, l'app ne gardait pas ces corrections. Elle les note maintenant (`fit` dans `cards_seen`). 186 cartes sur 705 ne sont pas dans la copie du wiki utilisée (juin 2026) : l'app lit le wiki à jour, ces cartes n'ont juste pas été relues ici.
+- **Vérifié** : Infinite Recursion donne de l'accélération, pas des niveaux : elle n'explique pas tes 3 parties au-delà du niveau 18. Un texte avec « Ability Haste » (cas de One Hit Wonder au 26.22) est bien classé accélération.
+- **26.22** : notes officielles toujours absentes (14 h 30 UTC). Ta partie en cours (Senna) tourne encore sur une version d'avant la v1.78 : pas de ligne « Version lancée » au journal, aucune mesure n'avance tant que l'app n'est pas relancée.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse.
+- Tests : `test/augfit.test.ts` sur les vraies descriptions (`test/fixtures/mayhem-augments-wiki.lua`). Pas de changement d'écran. Pas encore vu en vraie partie.
+
 ## v1.85 — 3 nov. 2026 — ton or qui dort devient un élixir quand ton build est fini
 - **Nouveau, prochain achat** : quand il ne reste rien à acheter (sac plein d'items finis, ou plus aucun conseil), l'app propose l'élixir de ton build au lieu de « à toi de juger ». Sac plein, il se boit à l'achat, sans place à faire.
 - **Pourquoi** : mesuré sur tes 80 parties Mayhem détaillées, 55 finissent avec 6 items finis, et sur ces 55 tu gagnes en médiane environ 3 600 or de plus que la valeur de ton inventaire final, soit 7 élixirs. 36 parties dépassent 2 500 or. **Ordre de grandeur** : prix des items estimés (2 900 or l'item fini), et l'or des items revendus ou remplacés compte dedans. L'app n'en parlait pas jusqu'ici.

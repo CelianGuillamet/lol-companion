@@ -50,21 +50,77 @@ export function parseAugmentModule(lua: string): Map<string, { description: stri
   return out;
 }
 
-/** Ce sur quoi joue un augment, d'après sa description. */
+/** Texte lisible d'une description du wiki : sans gras, sans liens, modèles {{...}} remplacés par ce qu'ils affichent. */
+export function plainText(description: string): string {
+  let t = description
+    .replace(/'{2,}/g, '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/\[\[File:[^\]]*\]\]/g, '')
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1');
+  // Du plus profond vers l'extérieur. tip et sti : 1er argument = la clé, le dernier = le texte affiché.
+  for (let last = ''; last !== t; ) {
+    last = t;
+    t = t.replace(/\{\{([^{}]*)\}\}/g, (_, inner: string) => {
+      const [name, ...args] = inner.split('|').filter((x) => !x.includes('='));
+      if (!args.length) return '';
+      return /^(tip|sti|stil)$/i.test(name.trim()) ? args[args.length - 1] : args[0];
+    });
+  }
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+/** Texte où un mot-clé ne dit rien de ton build : les PV de la cible, un seuil de PV, le sort d'un allié, un délai. */
+function withoutNoise(text: string): string {
+  return text
+    .replace(/(?:the target's|target's|their|enemy's)\s+(?:maximum|current|missing)\s+health/gi, '')
+    .replace(/(?:below|above)\s+[\d.]+%\s+(?:of your\s+)?(?:maximum\s+)?health/gi, '')
+    .replace(/(?:dropping|falling)\s+below\s+[\d.]+%\s+(?:of your\s+)?maximum\s+health/gi, '')
+    .replace(/your ally's next basic attack/gi, '')
+    .replace(/enemy champion to use a basic attack(?: on-hit)?/gi, '')
+    // Les stats d'une créature invoquée (Tibbers de DropBear) ne sont pas les tiennes
+    .replace(/\bHe gains [^.]*attack speed[^.]*\.|\bHis stats are:.*$/gis, '');
+}
+
+// L'effet part d'un sort, ou d'une attaque OU d'un sort : il marche sans attaquer et sans critiques
+const TRIGGERED_BY_SPELL =
+  /basic attacks? (?:or|and) (?:ability|abilities)|your abilities (?:apply|can now)|damaging abilities|ability hits?\b|damaging an enemy champion with an ability|replace a summoner spell/i;
+// Récompenses tirées au hasard, quêtes : la stat citée n'est pas ce que la carte demande
+const NO_SCALING = /randomly appear|assigned with a number of quests|^assigns quests/i;
+// Le jeu ne propose ces cartes qu'aux sorts qui en profitent, ou elles te donnent un sort : la stat citée vient avec la carte
+const COMES_WITH_CARD = /^upgrades one of your champion's abilities|^replace a summoner spell/i;
+// Convertit une stat en une autre : on ne dépend d'aucune des 2
+const CONVERTS = /^convert all of your/i;
+// Bonus de 4 s après une élimination (Get Excited!) : ne dépend pas de ton build
+const SHORT_BURST = /^scoring a (?:champion )?takedown grants you/i;
+// Les critiques portent sur tes soins, pas sur tes attaques (Critical Healing)
+const CRIT_ON_HEALS = /your heals and shields now have a chance/i;
+
+/**
+ * Ce sur quoi joue un augment, d'après sa description. `crit`, `as`, `ad`, `ap` et `attacks` peuvent donner un malus
+ * (voir `fitOf`) : ne les poser que si la carte en dépend vraiment. Mots lus sur les 202 descriptions du wiki :
+ * « attack damage » ou « attack range » ne sont pas des attaques de base, « health » n'est pas un soin, « critters »
+ * n'est pas un critique, « (8 second cooldown) » n'est pas de l'accélération, « per 100 base AD » monte avec le niveau,
+ * pas avec tes items.
+ */
 export function tagsOf(description: string): Set<FitTag> {
-  const d = description.toLowerCase();
+  const plain = withoutNoise(plainText(description));
+  const d = plain.toLowerCase();
   const t = new Set<FitTag>();
-  const ap = /ability power/.test(d);
-  const ad = /attack damage/.test(d);
-  if (/critical strike|crit/.test(d)) t.add('crit');
+  const spell = TRIGGERED_BY_SPELL.test(plain);
+  const ap = /ability power/.test(d) || /\d%\s+(?:bonus\s+)?AP\b|per \d+ (?:bonus )?AP\b/.test(plain);
+  const ad = /attack damage/.test(d) || /\d%\s+(?:bonus\s+|total\s+)?AD\b|per \d+ (?:bonus )?AD\b/.test(plain);
+  if (/critical(?:ly)? strike/.test(d) && !spell && !/can (?:now )?critically strike|critical defend/.test(d)) t.add('crit');
   if (/attack speed/.test(d)) t.add('as');
-  if (/basic attack|on-hit|attacks? /.test(d)) t.add('attacks');
+  if (/(?:^|[.:>]\s*)basic attacks?\b|\byour (?:next |damaging )*(?:basic |energized )attacks?\b|\bon-hit\b|^gain [\d ]+bonus attack range/.test(d) && !spell) t.add('attacks');
   // Un augment qui cite les deux (dégâts adaptatifs, ratios mixtes) ne penche ni AD ni AP
   if (ap && !ad) t.add('ap');
   if (ad && !ap) t.add('ad');
-  if (/maximum health|bonus health|bonus armor|magic resist|resistances/.test(d)) t.add('tank');
-  if (/\bheal|shield|omnivamp|life steal/.test(d)) t.add('heal');
-  if (/ability haste|cooldown/.test(d)) t.add('haste');
+  if (/maximum health|bonus health|bonus armor|bonus magic resist|bonus resist|critical defend/.test(d)) t.add('tank');
+  if (/\bheal(?:s|ing|ed)?\b|(?<!spell )\bshields?\b|shielding|omnivamp|life steal/.test(d)) t.add('heal');
+  if (/ability haste|ultimate haste/.test(d)) t.add('haste');
+  if (SHORT_BURST.test(plain)) t.delete('as');
+  if (CRIT_ON_HEALS.test(plain)) t.delete('crit');
+  if (CONVERTS.test(plain) || NO_SCALING.test(plain) || COMES_WITH_CARD.test(plain)) for (const k of ['ad', 'ap', 'as', 'attacks', 'crit'] as FitTag[]) t.delete(k);
   return t;
 }
 
@@ -173,6 +229,11 @@ export class AugmentInfo {
     }
     const parsed = text ? parseAugmentModule(text) : null;
     if (parsed && parsed.size >= 50) this.map = parsed;
+  }
+
+  /** Carte dont on a le texte : sans lui, pas de correction, ni bonus ni malus. */
+  has(name: string): boolean {
+    return this.map.has(normName(name));
   }
 
   tags(name: string): Set<FitTag> {

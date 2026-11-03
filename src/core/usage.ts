@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 
 export type UsageEvent =
   | ElixirEvent
-  | { type: 'cards_seen'; at: number; championId: number; round: number | null; ids: number[]; best: number | null; unsure: boolean; rarity?: string | null; reroll?: { kind: string; targets: number[]; gain: number; upgrade: boolean; pool?: number } }
+  | { type: 'cards_seen'; at: number; championId: number; round: number | null; ids: number[]; best: number | null; unsure: boolean; rarity?: string | null; fit?: Record<string, number>; reroll?: { kind: string; targets: number[]; gain: number; upgrade: boolean; pool?: number } }
   | { type: 'bag_full'; at: number; championId: number | null; gold: number; reco: number; sell: number | null; blocked: boolean; bag: number[]; level: number | null }
   /** Achat rendu possible par une revente, une fois par conseil : le suivre se lit dans `item_bought`. */
   | { type: 'resale'; at: number; championId: number | null; gold: number; reco: number; gap: number; gain: number; sell: number[]; full: boolean; level: number | null }
