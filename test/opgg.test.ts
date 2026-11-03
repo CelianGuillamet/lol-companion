@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { opggNames, parseCompact, parseRpc, readAnalysis } from '../src/core/opgg';
+import { OpggData, opggNames, parseCompact, parseRpc, readAnalysis, type OpggClient } from '../src/core/opgg';
 
 const sample = JSON.parse(readFileSync(new URL('./fixtures/opgg/opgg-sample-analysis.json', import.meta.url), 'utf8'));
 
@@ -38,5 +38,14 @@ describe('OP.GG', () => {
     expect(opggNames('Miss Fortune')).toContain('MISS_FORTUNE');
     expect(opggNames("Kai'Sa")).toContain('KAISA');
     expect(opggNames('Wukong', 'MonkeyKing')).toContain('MONKEY_KING');
+  });
+});
+
+describe('méta des rôles', () => {
+  it('winrate précis (victoires / parties) quand win est donné, sinon win_rate arrondi', async () => {
+    const client = { call: async () => ({ data: { positions: { mid: [{ champion: 'Ahri', play: 1000, win: 516, win_rate: 0.52, role_rate: 0.9, tier: 1 }, { champion: 'Lux', play: 1000, win_rate: 0.49, role_rate: 0.8, tier: 2 }] } } }) };
+    const meta = await new OpggData(client as unknown as OpggClient).laneMeta();
+    expect(meta.get('ahri')![0].winRate).toBeCloseTo(0.516, 5);
+    expect(meta.get('lux')![0].winRate).toBe(0.49);
   });
 });

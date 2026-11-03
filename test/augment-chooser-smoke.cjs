@@ -50,6 +50,8 @@ process.env.ARAM_SMOKE_JS = `
   if (${!none && !partial}) {
     assert(chooser.firstElementChild.classList.contains('cards'), 'Les filtres précèdent encore les cartes');
     assert(!chooser.querySelector('.search'), 'Les filtres masquent la réponse');
+    assert(/relance/i.test(chooser.querySelector('.reroll')?.textContent ?? ''), 'Conseil de relance absent');
+    assert(!chooser.querySelector('.doubt'), 'Doute affiché malgré un classement complet');
     const positions = ${JSON.stringify(Object.fromEntries(names.map((n, i) => [n, ['À gauche', 'Au milieu', 'À droite'][i]])))};
     for (const card of cards) assert(card.querySelector('.card-cue').textContent.includes(positions[card.querySelector('.n').textContent]), 'Position perdue pendant le classement');
   }

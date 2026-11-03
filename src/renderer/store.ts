@@ -31,11 +31,16 @@ function httpApi(): Api {
     championAugments: async () => null,
     championBuild: async () => null,
     listChampions: async () => [],
+    poolReport: async () => null,
     laneTier: async () => [],
     currentLane: async () => null,
     championLanes: async () => [],
     balanceChanges: async () => [],
+    relaunch: readOnly,
     pickChampion: readOnly,
+    hoverBan: readOnly,
+    markEnemySpell: async (id, slot, action, delta) =>
+      (await fetch(`/api/spell?t=${encodeURIComponent(t)}&c=${id}&s=${slot}&a=${action}&d=${delta ?? 0}`, { method: 'POST' })).json(),
     applyLoadout: readOnly,
     setSettings: async () => (await get<AppState>('/api/state')).settings,
     refreshData: async () => undefined,
@@ -66,6 +71,12 @@ export const ROUND_LABEL = ['début', 'niv. 7', 'niv. 11', 'niv. 15'];
 export const pct = (x: number | null | undefined, digits = 1) => (x == null ? '—' : `${(x * 100).toFixed(digits).replace('.', ',')} %`);
 
 export const signed = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(1).replace('.', ',')}`;
+
+/** « 2 350 » avec l'espace fine française, signé : l'écart d'objets. */
+const thousands = (x: number) => Math.round(x).toString().replace(/\B(?=(\d{3})+$)/g, '\u202f');
+export const signedGold = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${thousands(Math.abs(x))}`;
+/** « 11,2 k » sous la vue compacte. */
+export const shortGold = (x: number) => (x < 1000 ? thousands(x) : `${(x / 1000).toFixed(1).replace('.', ',')} k`);
 
 export const PHASE_LABEL: Record<string, string> = {
   None: 'Accueil',
@@ -106,3 +117,10 @@ export const confidenceOf = (winrate: number, games: number) => {
 };
 
 export const hideBroken = (e: Event) => ((e.target as HTMLImageElement).style.visibility = 'hidden');
+
+/** Le client a changé de patch, pas encore les stats arammeta (quelques jours de décalage). */
+export function statsBehind(data?: { patch: string | null; clientPatch?: string } | null): boolean {
+  const c = data?.clientPatch;
+  const p = data?.patch;
+  return !!c && !!p && !c.startsWith(p) && !p.startsWith(c);
+}

@@ -14,6 +14,15 @@ const fixtures = join(__dirname, 'fixtures');
 const ahri = readAnalysis(JSON.parse(readFileSync(join(fixtures, 'opgg', 'opgg-sample-analysis.json'), 'utf8')).result, 'mid')!;
 const lux = ahri.losesTo[0];
 
+// Méta des rôles : Darius fort en haut, Syndra forte au milieu, Lux (counter d'Ahri) jouée au milieu
+const rows = (champion: string, lane: string, games: number, winRate: number) => [{ champion, lane, games, winRate, roleRate: 0.9, tier: 1 }];
+const banMeta = new Map([
+  ['darius', rows('Darius', 'top', 300_000, 0.54)],
+  ['syndra', rows('Syndra', 'mid', 200_000, 0.53)],
+  ['lux', rows('Lux', 'mid', 150_000, 0.5)],
+  ['jinx', rows('Jinx', 'adc', 200_000, 0.53)],
+]);
+
 let mock: Awaited<ReturnType<typeof startMockLcu>>;
 let engine: Engine;
 const asked: string[] = [];
@@ -35,7 +44,7 @@ beforeAll(async () => {
     },
     mainLane: async () => 'mid',
     guessLanes: async (enemies: { id: number }[]) => new Map(enemies.map((e) => [e.id, e.id === lux.id ? 'mid' : 'top'])),
-    laneMeta: async () => new Map(),
+    laneMeta: async () => banMeta,
   };
   await engine.refreshData(false);
 });
@@ -71,6 +80,51 @@ describe('Faille : champ select classée', () => {
     expect(sr.matchup?.verdict).toBe(lux.games >= 100 && sr.matchup!.hi < 0.5 ? 'défavorable' : sr.matchup!.verdict);
     for (const c of sr.counterPicks) expect(c.lo).toBeGreaterThan(0.5);
     expect(asked.some((a) => a.endsWith('|mid|ranked'))).toBe(true);
+  });
+
+  it('bans : aucune action de ban (Swiftplay, phase passée) → rien', () => {
+    expect(engine.state.champSelect!.sr!.bans).toBeNull();
+  });
+
+  it('bans : conseil pendant ton tour, survol sans validation', async () => {
+    const session = mock.state.session as { actions: object[][]; myTeam: object[]; theirTeam: object[] };
+    const saved = { actions: session.actions, theirTeam: session.theirTeam };
+    session.theirTeam = [];
+    session.actions = [
+      [{ id: 20, actorCellId: 0, championId: 0, completed: false, isInProgress: true, type: 'ban' }, { id: 21, actorCellId: 1, championId: 134, completed: false, isInProgress: true, type: 'ban' }],
+      [{ id: 9, actorCellId: 0, championId: 103, completed: false, isInProgress: false, type: 'pick' }],
+    ];
+    await engine.tick();
+    const bans = engine.state.champSelect!.sr!.bans!;
+    expect(bans.myTurn).toBe(true);
+    expect(bans.lanes).toBe(2); // ton rôle + le haut, où l'allié a Yasuo
+    const names = bans.options.map((o) => o.name);
+    expect(names).toContain('Darius');
+    expect(names).not.toContain('Syndra'); // survolée au ban par un allié
+    expect(names).not.toContain('Jinx'); // rôle dont l'allié n'a rien montré
+    const luxBan = bans.options.find((o) => o.id === 99)!;
+    expect(luxBan.myWinRate).toBeCloseTo(0.47, 2); // counter d'Ahri, malgré un winrate global de 50 %
+    const darius = bans.options.find((o) => o.name === 'Darius')!;
+
+    const r = await engine.hoverBan(darius.id);
+    expect(r.ok).toBe(true);
+    const call = mock.calls.filter((c) => c.method === 'PATCH' && c.path === '/lol-champ-select/v1/session/actions/20').pop();
+    expect(call?.body).toEqual({ championId: darius.id, completed: false });
+    expect(engine.state.champSelect!.sr!.bans!.hovered).toBe(darius.id);
+
+    // Pas ton tour : le client n'est pas appelé
+    (session.actions[0][0] as { isInProgress: boolean }).isInProgress = false;
+    const patches = () => mock.calls.filter((c) => c.method === 'PATCH' && c.path.includes('/actions/')).length;
+    const before = patches();
+    expect((await engine.hoverBan(darius.id)).ok).toBe(false);
+    expect(patches()).toBe(before);
+
+    // Ban validé : le panneau disparaît
+    (session.actions[0][0] as { completed: boolean }).completed = true;
+    await engine.tick();
+    expect(engine.state.champSelect!.sr!.bans).toBeNull();
+    Object.assign(session, saved);
+    await engine.tick();
   });
 
   it('build OP.GG : cœur, options, bottes, compétences', async () => {

@@ -13,6 +13,7 @@
 - Sheep Esports — Mayhem permanent : https://www.sheepesports.com/en/all/articles/riot-confirms-aram-mayhem-is-here-to-stay-with-more-content-coming/en
 
 ## Outils existants
+- arammayhem.com — données ouvertes (CC BY 4.0), dont combos.csv : https://arammayhem.com/data/
 - YOUR.GG — Mayhem Overlay : https://gengesports.notion.site/2025-12-22-Update-Mayhem-Overlay-2d16548b309e801e9a42cc3cb770321e
 - YOUR.GG — Jackpot : https://gengesports.notion.site/2026-03-10-Update-Mayhem-Jackpot-31f6548b309e80918927e8f1842a91fa
 - Rift Companion (overlay Mac) : https://www.producthunt.com/products/rift-companion/reviews

@@ -1,7 +1,7 @@
 # ARAM Companion (Mac)
 
 Outil perso pour ARAM, ARAM: Mayhem et la Faille (classée, normale, Swiftplay) sur macOS. API officielles uniquement (client League local, API Live Client
-du jeu, CommunityDragon, arammeta, wiki LoL) : pas de lecture mémoire, pas d'injection, pas de timers.
+du jeu, CommunityDragon, arammeta, arammayhem.com, wiki LoL) : pas de lecture mémoire, pas d'injection, pas de timers.
 
 ## Lancer l'app
 

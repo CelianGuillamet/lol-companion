@@ -20,6 +20,15 @@ const VERDICT: Record<MatchupView['verdict'], string> = {
   incertain: 'Pas assez de parties pour conclure',
 };
 
+const points = (g: number) => `+${(g * 100).toFixed(1).replace('.', ',')} pt`;
+
+async function hoverBan(id: number) {
+  busy.value = true;
+  const r = await window.api.hoverBan(id);
+  toast.value = { ok: r.ok, text: r.message };
+  busy.value = false;
+}
+
 async function loadout() {
   busy.value = true;
   const r = await window.api.applyLoadout();
@@ -45,6 +54,27 @@ async function loadout() {
       <button class="btn big" :disabled="!cs.myChampionId || busy" @click="loadout">{{ busy ? 'Import…' : 'Importer runes et sorts' }}</button>
     </section>
     <p v-if="toast" class="toast" :class="toast.ok ? 'good' : 'bad'">{{ toast.text }}</p>
+
+    <section v-if="sr.bans" class="card block">
+      <h2>Bans conseillés <span class="faint">points de victoire gagnés, estimation prudente</span></h2>
+      <ul v-if="sr.bans.options.length" class="cp">
+        <li v-for="b in sr.bans.options" :key="b.id" class="ban">
+          <img @error="hideBroken" :src="championIcon(b.id)" width="34" height="34" class="icon" alt="" />
+          <div>
+            <span class="n">{{ b.name }}</span>
+            <div class="faint small">
+              <template v-if="b.myWinRate != null">{{ p(b.myWinRate) }} pour toi contre lui, en face de toi dans {{ p(b.share) }} des parties</template>
+              <template v-else>{{ p(b.winRate) }} en {{ b.laneLabel }}, joué dans {{ p(b.share) }} des parties</template>
+            </div>
+          </div>
+          <span class="num good">{{ points(b.gain) }}</span>
+          <span v-if="sr.bans.hovered === b.id" class="small faint">survolé</span>
+          <button v-else class="btn ghost" :disabled="!sr.bans.myTurn || busy" @click="hoverBan(b.id)">Survoler</button>
+        </li>
+      </ul>
+      <p v-else class="muted small">Aucun ban ne se détache : un champion fort que ton équipe peut encore prendre ne rapporte rien à bannir.</p>
+      <p class="faint small">Comptés : {{ sr.bans.lanes }} rôle{{ sr.bans.lanes > 1 ? 's' : '' }} sur 5, le tien et ceux dont l’allié a montré son champion. Survoler ne valide rien : le ban se confirme dans le client.</p>
+    </section>
 
     <section v-if="sr.matchup" class="card block mu" :class="sr.matchup.verdict">
       <img @error="hideBroken" :src="championIcon(sr.matchup.opponent.id)" width="44" height="44" class="icon" alt="" />
@@ -101,6 +131,7 @@ async function loadout() {
 .mu.défavorable { box-shadow: inset 3px 0 0 var(--bad); }
 .cp { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .cp li { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.cp li.ban { grid-template-columns: 34px 1fr auto auto; }
 .n { font-weight: 650; }
 .toast { margin: 0; }
 .small { font-size: 12px; }

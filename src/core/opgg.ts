@@ -487,7 +487,7 @@ export class OpggData {
     const lanes: Lane[] = ['top', 'jungle', 'mid', 'adc', 'support'];
     const map = new Map<string, LaneMetaRow[]>();
     // Champs précis d'abord ; si le serveur les refuse, la réponse complète (format non encore vu en vrai)
-    for (const fields of [lanes.map((l) => `data.positions.${l}[].{champion,play,role_rate,tier,win_rate}`), ['data']]) {
+    for (const fields of [lanes.map((l) => `data.positions.${l}[].{champion,play,role_rate,tier,win,win_rate}`), ['data']]) {
       try {
         const r = await this.client.call('lol_list_lane_meta_champions', { position: 'all', lang: 'en_US', desired_output_fields: fields });
         const root = (typeof r === 'string' ? parseCompact(r) : r) as { data?: { positions?: Record<string, Record<string, unknown>[]> } };
@@ -496,7 +496,7 @@ export class OpggData {
             const k = normChamp(String(row.champion ?? ''));
             if (!k) continue;
             const list = map.get(k) ?? [];
-            list.push({ champion: String(row.champion), lane: l, roleRate: num(row.role_rate), winRate: num(row.win_rate), tier: row.tier == null ? null : num(row.tier), games: num(row.play) });
+            list.push({ champion: String(row.champion), lane: l, roleRate: num(row.role_rate), winRate: num(row.play) && row.win != null ? num(row.win) / num(row.play) : num(row.win_rate), tier: row.tier == null ? null : num(row.tier), games: num(row.play) });
             map.set(k, list);
           }
       } catch {

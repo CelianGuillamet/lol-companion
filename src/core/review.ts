@@ -6,6 +6,8 @@
 // Limite à garder à l'esprit : la note mesure l'écart avec les stats globales, pas ce qui était vraiment le mieux
 // dans cette partie. Dans le doute (peu de parties, estimation), on dit « proche » ou « non noté », jamais « erreur ».
 
+import type { RerollNote } from './reroll';
+
 export type ReviewVerdict = 'best' | 'close' | 'costly' | 'unknown';
 
 export interface ReviewCard {
@@ -19,12 +21,16 @@ export interface ReviewCard {
 
 export interface ReviewChoice {
   round: number | null;
+  /** 1 pour un 2e choix au même palier (augment en plus de K/DA). Absent pour un choix normal. */
+  choice?: number;
   cards: ReviewCard[];
   picked: number | null;
   best: number | null;
   /** Points de winrate estimés perdus (fraction, 0.024 = 2,4 pts). 0 sauf pour un choix coûteux. */
   lost: number;
   verdict: ReviewVerdict;
+  /** Relance à signaler sur ce tirage (reroll.ts). Absent : rien de net, ou relances inconnues. */
+  reroll?: RerollNote;
 }
 
 export interface GameReview {
@@ -36,29 +42,37 @@ export interface GameReview {
   lost: number;
   /** Refait après coup avec les stats actuelles, sans la correction de build de la partie. */
   approx?: boolean;
+  /** Points estimés perdus sur les relances, séparés de `lost` : ils se sont joués avant le choix. */
+  rerollLost?: number;
+  /** Relances déjà regardées (une partie d'avant la v1.66 est reprise une seule fois). */
+  rerollsDone?: boolean;
+  /** Relances reprises après coup depuis usage.json, sans ton build du moment. */
+  rerollsApprox?: boolean;
 }
 
 /** En dessous d'un point d'écart, deux cartes se valent en pratique. */
-const MIN_LOST = 0.01;
+export const MIN_LOST = 0.01;
 /** Écart à dépasser, en erreurs types : environ 95 % de confiance que la carte conseillée est devant. */
-const CONFIDENCE_Z = 1.64;
+export const CONFIDENCE_Z = 1.64;
 
-const variance = (c: ReviewCard) => {
+export const variance = (c: Pick<ReviewCard, 'value' | 'games'>) => {
   const p = Math.min(0.99, Math.max(0.01, c.value));
   return (p * (1 - p)) / Math.max(1, c.games);
 };
 
-export function reviewChoice(round: number | null, cards: ReviewCard[], picked: number | null): ReviewChoice {
+export function reviewChoice(round: number | null, cards: ReviewCard[], picked: number | null, choice = 0): ReviewChoice {
   const ranked = [...cards].sort((a, b) => b.value - a.value);
   const top = ranked[0] ?? null;
   const mine = cards.find((c) => c.id === picked) ?? null;
-  const out = (verdict: ReviewVerdict, lost = 0): ReviewChoice => ({ round, cards, picked, best: top?.id ?? null, lost, verdict });
+  const out = (verdict: ReviewVerdict, lost = 0): ReviewChoice => ({ round, ...(choice ? { choice } : {}), cards, picked, best: top?.id ?? null, lost, verdict });
   if (!top || !mine || mine.estimated || top.estimated) return out('unknown');
   if (mine.id === top.id) return out('best');
   const lost = top.value - mine.value;
   const noise = CONFIDENCE_Z * Math.sqrt(variance(top) + variance(mine));
   return lost < MIN_LOST || lost < noise ? out('close') : out('costly', lost);
 }
+
+export const rerollLostOf = (c: ReviewChoice) => (c.reroll && c.reroll.verdict !== 'good' ? c.reroll.delta : 0);
 
 export function reviewGame(choices: ReviewChoice[], approx = false): GameReview | null {
   if (!choices.length) return null;
@@ -69,11 +83,15 @@ export function reviewGame(choices: ReviewChoice[], approx = false): GameReview 
     analysed: noted.length,
     solid: noted.filter((c) => c.verdict !== 'costly').length,
     lost: noted.reduce((n, c) => n + c.lost, 0),
+    rerollLost: sorted.reduce((n, c) => n + rerollLostOf(c), 0),
     ...(approx ? { approx: true } : {}),
   };
 }
 
-export const roundLabel = (round: number | null): string => (round ? (['Début', 'Niveau 7', 'Niveau 11', 'Niveau 15'][round - 1] ?? `Choix ${round}`) : 'Choix');
+export function roundLabel(round: number | null, choice = 0): string {
+  const base = round ? (['Début', 'Niveau 7', 'Niveau 11', 'Niveau 15'][round - 1] ?? `Choix ${round}`) : 'Choix';
+  return choice ? `${base}, ${choice + 1}e choix` : base;
+}
 
 const pct = (x: number) => `${(x * 100).toFixed(1).replace('.', ',')}\u00a0%`; // espace insécable : le « % » ne part pas seul à la ligne
 export const points = (x: number) => (x * 100).toFixed(1).replace('.', ',');
@@ -89,6 +107,13 @@ export function choiceText(c: ReviewChoice): string {
   return `${mine.name} (${pct(mine.value)}) : ${top.name} était mieux placé (${pct(top.value)}), environ ${points(c.lost)} pts perdus.`;
 }
 
+/** Une phrase pour une relance notée. */
+export function rerollText(r: RerollNote): string {
+  if (r.verdict === 'costly') return `Tu as relancé ${r.name} (${pct(r.value)}), ta meilleure carte : environ ${points(r.delta)} pts perdus en moyenne.`;
+  if (r.verdict === 'good') return `Relancer ${r.name} (${pct(r.value)}) était un bon pari : environ +${points(r.delta)} pts en moyenne.`;
+  return `Tu pouvais encore relancer ${r.name} (${pct(r.value)}) gratuitement : environ ${points(r.delta)} pts laissés en moyenne.`;
+}
+
 export interface ReviewSummary {
   games: number;
   analysed: number;
@@ -96,6 +121,13 @@ export interface ReviewSummary {
   /** Points estimés perdus par partie notée. */
   lostPerGame: number;
   worst: ReviewChoice | null;
+  /** Relances, sur les parties où elles ont été regardées (0 partie : pas de ligne à afficher). */
+  rerollGames: number;
+  rerollLostPerGame: number;
+  /** Meilleures cartes relancées à tort. */
+  rerollCostly: number;
+  /** Relances gratuites laissées. */
+  rerollUnused: number;
 }
 
 /** Bilan sur plusieurs parties ; null si aucune partie n'a de choix noté. */
@@ -103,11 +135,17 @@ export function reviewSummary(reviews: (GameReview | undefined)[]): ReviewSummar
   const list = reviews.filter((r): r is GameReview => !!r && r.analysed > 0);
   if (!list.length) return null;
   const costly = list.flatMap((r) => r.choices).filter((c) => c.verdict === 'costly');
+  const rolled = list.filter((r) => r.rerollsDone);
+  const notes = rolled.flatMap((r) => r.choices).flatMap((c) => (c.reroll ? [c.reroll] : []));
   return {
     games: list.length,
     analysed: list.reduce((n, r) => n + r.analysed, 0),
     solid: list.reduce((n, r) => n + r.solid, 0),
     lostPerGame: list.reduce((n, r) => n + r.lost, 0) / list.length,
     worst: costly.sort((a, b) => b.lost - a.lost)[0] ?? null,
+    rerollGames: rolled.length,
+    rerollLostPerGame: rolled.length ? rolled.reduce((n, r) => n + (r.rerollLost ?? 0), 0) / rolled.length : 0,
+    rerollCostly: notes.filter((n) => n.verdict === 'costly').length,
+    rerollUnused: notes.filter((n) => n.verdict === 'unused').length,
   };
 }

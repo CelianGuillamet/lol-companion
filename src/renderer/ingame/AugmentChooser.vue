@@ -5,7 +5,7 @@
 import { computed, ref, watch } from 'vue';
 import { tone, state, pct, hideBroken, wrAt, ROUND_LABEL } from '../store';
 import type { AugmentPanel, AugmentRow, Rarity } from '../../core/types';
-import { presentOfferedCards } from '../offered-cards';
+import { presentOfferedCards, rerollLine } from '../offered-cards';
 import Confidence from '../ui/Confidence.vue';
 
 const props = defineProps<{ panel: AugmentPanel; prepare?: boolean }>();
@@ -53,6 +53,7 @@ const byId = computed(() => {
 const presentation = computed(() => presentOfferedCards(offered.value, byId.value, round.value));
 const cards = computed(() => presentation.value.cards);
 // Classement des cartes : winrate au moment du choix, corrigé selon ton build en cours (bonus / malus affiché)
+const reroll = computed(() => (presentation.value.sure ? rerollLine(offered.value?.reroll, cards.value) : null));
 const fitOf = (id: number) => offered.value?.fit?.[id] ?? null;
 const sure = computed(() => presentation.value.sure);
 const showAll = ref(false);
@@ -68,6 +69,9 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const traps = computed(() => new Set((props.panel.traps ?? []).map((t) => t.id)));
 const myTraps = computed(() => new Map((props.panel.myTraps ?? []).map((t) => [t.id, t])));
 const champWr = computed(() => props.panel.championWinrate ?? 0.5);
+const comboOf = (id: number) => offered.value?.combos?.[id] ?? props.panel.combos?.[id] ?? null;
+const comboClass = (id: number) => ({ true: 'good', false: 'bad', null: 'faint' })[String(comboOf(id)?.good ?? null) as 'true' | 'false' | 'null'];
+const COMBO_TITLE = 'Avis de la communauté sur ce champion (Data: arammayhem.com), pas une statistique. N’entre pas dans le classement.';
 
 const pool = computed<AugmentRow[]>(() => {
   const all = props.panel.all?.[rarity.value];
@@ -91,16 +95,18 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
         <h2>Tes cartes</h2>
         <span class="read-status">{{ sure ? '3 sur 3 reconnues' : 'Lecture à vérifier' }}</span>
       </div>
-      <p class="decision" v-if="sure">Prends la première, puis retrouve sa position dans le jeu.</p>
-      <p v-else class="doubt" role="status">{{ doubt }}. Aucun conseil pour ce tirage. Vérifie dans la liste ou relis avec <kbd>⌘⇧R</kbd>.</p>
+      <p v-if="reroll" class="reroll" :class="{ act: reroll.targets.length }">{{ reroll.text }}</p>
+      <p class="decision" v-if="sure && offered?.reroll?.kind !== 'free'">Prends la première, puis retrouve sa position dans le jeu.</p>
+      <p v-if="!sure" class="doubt" role="status">{{ doubt }}. Aucun conseil pour ce tirage. Vérifie dans la liste ou relis avec <kbd>⌘⇧R</kbd>.</p>
       <ol class="list offered-list" :aria-label="sure ? 'Tes cartes classées par recommandation' : 'Cartes reconnues, sans classement'">
-        <li v-for="(c, i) in cards" :key="c.id" :class="{ best: sure && i === 0, reco: sure && i === 0, top: true, trap: traps.has(c.id) || myTraps.has(c.id) }">
+        <li v-for="(c, i) in cards" :key="c.id" :class="{ best: sure && i === 0, reco: sure && i === 0, top: true, trap: traps.has(c.id) || myTraps.has(c.id) || comboOf(c.id)?.kind === 'trap' }">
           <img v-if="c.a?.icon" @error="hideBroken" :src="c.a.icon" width="30" height="30" class="ic" alt="" />
           <span v-else class="ic" />
           <span class="name">
-            <span class="card-cue"><b v-if="sure">{{ i === 0 ? 'À prendre' : 'Alternative' }}</b><span v-if="c.position">{{ c.position }} dans le jeu</span></span>
+            <span class="card-cue"><b v-if="sure">{{ i === 0 ? 'À prendre' : reroll?.targets.includes(c.id) ? 'À relancer' : 'Alternative' }}</b><span v-if="c.position">{{ c.position }} dans le jeu</span></span>
             <span class="n">{{ c.name }}</span>
             <span class="tags">
+              <span v-if="comboOf(c.id)" class="tag" :class="comboClass(c.id)" :title="COMBO_TITLE">{{ comboOf(c.id)!.label }}</span>
               <span v-if="myTraps.has(c.id)" class="tag bad">tu perds avec ({{ myTraps.get(c.id)!.wins }}V {{ myTraps.get(c.id)!.games - myTraps.get(c.id)!.wins }}D)</span>
               <span v-else-if="c.a?.personal && c.a.personal.games >= 2" class="tag" :class="tone(c.a.personal.wins, c.a.personal.games)">toi {{ c.a.personal.wins }}V {{ c.a.personal.games - c.a.personal.wins }}D</span>
               <span v-if="fitOf(c.id)" class="tag" :class="fitOf(c.id)!.good ? 'good' : 'bad'" title="Correction selon tes items achetés et prévus (description de l’augment sur le wiki)">{{ fitOf(c.id)!.why }} {{ fmtDelta(fitOf(c.id)!.delta * 100) }}</span>
@@ -146,13 +152,14 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
     </p>
 
     <ol v-if="listOpen" class="list">
-      <li v-for="{ a, rank } in rows" :key="a.id" :class="{ best: rank === 1 && !offered, reco: rank === 1 && !offered, top: rank <= 3, trap: traps.has(a.id) || myTraps.has(a.id) }">
+      <li v-for="{ a, rank } in rows" :key="a.id" :class="{ best: rank === 1 && !offered, reco: rank === 1 && !offered, top: rank <= 3, trap: traps.has(a.id) || myTraps.has(a.id) || comboOf(a.id)?.kind === 'trap' }">
         <span class="rank num">{{ rank }}</span>
         <img v-if="a.icon" @error="hideBroken" :src="a.icon" width="30" height="30" class="ic" alt="" />
         <span v-else class="ic" />
         <span class="name">
           <span class="n">{{ a.name }}</span>
           <span class="tags">
+            <span v-if="comboOf(a.id)" class="tag" :class="comboClass(a.id)" :title="COMBO_TITLE">{{ comboOf(a.id)!.label }}</span>
             <span v-if="myTraps.has(a.id)" class="tag bad">tu perds avec ({{ myTraps.get(a.id)!.wins }}V {{ myTraps.get(a.id)!.games - myTraps.get(a.id)!.wins }}D)</span>
             <span v-else-if="a.personal && a.personal.games >= 2" class="tag" :class="tone(a.personal.wins, a.personal.games)">toi {{ a.personal.wins }}V {{ a.personal.games - a.personal.wins }}D</span>
             <span v-if="traps.has(a.id)" class="tag bad">piège fréquent</span>
@@ -214,6 +221,8 @@ li.top .rank { color: var(--text); }
 .cards h2 { font-size: 19px; }
 .read-status { font-size: 12px; color: var(--muted); }
 .decision { margin: 0; font-size: 13px; color: var(--muted); }
+.reroll { margin: 0; font-size: 13px; color: var(--muted); }
+.reroll.act { color: var(--text); }
 .offered-list { gap: 8px; overflow: visible; border-top: 0; }
 .offered-list li { grid-template-columns: 30px minmax(0, 1fr) auto; padding: 12px; gap: 12px; background: var(--surface-1); border: 1px solid var(--border); }
 .offered-list li.best { border-color: transparent; }

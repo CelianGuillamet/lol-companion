@@ -11,6 +11,7 @@
     "start": "npm run build && electron .",
     "app": "electron .",
     "test": "vitest run",
+    "rehearsal": "vitest run test/rehearsal.test.ts",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "probe": "node scripts/probe.mjs",
     "mayhem": "node scripts/mayhem-stats.mjs"

@@ -1,5 +1,284 @@
 # Journal des versions
 
+## v1.85 — 3 nov. 2026 — ton or qui dort devient un élixir quand ton build est fini
+- **Nouveau, prochain achat** : quand il ne reste rien à acheter (sac plein d'items finis, ou plus aucun conseil), l'app propose l'élixir de ton build au lieu de « à toi de juger ». Sac plein, il se boit à l'achat, sans place à faire.
+- **Pourquoi** : mesuré sur tes 80 parties Mayhem détaillées, 55 finissent avec 6 items finis, et sur ces 55 tu gagnes en médiane environ 3 600 or de plus que la valeur de ton inventaire final, soit 7 élixirs. 36 parties dépassent 2 500 or. **Ordre de grandeur** : prix des items estimés (2 900 or l'item fini), et l'or des items revendus ou remplacés compte dedans. L'app n'en parlait pas jusqu'ici.
+- **Quel élixir** : Wrath (+30 AD), Sorcery (+50 AP) ou Iron (+300 PV, ténacité), selon ton champion et surtout ce que tu construis : un Malphite full AP boit Sorcery.
+- **Quand** : niveau 9 minimum (règle du jeu) et au moins 500 or. Jamais avant la fin du build. S'il reste un composant à vendre pour finir un item, ça passe d'abord.
+- **Suivi de l'effet** : l'API ne dit rien d'un élixir bu. L'app le déduit de ton or qui baisse de 500 sans que ton sac change, puis affiche « Élixir actif, encore 2:10 ». À moins d'une minute, elle repropose l'achat : en ARAM tu n'achètes qu'en base. Une prime touchée au même instant peut masquer l'achat : la ligne reste alors affichée, sans gravité.
+- **Vérifié** : Data Dragon 16.21 donne les 3 élixirs sur les cartes 11 (Faille) et 12 (Abîme hurlant). Si un patch les retire, la ligne disparaît. **Pas vérifié** : que la boutique Mayhem les vende vraiment : si tu ne les trouves pas, dis-le-moi.
+- Visible partout où l'achat s'affiche : fenêtre, téléphone, panneau flottant (mode minimal : « Achète Elixir of Iron »). Tous les modes 5v5.
+- **26.22** : notes officielles toujours absentes, aucune partie depuis cette nuit, aucune mesure n'a avancé.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse.
+- Tests : `test/elixir.test.ts`, `test/engine-elixir.test.ts`. Rendu vu sous Electron avec un faux client (les icônes ne chargent pas d'ici). Pas encore vu en vraie partie.
+
+## v1.84 — 3 nov. 2026 — timers ennemis corrigés : Flash revient en 176 s en ARAM et Mayhem, pas 300
+- **Corrigé, timers des sorts ennemis** : en ARAM et en Mayhem, tout le monde a 70 haste de sorts d'invocateur, et Data Dragon ne la compte pas. L'app affichait Flash à 300 s au lieu de 176 s : tu aurais cru Flash absent encore 2 minutes alors qu'il était revenu, au pire moment pour engager. Tous les sorts d'invocateur sont corrigés (Fantôme 141 s, Marque 47 s…). La Faille ne change pas.
+- **Corrigé, ultimes** : l'accélération d'équilibrage du champion (la même que le badge du champ select, par exemple +10 sur Hecarim) compte maintenant dans le timer de son ultime. Un malus ne rallonge rien : voir la limite plus bas.
+- **Corrigé, Mayhem** : plus de « dès 2:10 » sur une rune cachée : les runes sont désactivées dans ce mode. L'étiquette « approximatif » reste, car les augments adverses restent invisibles (Flash 2, Flashy).
+- **Tu n'avais pas encore vu l'erreur** : ces timers datent de la v1.74, et l'app n'a pas été relancée depuis la v1.63.
+- **Vérifié, cartes du 26.22** : RISE (4 lettres) et One Hit Wonder sont reconnues à la lecture, sans confusion avec un mot de description ou un titre mal lu.
+- **Pas fait, après mesure** : un rappel « augment en attente », puisque le choix ne s'ouvre que mort ou en base. Sur tes 59 choix des niveaux 7, 11 et 15, la 1re lecture arrive en 8 à 28 s (médiane par palier). Tu ne laisses pas traîner tes choix : rien à gagner.
+- **26.22** : notes officielles toujours absentes (sortie le 4 nov.). Un résumé d'aperçu confirme RISE et One Hit Wonder, sans un mot sur Superfans. Aucune partie depuis cette nuit, aucune mesure n'a avancé.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse.
+- **Limites** : les sources sont le wiki LoL et un guide, pas une mesure en jeu. L'API ne donne le cooldown d'aucun sort ennemi. Pour un champion à malus (Ziggs −20), le jeu affiche 0 de haste : j'ai donc supposé que le malus n'allonge pas l'ultime tant qu'il n'a pas de haste d'objets.
+- Tests : `test/enemyspells.test.ts`, `test/engine-enemyspells.test.ts`, `test/cardmatch.test.ts`. Pas de changement d'écran, seulement les valeurs : pas de nouvelle capture. Pas encore vu en vraie partie.
+
+## v1.83 — 3 nov. 2026 — les combos champion + augment connus, sur tes cartes
+- **Nouveau, sur tes cartes Mayhem** : une étiquette dit ce que la communauté sait de cette carte sur ton champion : « combo fort », « bon combo », « piège connu », « astuce connue », « pour le fun ». Par exemple Dual Wield sur Vayne (fort), Vampirism sur Garen (piège). Les stats ne voient pas ces interactions : un piège peut venir d'un sort qui ne déclenche pas l'augment.
+- **Nouveau, plans à plusieurs augments** : si le fichier met deux augments dans le même plan pour ton champion et que l'un a été conseillé à un choix précédent, l'autre affiche « va avec Jeweled Gauntlet ». C'est la première info augment × augment de l'app : arammeta n'en a pas. Même pari que les augments liés : l'app suppose que tu as pris la carte conseillée.
+- **Corrigé, relances** : l'app pouvait te dire de relancer la carte qui fait combo, car elle ne voit que les winrates. « Combo fort », « bon combo » et « va avec » ne sont plus jamais relancés. S'il ne reste rien à relancer : « Pas de relance : tu perdrais un combo connu. »
+- **Le classement ne change pas** : ces avis ne sont pas des stats, le site le dit (« not a win-rate metric »). « À prendre » peut donc tomber sur une carte marquée piège : à toi de trancher, et dis-moi si c'est arrivé.
+- **Visible** dans la fenêtre, sur le téléphone, le panneau flottant et la liste complète de Préparer. Plans seulement pendant la partie.
+- **Fréquence, mesurée sur tes 23 parties du journal** : une étiquette sur 25 tirages de 220, soit 1 sur 9. 3 bons combos solo, tous non conseillés par les stats (Eureka sur Karthus deux fois, Ethereal Weapon sur Hecarim), 0 piège, 2 cas de plan. C'est rare, et rien ne prouve encore que suivre ces avis fasse gagner.
+- **Mesure** : `cards_seen` note `combos` dans `usage.json`, le journal aussi (« combos : … »).
+- **Source** : [arammayhem.com/data](https://arammayhem.com/data/), 457 lignes, CC BY 4.0, relues toutes les 24 h, avec un instantané embarqué du 3 nov. si le site ne répond pas. Réglages affiche laquelle est utilisée. Le site n'est joignable que par lecture web d'ici : **le vrai téléchargement n'a pas encore été vu**, mais l'en-tête du fichier a été lu tel quel.
+- **26.22** : notes officielles toujours absentes, arammayhem.com s'arrête au 26.21. Superfans reste non confirmé. Aucune partie depuis cette nuit, aucune mesure n'a avancé.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse.
+- Tests : `test/combos.test.ts`, `test/engine-combos.test.ts`. Rendu vu sous Electron avec un faux client. Pas encore vu en vraie partie.
+
+## v1.82 — 3 nov. 2026 — la revente compte dans ton or : l'item à ce retour en base, pas au suivant
+- **Nouveau, prochain achat** : quand il te manque un peu d'or, l'app regarde si vendre un composant inutile comble l'écart. Avant : « À économiser, manque 200 or » avec 305 or dormant dans ton sac. Maintenant : « Vendre, puis acheter », avec ce que rend la vente et l'or qui reste. En ARAM on n'achète qu'en base : l'item arrive à ce passage et pas à la prochaine mort.
+- **Ce qu'elle vend** : une ou deux ventes au plus, la plus petite somme qui suffit. Jamais un composant de l'item visé ni d'un achat prévu, jamais un item fini, des bottes, un Tear, une Dark Seal ou une quête de support. Sac plein : la vente déjà imposée compte d'abord.
+- **Valeur lue, pas supposée** : `gold.sell` de Data Dragon, objet par objet. Une valeur inconnue (objet Mayhem hors catalogue, Data Dragon injoignable) ne compte pas, et l'app reste au conseil d'avant.
+- Visible partout où l'achat s'affiche : fenêtre, téléphone, panneau flottant, onglet Build.
+- **Pas mesuré** : le gain en parties, ni la fréquence. Les captures ne donnent ni le plan d'achat ni l'or à chaque mort. L'événement `resale` de `usage.json` le dira. En boutique, le prix de vente s'affiche sur l'objet : si un écart avec l'app apparaît, c'est à corriger.
+- **26.22 lu ce matin** : notes officielles toujours absentes. Un site tiers annonce le Worlds Band Track au 26.22, cohérent avec Superfans (id « Worlds » au PBE), et le retour de Butcher's Bridge et Koeshin's Crossing en Mayhem au patch suivant le 26.21. Rien à changer dans l'app pour ces cartes.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse. Aucune partie depuis cette nuit, aucune mesure n'a avancé.
+- Tests : `test/nextbuy.test.ts`, `test/purchase.test.ts`, `test/engine-purchase.test.ts`, `test/cooldowns.test.ts`. Rendu vu sous Electron avec un faux client (fenêtre et panneau flottant). Pas encore vu en vraie partie.
+
+## v1.81 — 3 nov. 2026 — sac plein : l'app sait qu'il n'y a que 6 places
+- **Corrigé, prochain achat** : l'app ne regardait pas la place dans ton sac. Sur tes 20 dernières parties, 8 fois sur 20 tu as les 6 places prises au niveau 15, toujours avec des composants, et 23 de ses 128 conseils d'achat tombaient sur un sac plein (Wit's End avec Chempunk Chainsword qui traîne, Rabadon avec un Amplifying Tome). La boutique refuse ces achats, et sur le Taric du 2 nov. 3 996 or sont restés en poche.
+- **Nouveau** : sac plein, l'item qui termine un de tes composants passe en tête. Sinon, l'app dit quoi vendre : « Vends d'abord Amplifying Tome », jamais un item fini, des bottes, un Tear, une Dark Seal ou une quête de support. Tant que tu économises, elle ne te fait rien vendre.
+- **Corrigé** : le composant « en attendant » n'est plus proposé s'il n'a pas de place.
+- **Nouveau** : plus de composant à vendre, l'app affiche « Inventaire plein » au lieu d'un 7e item à acheter. Le choix de remplacer un item fini reste le tien : aucune stat ne dit lequel retirer. Une menace forte ou un augment lié gardent leur priorité, la vente est indiquée.
+- Visible partout où l'achat s'affiche : fenêtre, téléphone, panneau flottant, onglet Build.
+- **Notes du 26.22 pas encore publiées** ce matin : Superfans reste non confirmé.
+
+## v1.80 — 3 nov. 2026 — prête pour le jour du patch : timers à jour et stats signalées
+- **Corrigé, timers des sorts ennemis** : ils suivaient la version d'arammeta, qui garde des jours de retard sur le jeu. Dès le 26.22, un ultime ou un sort modifié aurait gardé son ancien cooldown (Mel, par exemple). L'app prend maintenant la version de ton client, et reste sur l'ancienne le temps que Data Dragon publie la nouvelle.
+- **Nouveau, au champ select** : tant que les stats ont un patch de retard, un bandeau le dit, au moment où tu choisis. Avant, ce n'était écrit qu'en petit en bas à gauche et dans Réglages. Le classement ne change pas : un champion modifié peut être mal classé pendant ces jours-là.
+- **Corrigé, données du nouveau patch** : quand arammeta passe au nouveau patch, le détail d'un champion (augments, builds) pouvait rester celui du patch d'avant jusqu'à 12 h. Il est relu aussitôt, avec repli sur le disque si le site ne répond pas.
+- **Pas fait, après mesure** : ton bilan contre les champions adverses à l'écran de chargement, repéré chez Blitz. Sur 80 parties Mayhem rejouées dans l'ordre, ton passé ne donne un signal lisible que 12 fois, et il ne prédit rien (bilan « mauvais » : 4 V sur 8, « bon » : 3 V sur 4). Ça resterait du bruit à l'écran. À relire à 300 parties.
+- **Notes du 26.22 toujours pas lisibles** : la page de Riot ne répond pas d'ici, et les résumés lisibles ne reprennent que l'aperçu des équilibrages, sans mot sur Mayhem. Superfans reste non confirmé.
+- **Répétition générale refaite** sur tes vraies données avant ce dépôt, sans casse.
+- **Relance l'app avant ta prochaine partie**, idéalement avant le patch du 4 nov. Aucune partie depuis cette nuit, aucune mesure n'a avancé, et l'app tourne encore sur une version d'avant la v1.64.
+- Tests : `test/cooldowns.test.ts`, `test/arammeta-patch.test.ts`, `test/engine-patchday.test.ts`, `test/ui-helpers.test.ts`. Bandeau vu sous Electron avec un faux client en 16.22. Numéro de version du vrai client non capturé : si son format diffère, l'app garde simplement le comportement d'avant. Pas encore vu en vraie partie.
+
+## v1.79 — 3 nov. 2026 — répétition générale sur tes vraies données avant ta prochaine relance
+- **Pourquoi cette session n'ajoute pas de fonction** : 16 versions, celle-ci comprise, vont s'appliquer d'un coup à ta prochaine relance. Je les ai fait tourner ensemble sur tes vraies données, ce qui n'avait jamais été fait sur tout l'enchaînement.
+- **Résultat, pas de blocage trouvé** : ton historique (136 parties) passe sans perte, 25 anciennes parties reçoivent leur revue d'augments et 22 leur revue d'achats. 21 parties (89 lectures de la vraie API du jeu) et tes 27 champ select capturés sont rejoués sans erreur. Les 4 onglets s'ouvrent sous Electron avec ton historique, Mes parties et le détail des parties compris, sans erreur dans la console.
+- **Corrigé, écart d'objets** : les objets propres à Mayhem absents du catalogue (Wooglet's Witchcap à 6 000 or, vu dans tes parties) comptaient 0. L'app prend maintenant le prix donné par le jeu pour ces objets-là. Poro-Snax vaut bien 0 et n'est plus compté « sans prix ».
+- **Corrigé, sorts ennemis** : un ennemi avec Clown College ou Poltergeist affichait « ? » ou « Augment_Poltergeist » à la place d'un sort d'invocateur. Tu vois maintenant « Deceive » ou « Poltergeist », sans timer, car leur cooldown n'est pas connu.
+- **Limites de la répétition** : sous Linux, avec le faux client et 3 champions de stats réelles (les autres en réutilisent une copie), donc elle prouve que rien ne casse, pas que les conseils sont bons. Ce qui reste invisible d'ici : la relance sur macOS, OP.GG, Data Dragon et les objets des 9 autres joueurs (leurs captures n'existent qu'à partir de la v1.78).
+- **26.22 lu dans les aperçus** : Mel change le 4 nov. (W, Q, stats), Yasuo, Thresh et Locke baissent, Viktor, Corki, Rumble et 7 autres montent, Overlord's Bloodmail passe à 40 AD. Rien n'y parle de Mayhem ni de Superfans, les notes officielles ne sont toujours pas sorties.
+- **Question pour toi**, dans « À trancher » de la feuille de route : tant que l'app n'est pas relancée, ces sessions empilent des versions que personne ne teste. Veux-tu les espacer jusqu'à ta prochaine partie ?
+- **Relance l'app avant ta prochaine partie.** Aucune partie depuis cette nuit, aucune mesure n'a avancé.
+- Tests : `test/goldgap.test.ts`, `test/enemyspells.test.ts`, `test/rehearsal.test.ts` (ne tourne que si on lui donne une copie de `probe-output/`, qui ne va jamais sur GitHub). Pas encore vu en vraie partie.
+
+## v1.78 — 3 nov. 2026 — l'app te dit quand elle a une version d'avance sur toi
+- **Le problème** : les sessions planifiées déploient sans relancer l'app, pour ne jamais te couper en partie. Ton app n'a pas redémarré depuis le 2 nov. 16 h 55 UTC : **14 versions ne t'ont jamais servi** (revue des achats, reroll à jour, bans, sort à monter, timers, écart d'objets, Superfans…), et toutes les mesures de la feuille de route sont bloquées par ça.
+- **En bas à gauche, un bloc « Mise à jour prête : v1.xx »** : le nombre de versions pas encore lancées, un bouton **Relancer l'app**, et « Quoi de neuf » (les 5 dernières). Contrôle toutes les 5 minutes.
+- **Le bouton ne marche que hors partie** : client fermé, salon, file d'attente. Du ready check à l'enregistrement de la fin de partie, le bloc dit « Relance après la partie », et l'app refuse même si on l'appelle autrement.
+- **Une notification discrète** quand tu entres au salon ou en file avec une mise à jour en attente, au plus une fois toutes les 6 h.
+- **Rien ne se relance tout seul.** La relance automatique quand League est fermé est une question pour toi, dans « À trancher » de la feuille de route.
+- **La version lancée est notée** : « App v1.xx » en bas à gauche, ligne dans le journal, événement `app_start` dans `usage.json`. Plus besoin de deviner ce qui tournait pendant une partie.
+- **Captures plus utiles** : à chaque choix d'augment, `liveclient-choix*` garde aussi champion, équipe, niveau, rôle, objets et runes des 10 joueurs, sans identifiant. Une seule partie répondra à 3 questions ouvertes : les objets adverses suivent-ils les achats, quels objets n'ont pas de prix, `position` et `runes` sont-ils remplis ?
+- **Limite** : ce bloc n'existe qu'à partir de cette version. **Il faut encore relancer l'app à la main cette fois-ci.** Il n'apparaît pas sur le téléphone ni sur la fenêtre second écran.
+- Patch 26.22 : notes officielles toujours pas lisibles d'ici (Dot Esports et Mobafire refusés, arammayhem.com arrêté au 26.21). Aucune partie depuis cette nuit, aucune mesure n'a avancé.
+- Tests : `test/appversion.test.ts`, `test/engine-goldgap.test.ts`. Rendu vérifié sous Electron à 900 × 640 et en partie (relance refusée) ; relance réelle faite sous Linux, nouveau processus et fenêtre revenus. **Pas encore vue sur macOS.** Si l'app se ferme sans revenir, rouvre-la normalement et dis-le-moi.
+
+## v1.77 — 3 nov. 2026 — ta collection compte : le banc et les champions à débloquer
+- **Découvert en lisant les règles du champ select** : tes cartes viennent de ta collection (+ rotation), et au banc tu ne peux prendre que les champions qui en font partie. L'app ne le savait pas : elle pouvait conseiller un champion du banc que le client refuse, ou dire « Garde X » alors qu'une autre option était possible.
+- **Au champ select ARAM / Mayhem** : les champions du banc hors de ta collection sortent du classement, une ligne les cite. Le bouton de ceux qui restent marche donc à coup sûr.
+- **Dans Préparer, onglet Mayhem : « Champions à débloquer »**. Ta collection sur le total, puis les champions dont l'achat relève le plus ton meilleur choix moyen, avec le gain en points de winrate par partie. Un clic ouvre la fiche. Rien ne s'achète depuis l'app. Le panneau n'apparaît pas si tu as tout, si le client est fermé, ou sans stats globales.
+- **Le gain est petit et il faut le lire comme ça** : environ +0,3 pt pour les 5 premiers avec 120 à 150 champions, +0,5 pt avec 90 (simulation sur des winrates d'exemple). C'est peu sur une partie, mais ça joue sur toutes. Calcul simple : 2 cartes + 4 champions au banc, winrate global seulement, sans ton équipe ni tes résultats. Le prix en essences n'est pas lu.
+- **Le 3e champion (carte bénie)** : environ 5 % + 0,15 % par champion que tu possèdes, 30 % au plus (wiki et dodge.gg). Affiché dans le panneau.
+- **Limites** : le wiki dit que les 4 dernières rotations gratuites sont aussi tirables, et l'app ne les voit pas. Un champion qu'on te propose hors de ta collection lue compte donc comme à toi, et c'est noté. Mais un champion d'une ancienne rotation au banc, jamais proposé à toi, peut sortir à tort du classement : tu peux toujours le prendre dans le client. Le format de la liste du client vient de la documentation connue, pas d'une capture : si la lecture échoue, rien n'est filtré et le panneau reste caché.
+- **Mesure** : `usage.json` note `pool_seen` (taille de la collection) et `pool_outside`. Je ne sais pas encore combien de champions tu possèdes. Si tu les as tous, le panneau ne s'affichera jamais et le filtre ne fera rien.
+- **Vu dans tes parties, sans conseil à la clé** : mages 9 V sur 24, tireurs 20 sur 34, combattants 16 sur 27. Trop peu de parties, et le classement perso par classe n'est pas ajouté pour ça.
+- Rien de neuf à relire : aucune partie depuis cette nuit, notes du 26.22 pas encore sorties. **Relance l'app avant ta prochaine partie** : elle tourne encore sur une version d'avant la v1.64.
+- Tests : `test/pool.test.ts`, `test/engine-pool.test.ts`. Rendu vérifié sous Electron avec des données d'exemple, sans les icônes (CDN bloqués ici). Pas encore vu sur le vrai client.
+
+## v1.76 — 3 nov. 2026 — le build suit tes augments, entre builds proches
+- **Le conseil d'achat tient compte de tes augments avant ton premier item.** Si un augment joue sur la puissance, les critiques, les dégâts physiques, la vitesse d'attaque ou les résistances, et qu'un autre build du champion y répond mieux, l'app passe à ce build. La ligne dit « build X, pour <augment>, si tu l'as pris ». Avant, sans item acheté, elle prenait toujours le 1er build.
+- **Garde-fous** : seulement entre builds à moins de 2 points de winrate, avec au moins 1 000 parties. Rien ne change dès que tu as acheté un item ou un composant du build en cours. Deux augments opposés s'annulent. Les augments « Upgrade » gardent leur propre règle.
+- **La carte n'est plus pénalisée** quand un build proche lui va : elle perdait jusqu'à 4 pts contre le 1er build, alors qu'un build équivalent existait. Elle ne gagne pas de bonus pour autant.
+- **Limite principale, l'effet sera rare** : sur les 3 champions lisibles ici (Malphite, Leona, Yasuo), rien ne change. Malphite reste Tank : 4,4 pts d'écart avec son build AP, et arammeta ne dit pas ce que vaut un augment AP sur chaque build. Ça devrait surtout jouer sur les champions hybrides, ce qui reste à vérifier.
+- **Même pari que les augments liés** : le jeu ne dit pas l'augment pris avant la fin de partie. L'app suppose la carte conseillée, suivie 74 fois sur 96. Si tu as pris une autre carte, ignore la ligne.
+- **Mesure** : `usage.json` note `build_lean` (ancien et nouveau build, augment vraiment pris, build acheté, résultat).
+- **Vu dans tes parties, sans conseil à la clé** : Flash + Marque 12 V sur 33, Flash + Fantôme 14 V sur 21. Trop peu de parties, et les stats globales donnent ces deux choix à égalité. Ne change pas tes sorts pour ça.
+- Rien de neuf à relire : aucune partie depuis cette nuit, et les notes du 26.22 ne sont pas encore sorties. **Relance l'app avant ta prochaine partie** : elle tourne encore sur une version d'avant la v1.64.
+- Tests : `test/buildchoice.test.ts`, `test/engine-itembound.test.ts`. Pas de nouvel écran, donc pas de rendu Electron refait. Pas encore vu en vraie partie.
+
+## v1.75 — 3 nov. 2026 — l'écart d'objets, en partie
+- **En haut de la vue en partie, un repère** : « Objets +2 350 · niv. +3 », puis « Plus riche en face : Jinx, 11,2 k ». Sur la fenêtre second écran et le téléphone, dans tous les modes. Vert ou rouge seulement au-delà de 3 % de l'équipe la mieux équipée et de 500 or ; en dessous, « Objets à égalité ». C'est un choix prudent, pas une mesure.
+- **Tape dessus pour le détail** : tes 5 contre leurs 5. En Faille, rôle contre rôle, ta ligne en tête, avec l'écart de chaque lane. En ARAM et Mayhem, pas de lane : chaque équipe est classée du plus riche au moins riche. Si un rôle manque en Faille, même affichage.
+- **Pourquoi** : Hexgate l'offre sur Tab, l'app ne disait rien de l'état des forces. Le chiffre sert à savoir où en est le combat et qui porte l'équipe adverse. C'est une lecture du tableau des scores : l'app ne dit jamais d'engager ou de reculer.
+- **Pris maintenant** parce que tout ce qui est au-dessus dans la feuille de route attend des parties : aucune depuis cette nuit (01 h 20 UTC), et le 26.22 ne sort que demain.
+- **Prix total du patch** : le champ `price` du jeu est le coût de la dernière recette (Heartsteel : 400), inutilisable. Consommables exclus. Les objets Mayhem à identifiant préfixé (123430 = Rite of Ruin, 323075 = Thornmail) retombent sur l'objet de base ; un objet sans prix compte 0 et le détail le dit.
+- **Limites** : l'or en poche ne compte pour personne : un adversaire qui n'a pas encore acheté paraît plus pauvre qu'il n'est. La fraîcheur des objets adverses est celle du tableau des scores, pas vérifiée en vraie partie (les captures ne gardent que tes objets). « niv. » est la somme des niveaux de l'équipe. Le seuil « à égalité » n'est pas calibré.
+- **Mesure** : `usage.json` note à chaque partie `gold_gap` (écart et niveaux toutes les 5 minutes, résultat). Après 30 parties, on saura quel écart prédit vraiment la victoire.
+- Rien de neuf à relire en partie. **Relance l'app avant ta prochaine partie** : elle tourne encore sur une version d'avant la v1.64.
+- Tests : `test/goldgap.test.ts`, `test/engine-goldgap.test.ts`. Rendu vérifié sous Electron et dans Chromium via le serveur téléphone (400 et 1 100 px de large), en Mayhem et en Faille, avec des données d'exemple, sans les icônes (CDN bloqués ici). Pas encore vu en vraie partie.
+
+## v1.74 — 3 nov. 2026 — timers des sorts ennemis (tu tapes, l'app compte)
+- **En partie, un bloc « Sorts ennemis »** : les 5 adversaires, leur ultime et leurs 2 sorts d'invocateur. Tu tapes un sort quand tu le vois partir, le timer démarre sur le temps de jeu (relu au moment du clic) et compte à rebours. Sur le téléphone : nouvel onglet **Sorts**. C'est là qu'il sert le plus, le jeu en plein écran cache la fenêtre.
+- **Le vrai cooldown, pas un chiffre fixe** : base du patch (Data Dragon : sorts d'invocateur, ultime de chaque champion), rang de l'ultime déduit du niveau (6 / 11 / 16, ou 1 / 6 / 11 / 16 pour les champions à 4 rangs), haste des objets visibles (Ability Haste, haste d'ultime type Malignance, haste d'invocateur des bottes de Lucidité). S'il achète de la haste pendant le cooldown, le temps restant est recalculé comme en jeu.
+- **Corriger** : taper un timer en cours ouvre « −10 s » (tu l'as vu en retard), « +10 s », « Annuler ». Le timer disparaît tout seul quand le sort revient.
+- **Ce qui est dit honnêtement** : « dès 2:58 » si une rune invisible peut raccourcir (Cosmic Insight, Ultimate Hunter : arbre visible en Faille, inconnu en Mayhem). « ≈ » si une part est inconnue : augments adverses en Mayhem, Téléportation (dépend du niveau), Châtiment (charges), valeur de secours quand Data Dragon ne répond pas. « ? » si l'ultime n'est pas connu : pas de timer plutôt qu'un faux.
+- **Rien n'est automatique** : l'app ne détecte aucun lancement, conformément aux règles (docs/AGENT.md, politique Riot). Elle lit seulement ce que montre le tableau des scores (sorts équipés, niveau, objets) via l'API Live Client.
+- **Téléphone** : une seule action possible en écriture, `POST /api/spell` avec le jeton. Rien d'autre n'est modifiable depuis le téléphone.
+- **Non couvert** : Q / W / E (trop courts pour un clic), passifs qui réduisent l'ultime (resets sur kill…), haste conditionnelle ou à cumuls des objets, augments Mayhem des adversaires. Les descriptions d'objets utilisées par les tests sont reconstruites : la haste lue sur les vrais objets est à vérifier en vraie partie (survole une case, le détail dit d'où vient le chiffre).
+- Tests : `test/cooldowns.test.ts`, `test/enemyspells.test.ts`, `test/engine-enemyspells.test.ts`, `test/phone.test.ts`. Rendu vérifié dans Chromium (fenêtre large et téléphone), avec le vrai moteur, le faux client et des données d'exemple, sans les icônes (CDN bloqués ici). Pas encore vu en vraie partie.
+
+## v1.73 — 3 nov. 2026 — prête pour le 26.22 : Superfans et les tirages hors paliers
+- **Nouveau headliner reconnu : Superfans**, prévu au patch 26.22 (mercredi 4 nov.). Niveau max 21 pour tout le monde, plus d'XP, et un augment en plus au niveau 21. L'app lit la bannière, affiche les conseils et note le headliner dans l'historique. Sans bannière lue, une partie finie avec 5 augments au niveau 21 s'affiche « Superfans (probable) », plus « K/DA (probable) ».
+- **Corrigé : l'app ne lisait plus l'écran après le choix 4.** Le lecteur de cartes dort 3 minutes après chaque palier. L'augment du niveau 21 serait passé sans conseil. Il se réveille maintenant au niveau 21, et au niveau 18 sur Pentakill, dont la 2e carte tombait dans le même trou.
+- **K/DA : un coup d'œil toutes les 5 s pendant toute la partie**, car l'augment en plus arrive à n'importe quel moment. Avant, il n'était lu que s'il tombait juste après un palier. Coût : une lecture d'écran de plus toutes les 5 s, sur ces parties seulement.
+- **À l'écran** : « Augment en plus · niveau 21 » à la place de « Choix 4 » sur la fenêtre second écran et le téléphone, pas encore sur l'overlay. L'augment est classé avec les stats du choix 4 : aucune stat n'existe pour un 5e choix.
+- **Limites** : Superfans vient des données du serveur de test (31 oct.), les notes officielles du 26.22 n'étaient pas lisibles. Le nom sur la bannière est supposé être « Superfans ». Si le patch le change, rien ne casse et le raté sera noté dans `usage.json`. Atteindre le niveau 21 seul ne prouve rien : 3 de tes parties ont dépassé le niveau 18 en octobre, sans headliner connu.
+- **Aussi au 26.22, d'après le serveur de test** : 2 cartes, One Hit Wonder (or) et RISE (prismatique), classées « estimées » tant qu'arammeta n'a pas de parties dessus ; refonte de Mel, dont les stats resteront celles de l'ancien kit quelques jours ; XP des sbires partagée à 5 : 20 % chacun au lieu de 24 %.
+- Pas de nouvelle partie depuis la v1.70 : aucune mesure de la feuille de route n'a avancé. Relance l'app avant ta prochaine partie, elle tourne encore sur une version d'avant la v1.64.
+- Tests : `test/headliner.test.ts`, `test/engine.test.ts`. Rendu vérifié dans Electron sous Linux avec des données d'exemple (bannière et libellé). Le réveil du lecteur lui-même ne tourne que sur macOS : pas encore vu en vraie partie.
+
+## v1.72 — 3 nov. 2026 — Upgrade Cutlass, et plus de conseil sur une carte que tu as déjà
+- **Upgrade Cutlass est reconnu** : la carte vise Spectral Cutlass (le wiki décrit son actif, Soul Anchor). Elle est notée selon ton plan et l'item passe en tête du conseil d'achat, comme les autres « Upgrade ». Tu n'as jamais fini cet item sur tes 83 parties détaillées, donc la carte perdra le plus souvent 2 pts, sauf s'il est dans ton plan.
+- **Corrigé : l'app pouvait conseiller un augment que tu possèdes déjà.** Caitlyn, cette nuit : pendant les relances du choix 3, elle a lu Giant Slayer, pris au choix 2, et l'a conseillé 4 s. Une carte vue à un choix précédent est maintenant retirée : la lecture repasse à « 2 cartes sur 3 », sans conseil, jusqu'à la lecture suivante. C'est arrivé 1 fois sur 333 lectures.
+  Elle restait aussi comptée comme une relance dans le suivi du tirage : ce n'est plus le cas. Des cartes laissées ouvertes au palier suivant et les cartes Pentakill ne sont pas touchées.
+- **Nouvel « Upgrade X » au patch** : l'app le note dans le journal (« Augment lié à un item inconnu de l'app ») et dans `usage.json` (`bound_unknown`). Utile au 26.22, qui peut ajouter des cartes.
+- **Pas fait : HEARTSTEEL dans le classement.** Aucune source lue ne dit quels bonus ont les cartes, et l'app ne lit que leur titre. Le conseil reste « relis la carte ».
+- Rien de neuf à relire : aucune partie depuis la v1.70, et l'app tourne encore sur une version d'avant la v1.64. Relance-la avant ta prochaine partie.
+- Tests : `test/offers.test.ts`, `test/itembound.test.ts`, `test/engine-itembound.test.ts`, `test/engine.test.ts`. Pas de changement d'interface, donc pas de rendu Electron refait. Pas encore vu en vraie partie.
+
+## v1.71 — 3 nov. 2026 — le build suit tes augments « Upgrade »
+- **L'item d'un augment lié passe en tête du conseil d'achat** : Upgrade Infinity Edge, Immolate, Sheen, Stormsurge, Sundered Sky, Ravenous Hydra, Zhonya's, Collector, Death's Dance, Mikael's, Hubris, Ultra Hydra.
+  Ces augments n'améliorent que l'item nommé. La ligne dit « pour Upgrade Immolate, si tu l'as pris ». Si plusieurs items conviennent (Sunfire ou Hollow Radiance, Trinity ou Lich Bane…), l'app prend celui de ton build, sinon celui qui va à ton rôle.
+- **Pourquoi** : 16 de tes 133 parties Mayhem en ont un. Sur Taric le 2 nov., l'app a conseillé Upgrade Immolate puis Winter's Approach, sans item à Immolate dans le plan : tu as pris Hollow Radiance tout seul.
+- **Les cartes sont notées selon ton plan** : « Hollow Radiance est dans ton plan » (+1,5 pt), « tu as déjà … » (+2 pts), « il te faudrait …, hors de ton plan » (-2 pts). Ça peut changer la carte conseillée.
+- **Limite principale** : le jeu ne dit pas quel augment tu as pris avant la fin de la partie. L'app suppose que tu as pris la carte conseillée (68 choix sur 86). Si tu as pris une autre carte, ignore la ligne : après 2 achats différents, elle passe en dernier.
+  À l'inverse, si tu prends une carte liée que l'app ne conseillait pas, le conseil d'achat ne change pas.
+- **Mesure** : `usage.json` note `item_bound` à chaque partie : augment supposé, vraiment pris ou non, item acheté ou non.
+- **Non couvert** : Upgrade Cutlass (item illisible sur le wiki). L'effet d'Ultra Hydra vient des notes de patch, pas du texte de la carte. Le build ne suit pas encore les autres augments, par exemple un augment AP sur Malphite.
+- Rien de neuf en vraie partie à relire : aucune partie depuis la v1.70, et l'app n'a pas été relancée depuis le 2 nov. Taux de lecture du headliner relu : 13 lus, 2 ratés, la zone lue reste comme ça.
+- Tests : `test/itembound.test.ts`, `test/engine-itembound.test.ts`. Pas de nouveau composant, donc pas de rendu Electron refait ; pas encore vu en vraie partie.
+
+## v1.70 — 3 nov. 2026 — le prochain sort à monter, en partie
+- **En partie, une ligne dit quel sort monter** au-dessus de l'achat, sur la fenêtre second écran et le téléphone : « Point à mettre : Shield of Daybreak, rang 4 » avec la touche, puis
+  « Monte Q › W › E ». Quand tu passes un niveau, le cadre devient doré jusqu'à ce que tu mettes le point. Le nom du sort vient du jeu.
+- **Marche en Mayhem et en ARAM**, plus seulement en Faille : l'ordre le plus joué vient maintenant d'OP.GG pour tous les modes, et s'affiche aussi dans Build. OP.GG n'a pas de file Mayhem :
+  c'est l'ordre ARAM, indiqué « OP.GG, ARAM ». Pourquoi : tes parties passent sur 75 champions et plus, l'app ne donnait aucun ordre en Mayhem.
+- **Un écart ne casse pas le conseil** : si tu as pris E trop tôt, la suite s'adapte. Rangs interdits par ton niveau jamais proposés, R aux niveaux 6, 11, 16, champions à R dès le début gérés.
+- **Mesure** : `usage.json` garde à chaque partie l'ordre où tu as vraiment pris tes points et le nombre de points hors conseil (`skills_taken`).
+- **Limites** : ordre le plus joué, pas forcément le meilleur ; un augment Mayhem qui change un sort ne le modifie pas (« Back To Basics » sans ultime : R restera proposé). Si OP.GG ne répond pas, rien ne
+  s'affiche et ta partie n'est pas ralentie. OP.GG n'est pas joignable depuis la session : ton ordre passé n'a pas pu être comparé au conseil, première vraie vérification à ta prochaine partie.
+- **Ton app tourne encore sur une ancienne version** : lancée le 2 nov. vers 17 h 55, avant la v1.64. Tes 2 parties de cette nuit n'ont donc ni conseiller de relance, ni revue des achats, ni bans. Relance-la.
+- Tests : `test/skills.test.ts`, `test/engine-skills.test.ts` (dont l'exemple ARAM réel d'OP.GG et la réponse réelle du jeu sur Sejuani). Rendu vérifié dans Electron sous Linux, avec des données d'exemple.
+
+## v1.69 — 3 nov. 2026 — Faille : bans conseillés
+- **Le champ select Faille conseille 3 bans** tant que ton ban n'est pas validé, avec le gain estimé en points de victoire : « Lux, +0,3 pt,
+  47 % pour toi contre elle, en face de toi dans 17 % des parties ». Rien sur une file sans bans (Swiftplay), rien en ARAM ou Mayhem.
+- **Ce qui compte** : le counter de ton champion survolé, s'il est sûr à 95 %, sinon le winrate du champion dans son rôle, pondérés par sa
+  fréquence. Un champion que tu bats n'est jamais proposé, même fort.
+- **Le piège évité** : banner un champion fort ne rapporte rien si ton équipe peut encore le prendre, il sort des deux côtés. Seuls comptent
+  ton rôle et ceux où l'allié a montré son champion. Plus tes alliés survolent tôt, plus la liste s'étoffe. Ce que tes alliés
+  survolent ou bannissent est retiré. Si rien ne dépasse 0,05 pt, l'app le dit au lieu d'inventer un ban.
+- **Bouton Survoler** : il pose le ban dans le client pendant ton tour, sans jamais le valider. La confirmation reste la tienne.
+- **Winrates des rôles plus précis** : victoires / parties, plus le chiffre arrondi d'OP.GG, si OP.GG donne ce champ. Sert aussi à la tier list par rôle.
+- **Limites** : gain moyen estimé, pas une prédiction, et petit par nature. Seuls 3 counters par champion sont connus. Aucun vrai champ select avec
+  bans n'a pu être relu (tes captures sont en Mayhem), OP.GG n'est pas joignable d'ici : à vérifier sur ta prochaine draft ou classée.
+- Rendu vérifié dans Chromium avec des données d'exemple, sans les icônes (CDragon bloqué ici). Tests : `test/bans.test.ts`, `test/engine-sr.test.ts`, `test/opgg.test.ts`.
+
+## v1.68 — 2 nov. 2026 — le conseiller de relance oublie les cartes déjà passées
+- **Une carte vue ne revient pas de la partie** : mesuré sur tes 23 parties, 0 carte répétée d'un choix à l'autre sur 439, alors
+  qu'il en faudrait environ 17 si les tirages étaient indépendants. Le pool d'une relance ne contient plus les cartes vues aux
+  choix précédents, y compris celle que tu as prise. Avant, seules les cartes du tirage en cours étaient retirées.
+- **Ce que ça change** : le calcul colle mieux à ce que tu peux vraiment tirer, surtout aux choix 3 et 4, si tes tirages d'avant étaient
+  dans la même rareté. Si tu as déjà vu les meilleures cartes, relancer ta meilleure carte devient moins tentant, et l'inverse aussi.
+  Le gain reste petit par relance : ça retire au plus 18 cartes d'une rareté, sur une soixantaine, et le plus souvent bien moins.
+- **Même règle dans la revue** : les relances sont jugées avec ce pool, et les anciennes parties pas encore relues aussi.
+- **Mesure pour la suite** : `cards_seen` note la taille du pool (`reroll.pool`). Tes vraies parties laissent estimer 195 cartes
+  tirables au total : si le pool de l'app est bien plus grand, c'est qu'il compte des cartes que tu ne peux pas tirer.
+- **Limites** : une carte vue seulement dans une lecture partielle n'est pas retirée, et les augments impossibles sur ton champion
+  restent comptés (rien ne les liste). Rien de nouveau à l'écran. « Reco d'augment suivie » relue, sans conclusion : voir la feuille de route.
+- Tests : `test/engine.test.ts`, `test/offers.test.ts`.
+
+## v1.67 — 2 nov. 2026 — Faille : items comparés au même rang
+- **Le conseil d'achat Faille regarde le rang de l'item à acheter** : à partir du 4e item, les options viennent des stats OP.GG de
+  ce rang, plus d'un mélange 4e / 5e / 6e. Le winrate monte tout seul avec le rang (Rabadon sur Ahri : 58 % en 4e, 64 % en 5e, car
+  une partie qui voit un 5e item est déjà engagée) : un item surtout pris en 5e pouvait passer devant le meilleur 4e item.
+- **La ligne le dit** : « 4e item (58 %) » au lieu de « item suivant ». Bottes et composants ne comptent pas dans le rang.
+  S'il reste moins de 2 items avec 50 parties à ce rang (souvent le 6e), l'ancienne liste reprend la main.
+- **La revue des achats Faille a enfin des chiffres** : un item hors plan est comparé au conseil à ce même rang, « Rabadon était
+  mieux placé (58 %) en 4e item ». `item_bought` garde le rang (`slot`). Mêmes règles que Mayhem : 1 point d'écart et assez de parties.
+- **Limites** : rien avant le 4e item (OP.GG donne le cœur comme un bloc). L'exemple enregistré ne donne que 3 items par rang : une
+  fois ceux du plan retirés, il restera peu d'achats à chiffrer. Un item de situation (Void Staff contre des tanks) garde le biais
+  des parties où on le prend. Mayhem et ARAM ne changent pas.
+- Mesures de la feuille de route : aucune nouvelle partie depuis la v1.66, elles attendent tes prochaines parties.
+- Tests : `test/nextbuy.test.ts`, `test/buyreview.test.ts`, nouveau scénario `test/engine-sr-buy.test.ts`. Rendu de la revue vérifié
+  sous Linux avec une partie d'exemple ; pas encore vu en vraie partie.
+
+## v1.66 — 2 nov. 2026 — tes relances dans la revue d'après-partie
+- **La revue note maintenant tes relances**, sous le choix concerné (ligne ↻) : « Tu as relancé X, ta meilleure carte : environ
+  2 pts perdus en moyenne », « Tu pouvais encore relancer Y gratuitement », ou « bon pari » quand relancer ta meilleure carte
+  était justifié. Comme ta carte du choix pouvait être la meilleure des 3 restantes, la revue ne voyait pas ces pertes-là.
+- **Ça juge le pari, pas la carte reçue** : relancer 60 % reste une erreur même si tu tires 62 %. Le calcul compare relancer à
+  garder la carte puis jouer le reste au mieux, avec le même pool que le conseiller, Command Line compris.
+- **Prudente** : 1 point d'écart minimum et assez de parties, jamais de jugement sur une carte estimée. Quand 2 cartes changent
+  entre deux lectures (42 fois sur 127), l'ordre le plus favorable est retenu.
+- **Bilan** : les points perdus sur les relances sont comptés à part, sur chaque partie et dans Toutes les parties.
+- **Anciennes parties** : reprises une fois au lancement depuis `usage.json`, avec les stats actuelles (indiqué sur la revue).
+  Vérifié sur tes vraies données : 85 tirages retrouvés sur 85, dont 78 avec relances. Les notes elles-mêmes n'ont pas pu être
+  relues ici : arammeta n'est pas joignable depuis la session, tu seras le premier à les voir.
+- **Limites** : une relance faite avant la 1re lecture de l'écran n'est pas vue, donc « tu pouvais encore relancer » peut se
+  tromper dans ce cas ; le pool compte encore les augments déjà pris. Tests : `test/reroll.test.ts`, `test/review.test.ts`,
+  `test/offers.test.ts`, scénario moteur. Rendu vérifié sous Linux avec des données d'exemple.
+
+## v1.65 — 2 nov. 2026 — conseiller de reroll
+- **L'app dit quelles cartes relancer** : relancer une carte que tu ne prendrais pas est gratuit, elle les marque « À relancer »
+  avec le gain moyen. Quand il ne reste que ta meilleure carte à relancer, elle ne le propose que si ça vaut au moins 1 point,
+  avec la chance de trouver mieux et la carte qui te reste.
+- **Mesuré sur tes 92 tirages** : chaque carte se relance une fois, à chaque choix, jamais la même carte deux fois, et la
+  rareté ne bouge pas. 36 de tes 86 choix venaient d'une relance. Mais sur 83 tirages relancés, 18 ont perdu la carte que
+  l'app classait première.
+- **Command Line confirmé** : à chaque choix, la 1re relance monte d'un cran (Argent → Or, Or → Prismatique). Vu sur ta partie
+  du 2 nov. et sans doute sur 3 parties du 28 oct. L'ancien conseil « garde tes rerolls » était faux, il est remplacé.
+- **Calcul** : tirage supposé uniforme dans la rareté (compatible avec tes 445 cartes vues), avec les mêmes valeurs que le
+  classement. Les cartes rares sur ton champion comptent avec leur effet moyen.
+- **Limites** : une relance faite avant la 1re lecture de l'écran n'est pas vue ; les augments que tu as déjà et ceux réservés
+  à certains champions restent comptés dans le pool. Lecture partielle ou moins de 8 cartes connues : aucun conseil.
+- `usage.json` garde maintenant la rareté du tirage et le conseil de relance. Tests : `test/reroll.test.ts` et scénario moteur.
+  Rendu vérifié sous Linux avec des données d'exemple ; pas encore vu en partie.
+
+## v1.64 — 2 nov. 2026 — revue de tes achats
+- **Chaque partie Mayhem note maintenant tes achats** : sous la revue des augments, « Tes achats : 4 sur 6 dans le plan ».
+  Dans le plan = l'item conseillé, un des suivants, ou un item qui répond au même conseil (Morellonomicon quand l'anti-soins
+  était conseillé).
+- **Deux cas ressortent** : l'item conseillé contre leur équipe que tu n'as pas pris (signalé, sans points), et un autre
+  item nettement moins bien placé que le conseil (mêmes règles que les augments : 1 point d'écart et assez de parties).
+- **Anciennes parties** : tes achats sont notés au lancement depuis `usage.json`, avec les stats actuelles.
+  Les conseils contre leur équipe n'y sont pas reconnus, ce n'était pas enregistré (indiqué sur la revue).
+- **`item_bought` garde désormais** la raison du conseil et le winrate de l'item acheté et du conseil.
+- **Limites** : arammeta ne donne le winrate que de quelques items par champion (6 dans nos exemples) : la plupart des écarts
+  resteront non chiffrés. Le winrate d'un item seul avantage les items achetés tard. Rien en Faille pour les chiffres.
+- **Relecture de la revue des augments** (10 vraies parties, 39 choix) : 31 meilleure carte, 5 proches, 1 coûteux, 2 non
+  notés. Les seuils restent tels quels.
+- Tests : `test/buyreview.test.ts`, scénario achat et anciennes parties. Rendu vérifié sous Linux avec des données d'exemple ;
+  pas encore vu sur une vraie partie.
+
+## v1.63 — 2 nov. 2026 — le 2e choix d'un même palier n'est plus perdu
+- **Augment en plus (K/DA)** : quand deux tirages tombaient au même palier de niveau, le 2e effaçait le 1er. La revue
+  et « Reco d'augment suivie » perdaient un de tes choix, et le conseil suivi du 1er comptait pour rien.
+  Les deux sont gardés. La revue affiche « Niveau 7, 2e choix ».
+- **Comment ils sont séparés** : une relance garde au moins une carte, un nouveau choix n'en garde aucune. Si tu relances
+  les 3 cartes entre deux lectures (vu 1 fois sur 17 parties), le tirage sans carte prise est écarté.
+- **K/DA confirmé sur une vraie partie** : 2e tirage 207 s après le 1er, au même palier. L'augment en plus peut donc
+  arriver à tout moment.
+- **Noms « jamais reconnus »** : fausse alerte. « Stats on Stats on Stats! » est un vrai augment, le raté date de la
+  toute première partie, avant que toutes les cartes du jeu soient reconnues. Rien à corriger dans la lecture.
+- Les anciennes parties ne sont pas recalculées. Tests : `test/offers.test.ts` (séquences de tes vraies parties) et
+  scénario moteur. Pas encore vu en partie : à vérifier à ta prochaine partie K/DA.
+
 ## v1.62 — 2 nov. 2026 — conseils plus stables, synergie plafonnée
 - **Achat stable** : tant que ton inventaire ne change pas, le conseil ne change plus. Une nouvelle menace passe
   après ton prochain achat. Vraie partie du 2 nov. : Thornmail, Iceborn, puis Thornmail en 90 secondes.

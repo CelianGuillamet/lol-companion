@@ -20,6 +20,7 @@ export interface RawSession {
   benchEnabled?: boolean;
   benchChampions?: ({ championId: number } | number)[];
   actions?: Action[][];
+  bans?: { myTeamBans?: number[]; theirTeamBans?: number[] };
   timer?: { phase?: string };
   trades?: { id: number; cellId: number; state: string }[];
 }
@@ -75,6 +76,12 @@ export function parseSession(session: RawSession, subset: number[]): ParsedChamp
 
 export async function pickCard(lcu: LcuClient, action: { id: number }, championId: number): Promise<boolean> {
   const r = await lcu.request('PATCH', `/lol-champ-select/v1/session/actions/${action.id}`, { championId, completed: true });
+  return r.status >= 200 && r.status < 300;
+}
+
+/** Survole un ban sans le confirmer : c'est toujours toi qui le valides dans le client. */
+export async function hoverBanAction(lcu: LcuClient, action: { id: number }, championId: number): Promise<boolean> {
+  const r = await lcu.request('PATCH', `/lol-champ-select/v1/session/actions/${action.id}`, { championId, completed: false });
   return r.status >= 200 && r.status < 300;
 }
 

@@ -11,15 +11,24 @@ export function purchaseOf(panel: NextBuyPanel | null | undefined) {
   const costKnown = known(remaining);
   const missing = costKnown && budgetKnown ? Math.max(0, Math.ceil(remaining - panel.gold)) : null;
   const affordable = costKnown && budgetKnown && remaining <= panel.gold;
-  const step = !affordable && budgetKnown && row.step && known(row.step.price) && row.step.price <= panel.gold ? row.step : null;
-  const kind = affordable ? 'item' : step ? 'component' : costKnown && budgetKnown ? 'saving' : 'unknown';
+  // La revente manque seulement ici : le moteur ne la propose que si elle couvre l'écart.
+  const resale = !affordable && costKnown && budgetKnown && row.resale && remaining <= panel.gold + row.resale.gain ? row.resale : null;
+  const step = !affordable && !resale && budgetKnown && row.step && known(row.step.price) && row.step.price <= panel.gold ? row.step : null;
+  // Plus rien à vendre : ni l'or ni un composant n'y changent rien, inutile de dire « économise ».
+  const full = row.room != null && row.room.sell == null;
+  const kind = full ? 'full' : affordable || resale ? 'item' : step ? 'component' : costKnown && budgetKnown ? 'saving' : 'unknown';
   const item = step?.item ?? row.item;
-  const cost = step?.price ?? (costKnown ? remaining : null);
+  const cost = full ? null : step?.price ?? (costKnown ? remaining : null);
   const canBuy = kind === 'item' || kind === 'component';
+  // À vendre seulement au moment d'acheter : pendant qu'on économise, le composant garde sa valeur.
+  const sells = kind !== 'item' ? [] : resale ? resale.items : row.room?.sell ? [row.room.sell] : [];
+  const sell = sells[0] ?? null;
+  const sellNames = sells.map((x) => x.name).join(' et ');
+  const gain = resale?.gain ?? 0;
   return {
-    kind, item, cost, canBuy, missing, target: row.item, why: row.why,
-    title: canBuy ? `Achète ${item.name}` : kind === 'saving' ? `Économise pour ${item.name}` : `Vérifie le prix de ${item.name}`,
-    goldAfter: canBuy && cost != null ? Math.floor(panel.gold - cost) : null,
+    kind, item, cost, canBuy, missing: full ? null : missing, target: row.item, why: row.why, sell, sells, sellNames, gain,
+    title: full ? `Inventaire plein : ${item.name} demande de remplacer un item fini` : sell ? `Vends ${sellNames}, puis achète ${item.name}` : canBuy ? `Achète ${item.name}` : kind === 'saving' ? `Économise pour ${item.name}` : `Vérifie le prix de ${item.name}`,
+    goldAfter: canBuy && cost != null ? Math.floor(panel.gold + gain - cost) : null,
   };
 }
 
