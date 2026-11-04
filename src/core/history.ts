@@ -9,6 +9,8 @@ import type { HistoryGame, Mode, StatsView } from './types';
 import type { GameReview } from './review';
 import type { BuyReview } from './buyreview';
 import { modeOf } from './modes';
+import { SMITE } from './quickplay';
+import { played } from './remake';
 
 export interface RawParticipant {
   participantId: number;
@@ -21,7 +23,14 @@ export interface RawParticipant {
   timeline?: { lane?: string; role?: string };
 }
 
-/** Rôle Faille d'après la timeline du client ; null si absent ou ambigu (pas de rôle inventé). */
+/**
+ * Rôle Faille d'après la timeline du client ; null si absent ou ambigu (pas de rôle inventé).
+ * Châtiment = jungle, même quand la timeline ne dit rien (4 parties Swiftplay sur 6 le 3 nov. : les parties courtes n'ont pas de couloir).
+ */
+export function laneOfGame(g: { timeline?: RawParticipant['timeline']; spells?: number[] }): string | null {
+  return laneOfTimeline(g.timeline) ?? (g.spells?.includes(SMITE) ? 'jungle' : null);
+}
+
 export function laneOfTimeline(t: RawParticipant['timeline']): string | null {
   const lane = String(t?.lane ?? '').toUpperCase();
   const role = String(t?.role ?? '').toUpperCase();
@@ -77,6 +86,15 @@ function riotId(game: RawGame, participantId: number): string {
   return p?.gameName ? `${p.gameName}${p.tagLine ? `#${p.tagLine}` : ''}` : p?.summonerName || '';
 }
 
+/** Comment la partie s'est finie, tel que le client le dit. Clé absente = le client ne donne pas ce champ. */
+export function endFlags(game: RawGame, puuid: string): { early?: boolean; surrender?: boolean; teamEarly?: boolean } | null {
+  const id = game.participantIdentities?.find((p) => p.player?.puuid === puuid)?.participantId;
+  const s = game.participants?.find((p) => p.participantId === id)?.stats;
+  if (!s) return null;
+  const flag = (k: string) => (k in s ? Boolean(s[k]) : undefined);
+  return { early: flag('gameEndedInEarlySurrender'), surrender: flag('gameEndedInSurrender'), teamEarly: flag('teamEarlySurrendered') };
+}
+
 /** Le détail complet (10 joueurs) n'existe que dans /games/{id} ; la liste ne contient que toi. */
 export function hasFullDetail(game: RawGame): boolean {
   return (game.participants?.length ?? 0) > 1;
@@ -89,6 +107,7 @@ export function parseGame(game: RawGame, puuid: string): HistoryGame | null {
   const me = game.participants?.find((p) => p.participantId === ident?.participantId) ?? (game.participants?.length === 1 ? game.participants[0] : undefined);
   if (!me) return null;
   const st = participantStats(me);
+  const position = mode === 'sr' ? laneOfGame({ timeline: me.timeline, spells: st.spells }) : null;
   const base: HistoryGame = {
     gameId: game.gameId,
     queueId: game.queueId,
@@ -101,7 +120,7 @@ export function parseGame(game: RawGame, puuid: string): HistoryGame | null {
     deaths: st.deaths,
     assists: st.assists,
     augments: st.augments,
-    ...(mode === 'sr' && laneOfTimeline(me.timeline) ? { position: laneOfTimeline(me.timeline)! } : {}),
+    ...(position ? { position } : {}),
   };
   if (!me.stats || !('goldEarned' in me.stats)) return base; // ancien format / données partielles
   const others = (game.participants ?? []).filter((p) => p !== me);
@@ -147,6 +166,7 @@ export class History {
     try {
       const data = JSON.parse(text);
       this.games = Array.isArray(data.games) ? data.games : [];
+      for (const g of this.games) if (g.mode === 'sr' && !g.position) g.position = laneOfGame(g) ?? undefined;
     } catch {
       // Fichier illisible : on le met de côté avant que la prochaine partie ne réécrive le fichier.
       this.corruptBackup = `${this.file}.illisible-${Date.now()}`;
@@ -234,7 +254,7 @@ export class History {
   /** Tes résultats par augment (tous champions confondus). */
   augmentRecord(): Map<number, { games: number; wins: number }> {
     const m = new Map<number, { games: number; wins: number }>();
-    for (const g of this.games) {
+    for (const g of played(this.games)) {
       for (const id of g.augments) {
         const e = m.get(id) ?? { games: 0, wins: 0 };
         e.games++;
@@ -245,9 +265,15 @@ export class History {
     return m;
   }
 
+  /** Tes parties de Faille sur ce champion dans ce rôle. */
+  roleRecord(championId: number, lane: string): { games: number; wins: number } {
+    const list = played(this.games).filter((g) => g.mode === 'sr' && g.championId === championId && g.position === lane);
+    return { games: list.length, wins: list.filter((g) => g.win).length };
+  }
+
   personal(mode: Mode | null): Map<number, { games: number; wins: number }> {
     const m = new Map<number, { games: number; wins: number }>();
-    for (const g of this.games) {
+    for (const g of played(this.games)) {
       if (mode ? g.mode !== mode : g.mode === 'sr') continue; // null : ARAM + Mayhem (jamais la Faille)
       const e = m.get(g.championId) ?? { games: 0, wins: 0 };
       e.games++;
@@ -263,11 +289,12 @@ export class History {
     const augs = new Map<number, { games: number; wins: number }>();
     // Les stats perso restent ARAM + Mayhem : une partie de Faille ne doit pas fausser tes chiffres d'ARAM.
     // La Faille n'apparaît que dans byMode et dans l'historique récent.
-    for (const g of this.games) {
+    const counted = played(this.games);
+    for (const g of counted) {
       byMode[g.mode].games++;
       if (g.win) byMode[g.mode].wins++;
     }
-    const games = this.games.filter((g) => g.mode !== 'sr');
+    const games = counted.filter((g) => g.mode !== 'sr');
     for (const g of games) {
       const c = champs.get(g.championId) ?? { games: 0, wins: 0, k: 0, d: 0, a: 0 };
       c.games++;
@@ -319,6 +346,7 @@ export class History {
         .map(([name, d]) => ({ name, games: d.games, wins: d.wins, champions: [...d.champs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c]) => c) }))
         .sort((a, b) => b.games - a.games),
       total: games.length,
+      recorded: this.games.length,
       byMode,
       champions: [...champs.entries()]
         .map(([id, c]) => ({ championId: id, name: championName(id), games: c.games, wins: c.wins, kda: (c.k + c.a) / Math.max(1, c.d) }))

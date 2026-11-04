@@ -22,6 +22,8 @@ export interface MockState {
   matchList: unknown[];
   mySelection: { spell1Id: number; spell2Id: number };
   selections: { puuid: string; championId: number }[];
+  /** /lol-lobby/v2/lobby, absent = 404. */
+  lobby?: unknown;
 }
 
 export interface Call {
@@ -116,6 +118,8 @@ export async function startMockLcu(token = 'secret') {
           return send(200, { styles: [{ id: 8000, name: 'Précision', iconPath: '/lol-game-data/assets/v1/perk-images/Styles/7201_Precision.png' }, { id: 8400, name: 'Volonté', iconPath: '/lol-game-data/assets/v1/perk-images/Styles/7204_Resolve.png' }] });
         case route === 'GET /lol-game-data/assets/v1/summoner-spells.json':
           return send(200, [{ id: 4, name: 'Saut éclair', iconPath: '/lol-game-data/assets/DATA/Spells/Icons2D/Summoner_Flash.png' }, { id: 32, name: 'Marque', iconPath: '/lol-game-data/assets/DATA/Spells/Icons2D/Summoner_Mark.png' }]);
+        case route === 'GET /lol-lobby/v2/lobby':
+          return state.lobby ? send(200, state.lobby) : send(404, { message: 'no lobby' });
         case route === 'GET /lol-champ-select/v1/session':
           return state.session ? send(200, state.session) : send(404, { message: 'no session' });
         case route === 'GET /lol-lobby-team-builder/champ-select/v1/subset-champion-list':

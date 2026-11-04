@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { tone, state, championIcon, pct, signed, hideBroken, statsBehind } from '../store';
+import { tone, state, championIcon, pct, signed, hideBroken, statsBehind, changeLine, CHANGE_TITLE } from '../store';
 import Home from '../Home.vue';
 import Notice from '../ui/Notice.vue';
 import SrSelectPanel from './SrSelectPanel.vue';
@@ -74,6 +74,7 @@ const open = ref<number | null>(null);
       <div class="dtext">
         <h1>{{ decision.title }}</h1>
         <p>{{ decision.why }}</p>
+        <p v-if="decision.champ.patchChange" class="chg" :title="CHANGE_TITLE">{{ changeLine(decision.champ.patchChange) }}</p>
         <div class="dmeta">
           <span v-for="r in decision.champ.reasons" :key="r.label" class="reason">
             {{ r.label }} <b class="num" :class="r.points > 0 ? 'good' : r.points < 0 ? 'bad' : 'faint'">{{ r.points ? signed(r.points) : '' }}</b>
@@ -129,7 +130,8 @@ const open = ref<number | null>(null);
             <span class="nm">
               <span class="n">{{ c.name }}</span>
               <span class="src" :class="`src-${c.source}`">{{ SOURCE_LABEL[c.source] }}</span>
-              <span v-if="c.balanceChange" class="chg" :title="c.balanceChange">équilibrage modifié</span>
+              <span v-if="c.patchChange" class="chg" :title="CHANGE_TITLE">{{ changeLine(c.patchChange) }}</span>
+              <span v-else-if="c.balanceChange" class="chg" :title="c.balanceChange">équilibrage modifié</span>
             </span>
             <span class="score num" :class="c.score < 0 ? 'neg' : ''" :title="`Score ${signed(c.score)} (points de winrate attendus)`">{{ signed(c.score) }}</span>
           </button>

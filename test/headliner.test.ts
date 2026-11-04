@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extraDrawAt, isSkinText, headlinerFromCards, headlinerFromText, headlinerNearMisses, historyHeadliner, HEADLINERS } from '../src/core/headliner';
+import { bannerOpen, extraDrawAt, isSkinText, headlinerFromCards, headlinerFromText, headlinerNearMisses, cardRarity, historyHeadliner, rarityJump, HEADLINERS } from '../src/core/headliner';
 
 describe('headliners Mayhem', () => {
   it('reconnaît le nom du headliner lu à l’écran, strictement', () => {
@@ -56,6 +56,34 @@ describe('headliners Mayhem', () => {
     expect(historyHeadliner({ mode: 'aram', createdAt: at, augments: [1, 2, 3, 4, 5] }, null)).toBeNull();
   });
 
+  it('Command Line : une carte d’un cran au-dessus de 2 autres, et rien d’autre', () => {
+    expect(rarityJump(['kGold', 'kGold', 'kPrismatic'])).toBe(2);
+    expect(rarityJump(['kSilver', 'kGold', 'kSilver'])).toBe(1);
+    // parties réelles : Disco (Or, Or, Argent), tirages purs, carte inconnue, 2 crans
+    expect(rarityJump(['kGold', 'kGold', 'kSilver'])).toBeNull();
+    expect(rarityJump(['kGold', 'kGold', 'kGold'])).toBeNull();
+    expect(rarityJump(['kPrismatic', 'kPrismatic', 'kPrismatic'])).toBeNull();
+    expect(rarityJump(['kGold', null, 'kPrismatic'])).toBeNull();
+    expect(rarityJump(['kSilver', 'kSilver', 'kPrismatic'])).toBeNull();
+    expect(rarityJump(['kSilver', 'kGold', 'kPrismatic'])).toBeNull();
+    expect(rarityJump(['kGold', 'kPrismatic'])).toBeNull();
+  });
+
+  it('rareté d’une carte : celle de la tier list, sauf si le wiki la contredit, jamais le wiki seul', () => {
+    expect(cardRarity('kGold', 'kGold')).toBe('kGold');
+    expect(cardRarity('kGold', null)).toBe('kGold');
+    expect(cardRarity(undefined, 'kSilver')).toBeNull();
+    expect(cardRarity('kSilver', 'kGold')).toBeNull();
+    expect(cardRarity(null, undefined)).toBeNull();
+  });
+
+  it('historique : 2 tirages à un cran d’écart = Command Line probable, sans passer devant ce qui est noté', () => {
+    const at = Date.UTC(2026, 9, 25);
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4] }, null, 2)).toBe('Command Line (probable)');
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4] }, null, 1)).toBeNull();
+    expect(historyHeadliner({ mode: 'mayhem', createdAt: at, augments: [1, 2, 3, 4], headliner: 'disco' }, null, 3)).toBe('Disco');
+  });
+
   it('Superfans : lu à l’écran, et deviné après coup à 5 augments au niveau 21', () => {
     expect(headlinerFromText(['Superfans'])?.info.key).toBe('superfans');
     expect(headlinerFromText(['SUPERFANS'])?.info.name).toBe('Superfans');
@@ -84,6 +112,22 @@ describe('headliners Mayhem', () => {
   it('chaque headliner a au moins un conseil', () => {
     expect(HEADLINERS).toHaveLength(9);
     for (const h of HEADLINERS) expect(h.tips.length).toBeGreaterThan(0);
+  });
+});
+
+describe('bannerOpen', () => {
+  const start = 1_000_000;
+  it('garde les vraies bannières du 3 nov. (lues 45 s après le début, avant les cartes)', () => {
+    expect(bannerOpen(start + 45_000, start, null)).toBe(true);
+    expect(bannerOpen(start + 90_000, start, start + 50_000)).toBe(true);
+  });
+  it('ferme la bannière avant « Heartsteel » lu 121 s après le début (Rell, 8035073521, cartes à 34 s)', () => {
+    expect(bannerOpen(start + 121_000, start, start + 34_000)).toBe(false);
+  });
+  it('ne ferme pas sur un écran de chargement long : marge après les 1res cartes', () => {
+    expect(bannerOpen(start + 95_000, start, null)).toBe(false);
+    expect(bannerOpen(start + 115_000, start, start + 100_000)).toBe(true);
+    expect(bannerOpen(start + 131_000, start, start + 100_000)).toBe(false);
   });
 });
 

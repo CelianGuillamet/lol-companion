@@ -2,9 +2,11 @@
 // Champ select Faille (classée, normale, Swiftplay, partie rapide…) : ton rôle, ton champion, l'adversaire de
 // lane probable et, avant le verrouillage, les counter-picks dont la supériorité est statistiquement établie.
 import { computed, ref } from 'vue';
-import { state, championIcon, hideBroken } from '../store';
+import { state, championIcon, hideBroken, changeLine, CHANGE_TITLE, opggBehind } from '../store';
 import BuildView from './BuildView.vue';
 import Confidence from '../ui/Confidence.vue';
+import LaneGuide from '../ui/LaneGuide.vue';
+import Notice from '../ui/Notice.vue';
 import type { ChampSelectView, MatchupView } from '../../core/types';
 
 const props = defineProps<{ cs: ChampSelectView }>();
@@ -39,6 +41,7 @@ async function loadout() {
 
 <template>
   <div class="page wrap">
+    <Notice v-if="opggBehind(state?.data)" kind="warn"><p>Patch tout neuf : ces winrates viennent encore du {{ state?.data.opggPatch }}. Un champion modifié peut être mal classé.</p></Notice>
     <section class="head" :class="{ reco: !!sr.me }">
       <img v-if="sr.me" @error="hideBroken" :src="championIcon(sr.me.id)" width="76" height="76" class="icon portrait" alt="" />
       <div class="txt">
@@ -49,6 +52,7 @@ async function loadout() {
           <Confidence :winrate="sr.me.winRate" :games="sr.me.games" />
           <span v-if="sr.me.tier" class="tier" :title="`Palier OP.GG ${sr.me.tier} (1 = le plus fort)`">palier {{ ['S', 'S', 'A', 'B', 'C', 'D'][sr.me.tier] ?? 'D' }}</span>
         </p>
+        <p v-if="sr.me?.change" class="chg" :title="CHANGE_TITLE">{{ changeLine(sr.me.change) }}</p>
         <p v-if="sr.note" class="faint small">{{ sr.note }}</p>
       </div>
       <button class="btn big" :disabled="!cs.myChampionId || busy" @click="loadout">{{ busy ? 'Import…' : 'Importer runes et sorts' }}</button>
@@ -61,7 +65,7 @@ async function loadout() {
         <li v-for="b in sr.bans.options" :key="b.id" class="ban">
           <img @error="hideBroken" :src="championIcon(b.id)" width="34" height="34" class="icon" alt="" />
           <div>
-            <span class="n">{{ b.name }}</span>
+            <span class="n">{{ b.name }}<span v-if="b.change" class="chg" :title="CHANGE_TITLE">{{ changeLine(b.change) }}</span></span>
             <div class="faint small">
               <template v-if="b.myWinRate != null">{{ p(b.myWinRate) }} pour toi contre lui, en face de toi dans {{ p(b.share) }} des parties</template>
               <template v-else>{{ p(b.winRate) }} en {{ b.laneLabel }}, joué dans {{ p(b.share) }} des parties</template>
@@ -86,6 +90,8 @@ async function loadout() {
           <Confidence :winrate="sr.matchup.myWinRate" :games="sr.matchup.games" />
         </div>
         <div class="small" :class="sr.matchup.verdict === 'favorable' ? 'good' : sr.matchup.verdict === 'défavorable' ? 'bad' : 'muted'">{{ VERDICT[sr.matchup.verdict] }}</div>
+        <div v-if="sr.matchup.opponent.change" class="chg" :title="CHANGE_TITLE">{{ sr.matchup.opponent.name }} {{ changeLine(sr.matchup.opponent.change) }}</div>
+        <LaneGuide v-if="sr.matchup.guide" :guide="sr.matchup.guide" :opponent="sr.matchup.opponent.name" />
       </div>
     </section>
 
@@ -94,7 +100,7 @@ async function loadout() {
       <ul class="cp">
         <li v-for="c in sr.counterPicks" :key="c.id">
           <img @error="hideBroken" :src="championIcon(c.id)" width="34" height="34" class="icon" alt="" />
-          <span class="n">{{ c.name }}</span>
+          <span class="n">{{ c.name }}<span v-if="c.change" class="chg" :title="CHANGE_TITLE">{{ changeLine(c.change) }}</span></span>
           <span class="num">{{ p(c.winRate) }} <span class="faint small">· {{ fmt(c.games) }}</span></span>
           <span class="small" :class="c.mastery && c.mastery >= 5 ? 'good' : 'faint'">{{ c.mastery ? `maîtrise ${c.mastery}` : 'jamais joué' }}</span>
         </li>
@@ -133,6 +139,8 @@ async function loadout() {
 .cp li { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .cp li.ban { grid-template-columns: 34px 1fr auto auto; }
 .n { font-weight: 650; }
+.chg { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--muted); }
+.n .chg { display: block; font-weight: 400; }
 .toast { margin: 0; }
 .small { font-size: 12px; }
 </style>

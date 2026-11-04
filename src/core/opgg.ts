@@ -310,6 +310,19 @@ export interface OpggAnalysis {
   skillMax: string[]; // priorité de montée, ex. Q W E
   /** Positions jouées (MID, TOP…) triées par parties : sert à deviner le rôle d'un ennemi. */
   positions: { name: string; games: number }[];
+  /** Patch le plus récent des stats (16.21), lu dans `trends.win`. null : réponse sans cette info. */
+  statsPatch: string | null;
+}
+
+/** Plus récent patch de `trends.win` : une liste dans les réponses JSON, un seul objet dans le format compact. */
+export function readStatsPatch(trends: unknown): string | null {
+  const win = (trends as { win?: unknown } | null | undefined)?.win;
+  const rows = (Array.isArray(win) ? win : [win]) as { version?: unknown }[];
+  const key = (v: string) => v.split('.').reduce((n, x) => n * 1000 + Number(x), 0);
+  return rows
+    .map((r) => (typeof r?.version === 'string' && /^\d+\.\d+$/.test(r.version) ? r.version : null))
+    .filter((v): v is string => !!v)
+    .sort((a, b) => key(b) - key(a))[0] ?? null;
 }
 
 const num = (x: unknown) => (typeof x === 'number' ? x : Number(x) || 0);
@@ -381,6 +394,7 @@ export function readAnalysis(payload: unknown, position: string | null): OpggAna
     skillOrder: Array.isArray(skills?.order) ? skills!.order : [],
     skillMax: Array.isArray(mast?.ids) ? mast!.ids : [],
     positions: pos.map((x) => ({ name: String(x.name ?? ''), games: num(x.stats?.play) })).sort((a, b) => b.games - a.games),
+    statsPatch: readStatsPatch(d.trends),
   };
 }
 
@@ -440,7 +454,7 @@ export interface LaneMetaRow {
   games: number;
 }
 
-const normChamp = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export const normChamp = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export class OpggData {
   private nameOk = new Map<string, string>(); // nom affiché → nom accepté par OP.GG
@@ -461,6 +475,26 @@ export class OpggData {
           this.nameOk.set(name, champion);
           return a;
         }
+      } catch {
+        /* variante suivante */
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Guide de matchup, réponse brute (champ vide = variante de nom refusée). Le schéma demande UPPER_SNAKE_CASE, la
+   * seule capture a marché avec « Ahri » : on essaie les deux, et la forme acceptée par l'analyse si elle est connue.
+   */
+  async matchupGuide(my: { name: string; alias?: string }, opp: { name: string; alias?: string }, lane: Lane): Promise<unknown | null> {
+    const forms = (c: { name: string; alias?: string }) => [...new Set([...(this.nameOk.has(c.name) ? [this.nameOk.get(c.name)!] : []), ...opggNames(c.name, c.alias), c.name])];
+    const a = forms(my);
+    const b = forms(opp);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      try {
+        const r = await this.client.call('lol_get_lane_matchup_guide', { my_champion: a[i] ?? a[0], opponent_champion: b[i] ?? b[0], position: lane, lang: 'fr_FR' });
+        const root = (typeof r === 'string' ? parseCompact(r) : r) as { data?: unknown } | null;
+        if (root?.data) return root;
       } catch {
         /* variante suivante */
       }
@@ -505,13 +539,14 @@ export class OpggData {
   }
 
   /** Rôle le plus probable de chaque ennemi (attribution gloutonne par taux de jeu dans le rôle, un rôle par joueur). */
-  async guessLanes(enemies: { id: number; name: string }[]): Promise<Map<number, Lane>> {
+  async guessLanes(enemies: { id: number; name: string }[], known: Map<number, Lane> = new Map()): Promise<Map<number, Lane>> {
     const meta = await this.laneMeta();
     const pairs: { id: number; lane: Lane; rate: number }[] = [];
     for (const e of enemies) for (const r of meta.get(normChamp(e.name)) ?? []) pairs.push({ id: e.id, lane: r.lane, rate: r.roleRate });
     pairs.sort((a, b) => b.rate - a.rate);
-    const out = new Map<number, Lane>();
-    const used = new Set<Lane>();
+    // `known` : rôles déjà lus (Châtiment, salon, jeu), le reste se répartit autour
+    const out = new Map<number, Lane>(known);
+    const used = new Set<Lane>(known.values());
     for (const p of pairs) {
       if (out.has(p.id) || used.has(p.lane)) continue;
       out.set(p.id, p.lane);
@@ -534,11 +569,20 @@ export function matchupFrom(mine: OpggAnalysis | null, theirs: OpggAnalysis | nu
  * Counter-picks contre un champion : ceux contre qui il perd, gardés seulement si la borne basse de l'intervalle à
  * 95 % dépasse 50 % (un « counter » à 54 % sur 80 parties n'en est pas un).
  */
-export function counterPicksFrom(theirs: OpggAnalysis | null, wilsonLo: (wr: number, n: number) => number, max = 4): { id: number; name: string; winRate: number; games: number; lo: number }[] {
+export function counterPicksFrom(theirs: { losesTo: CounterStat[] } | null, wilsonLo: (wr: number, n: number) => number, max = 4): { id: number; name: string; winRate: number; games: number; lo: number }[] {
   return (theirs?.losesTo ?? [])
     .map((c) => ({ id: c.id, name: c.name, winRate: 1 - c.myWinRate, games: c.games }))
     .map((c) => ({ ...c, lo: wilsonLo(c.winRate, c.games) }))
     .filter((c) => c.id > 0 && c.lo > 0.5)
     .sort((a, b) => b.lo - a.lo)
     .slice(0, max);
+}
+
+const DANGER_MIN_GAMES = 200;
+
+/** Ennemis, hors adversaire de lane, contre qui tu fais nettement moins que d'habitude (`base`) : tout l'intervalle sous ton winrate. */
+export function dangersFrom(list: CounterStat[], enemies: number[], oppId: number | undefined, base: number, wilsonHi: (wr: number, n: number) => number): CounterStat[] {
+  return list
+    .filter((c) => enemies.includes(c.id) && c.id !== oppId && c.games >= DANGER_MIN_GAMES && wilsonHi(c.myWinRate, c.games) < base)
+    .sort((a, b) => a.myWinRate - b.myWinRate);
 }

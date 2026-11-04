@@ -13,6 +13,14 @@ const pool: CardCandidate[] = [
 const line = (text: string, x: number, y: number, h = 0.04, w = 0.18): OcrLine => ({ text, conf: 0.9, x, y, w, h });
 
 describe('matchCards', () => {
+  it('RISE! : le point d’exclamation des notes, lu ou non par Vision', () => {
+    const p = [...pool, { id: 7, name: 'RISE!', rarity: 'kPrismatic' as const }, { id: 8, name: 'One Hit Wonder', rarity: 'kGold' as const }];
+    for (const text of ['RISE!', 'RISE']) {
+      const r = matchCards([line(text, 0.08, 0.3, 0.04, 0.06), line('Goliath', 0.35, 0.3), line('One Hit Wonder', 0.62, 0.3)], p);
+      expect(r?.ids).toEqual([7, 4, 8]);
+    }
+  });
+
   it('cartes du 26.22 : RISE, titre de 4 lettres, et One Hit Wonder', () => {
     const p = [...pool, { id: 7, name: 'RISE', rarity: 'kPrismatic' as const }, { id: 8, name: 'One Hit Wonder', rarity: 'kGold' as const }];
     const r = matchCards([line('RISE', 0.08, 0.3, 0.04, 0.06), line('Goliath', 0.35, 0.3), line('One Hit Wonder', 0.62, 0.3)], p);

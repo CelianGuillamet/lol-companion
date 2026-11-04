@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AugmentInfo, buildProfile, fitOf, normName, parseAugmentModule, plainText, tagsOf, type FitTag } from '../src/core/augfit';
+import { AugmentInfo, buildProfile, fitOf, isMelee, neverDrawn, normName, parseAugmentModule, plainText, rangedOnly, tagsOf, type FitTag } from '../src/core/augfit';
 
 const WIKI = parseAugmentModule(readFileSync('test/fixtures/mayhem-augments-wiki.lua', 'utf8'));
 const tagsNamed = (name: string) => [...tagsOf(WIKI.get(normName(name))!.description)].sort();
+
+// Copie du 3 nov., module réel lu par l'app sur le Mac
+const NOV = parseAugmentModule(readFileSync('test/fixtures/mayhem-augments-wiki-nov.lua', 'utf8'));
+const novTags = (name: string) => [...tagsOf(NOV.get(normName(name))!.description)].sort();
 
 const LUA = `return {
     ["ADAPt"] = {
@@ -144,6 +148,62 @@ describe('augfit', () => {
 
     it('accélération citée dans un texte du 26.22', () => {
       expect(tagsOf('An ability of your choice gains damage based on your Ability Haste, but Ability Haste no longer reduces its cooldown.').has('haste')).toBe(true);
+    });
+  });
+
+  describe('copie réelle du 3 nov.', () => {
+    it.each([
+      ['BEES!', []], // parti d'un sort : les effets à l'impact ne demandent pas d'attaquer
+      ['Hellbent', ['heal']], // sorts ou attaques, et la réapparition ne monte pas avec tes PV
+      ['Heavy is the Crown', []], // AD, AP et vitesse : marche sur tous les builds
+      ['The Boom and the Bass', ['attacks']],
+      ["Take'em Down Down Down", ['haste', 'heal']],
+      ['Tickle Monster', ['attacks']], // tout passe en vitesse d'attaque
+      ['Gift of the Drowned', []], // les PV partent en létalité
+      ['Glass Cannon', []], // plafonne tes PV : pas une carte de tank
+      ['Snowday', []], // l'accélération va à Mark, pas à ton build
+      ['Spin to Win', []],
+    ])('%s', (name, tags) => expect(novTags(name as string)).toEqual(tags));
+
+    it('garde les vrais tags des cartes nouvelles', () => {
+      expect(novTags('Sap Magic')).toContain('tank');
+      expect(novTags('Porcupine')).toEqual(['tank']);
+      expect(novTags('Big Shot')).toEqual(['ad', 'as', 'crit']);
+      expect(novTags('Lonely Warrior')).toEqual(['as', 'tank']);
+      expect(novTags('Lich Brain')).toEqual(['ap', 'tank']);
+    });
+
+    it('sait quelles cartes ne sortent plus', () => {
+      const off = [...NOV].filter(([, v]) => neverDrawn(v.description)).map(([k]) => k);
+      expect(off).toHaveLength(12);
+      expect(off).toEqual(expect.arrayContaining(['vampirism', 'snapback', 'flashbang']));
+      expect(neverDrawn(NOV.get('typhoon')!.description)).toBe(false);
+    });
+
+    it('sait quelles cartes sont réservées aux champions à distance', async () => {
+      expect([...NOV].filter(([, v]) => rangedOnly(v.description)).map(([k]) => k)).toEqual(['drawyoursword']);
+      const lua = readFileSync('test/fixtures/mayhem-augments-wiki-nov.lua', 'utf8');
+      const info = new AugmentInfo(mkdtempSync(join(tmpdir(), 'augfit-')), async () => lua);
+      await info.load();
+      expect(info.drawable('Draw Your Sword')).toBe(true);
+      expect(info.drawable('Draw Your Sword', true)).toBe(false);
+      expect(info.drawable('Typhoon', true)).toBe(true);
+    });
+
+    it('ne conclut à la mêlée que sur une portée lue', () => {
+      expect(isMelee(0)).toBe(false); // niveau 1 : le Live Client donne 0
+      expect(isMelee(150)).toBe(true);
+      expect(isMelee(250)).toBe(true); // Rell, vu en vrai
+      expect(isMelee(525)).toBe(false);
+    });
+
+    it('une carte sans texte reste au pool', async () => {
+      const lua = readFileSync('test/fixtures/mayhem-augments-wiki-nov.lua', 'utf8');
+      const info = new AugmentInfo(mkdtempSync(join(tmpdir(), 'augfit-')), async () => lua);
+      await info.load();
+      expect(info.drawable('Vampirism')).toBe(false);
+      expect(info.drawable('Typhoon')).toBe(true);
+      expect(info.drawable('RISE')).toBe(true);
     });
   });
 });

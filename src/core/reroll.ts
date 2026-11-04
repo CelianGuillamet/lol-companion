@@ -74,6 +74,18 @@ function afterRoll(slots: Slot[], i: number, pool: number[], first: number[]): n
  * `upgraded` : valeurs de la rareté du dessus quand la prochaine relance monte d'un cran, sinon null.
  * Null si une des deux est trop mal connue.
  */
+/**
+ * Cartes pour `adviseReroll` quand l'une n'a pas de stats (nouvelle au patch, `value` nulle). Elle compte comme la moins bonne pour ne jamais
+ * devenir la carte à garder, et comme déjà relancée pour ne jamais être visée : on ne relance pas une carte qu'on ne sait pas juger.
+ * Null sous 2 cartes mesurées, comme à l'écran.
+ */
+export function measuredCards(cards: { id: number; value: number | null; rolled: boolean }[]): RerollCard[] | null {
+  const values = cards.flatMap((c) => (c.value === null ? [] : [c.value]));
+  if (values.length < 2) return null;
+  const floor = Math.min(...values) - 0.001;
+  return cards.map((c) => (c.value === null ? { id: c.id, value: floor, rolled: true } : { id: c.id, value: c.value, rolled: c.rolled }));
+}
+
 export function adviseReroll(cards: RerollCard[], pool: number[], upgraded: number[] | null): RerollAdvice | null {
   if (cards.length !== 3 || pool.length < MIN_POOL || (upgraded && upgraded.length < MIN_POOL)) return null;
   const base = thin(pool);

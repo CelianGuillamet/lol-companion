@@ -102,6 +102,9 @@ export function goldGap(players: GapInput[], price: (id: number) => number | nul
   };
 }
 
+/** Moment de capture en Faille, où aucun choix d'augment ne rythme la partie : 2 min (rôles posés), 15 min (items finis). 0 = pas encore. */
+export const riftStage = (gameTime: number | null): number => (gameTime == null ? 0 : gameTime >= 900 ? 2 : gameTime >= 120 ? 1 : 0);
+
 /** Échantillon toutes les 5 minutes de jeu pour `gold_gap` : assez pour relier l'écart au résultat, sans gonfler usage.json. */
 export const SAMPLE_SEC = 300;
 
@@ -113,6 +116,6 @@ export function sampleSlot(gameTime: number): number {
  * Diagnostic : ce que `playerlist` montre des 10 joueurs à un choix d'augment, sans identifiants. Sert à vérifier en vraie
  * partie si les objets adverses suivent les achats, quels objets n'ont pas de prix, et si `position` et `runes` sont remplis.
  */
-export function probePlayers(players: { championName?: string; team?: string; level?: number; position?: string; items?: GapItem[]; runes?: unknown }[]): object[] {
-  return players.map((p) => ({ champion: p.championName ?? '', team: p.team ?? '', level: p.level ?? 0, position: p.position ?? '', items: (p.items ?? []).map((i) => i.itemID), runes: p.runes ?? null }));
+export function probePlayers(players: { championName?: string; team?: string; level?: number; position?: string; items?: GapItem[]; runes?: unknown; scores?: { creepScore?: number } }[]): object[] {
+  return players.map((p) => ({ champion: p.championName ?? '', team: p.team ?? '', level: p.level ?? 0, position: p.position ?? '', items: (p.items ?? []).map((i) => i.itemID), runes: p.runes ?? null, cs: p.scores?.creepScore ?? null }));
 }

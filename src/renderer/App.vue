@@ -3,7 +3,7 @@ import { QUEUE_LABEL } from '../core/modes';
 // Navigation par moment d'utilisation, pas par fonction :
 // Maintenant (suit la partie) · Préparer (tier list, fiches champion) · Mes parties · Réglages.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { state, PHASE_LABEL } from './store';
+import { state, PHASE_LABEL, opggBehind } from './store';
 import { canRelaunch } from '../core/appversion';
 import NowView from './views/NowView.vue';
 import PrepareView from './views/PrepareView.vue';
@@ -114,6 +114,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
             Stats Mayhem {{ s.data.patch }}<template v-if="stale"> · client {{ s.data.clientPatch }}</template>
           </div>
           <div v-else-if="s.data.error" class="data err">Stats Mayhem indisponibles</div>
+          <div v-if="s.mode === 'sr' && s.data.opggPatch" class="data" :class="{ stale: opggBehind(s.data) }" title="Patch des statistiques OP.GG">Stats OP.GG {{ s.data.opggPatch }}</div>
           <div v-if="s.appVersion" class="data">App {{ s.appVersion }}</div>
         </div>
       </div>

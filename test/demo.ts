@@ -88,6 +88,21 @@ if (scenario === 'intelligence') {
     players: snapshot.allPlayers.map((player) => ({ ...player, items: [] })),
   };
 }
+// Salon Swiftplay : jungle sans Châtiment + mid qui a une autre clé de voûte
+if (scenario === 'swiftplay') {
+  s.phase = 'Lobby';
+  s.queue = { id: 480, gameMode: 'SWIFTPLAY' };
+  const perks = (ids: number[], style: number, sub: number) => JSON.stringify({ perkIds: ids, perkStyle: style, perkSubStyle: sub });
+  s.lobby = {
+    gameConfig: { queueId: 480, gameMode: 'SWIFTPLAY' },
+    localMember: {
+      playerSlots: [
+        { championId: 54, skinId: 0, positionPreference: 'JUNGLE', spell1: 4, spell2: 32, perks: perks([8010, 9111, 9104, 8299, 8444, 8451, 5005, 5008, 5001], 8000, 8400) },
+        { championId: 103, skinId: 0, positionPreference: 'MIDDLE', spell1: 4, spell2: 14, perks: perks([8112, 8143, 8138, 8135, 8275, 8210, 5008, 5008, 5001], 8100, 8200) },
+      ],
+    },
+  };
+}
 // Faille (classée solo, mid) : champ select Ahri survolée contre Lux, puis en partie avec les rôles du Live Client
 if (scenario === 'sr' || scenario === 'sringame') {
   s.phase = scenario === 'sr' ? 'ChampSelect' : 'InProgress';
@@ -115,16 +130,25 @@ if (scenario === 'sr' || scenario === 'sringame') {
       teamTwo: [99, 122, 11, 51, 117].map((championId) => ({ puuid: `e${championId}`, championId })),
     };
     (s as unknown as { live: object }).live = {
+      gameTime: 840,
       me: { currentGold: 1480, level: 9, riotId: 'Celian#EUW' },
       players: [
-        { riotId: 'Celian#EUW', team: 'ORDER', position: 'MIDDLE', rawChampionName: 'game_character_displayname_Ahri', items: [{ itemID: 3118 }, { itemID: 3020 }], scores: { kills: 4, deaths: 2, assists: 3 } },
+        { riotId: 'Celian#EUW', team: 'ORDER', position: 'MIDDLE', rawChampionName: 'game_character_displayname_Ahri', items: [{ itemID: 3118 }, { itemID: 3020 }], scores: { kills: 4, deaths: 2, assists: 3, creepScore: 90 } },
         { riotId: 'B#1', team: 'ORDER', position: 'TOP', rawChampionName: 'game_character_displayname_Yasuo', items: [], scores: { kills: 1, deaths: 3, assists: 1 } },
-        { riotId: 'X#1', team: 'CHAOS', position: 'MIDDLE', rawChampionName: 'game_character_displayname_Lux', items: [{ itemID: 6655 }], scores: { kills: 2, deaths: 4, assists: 2 } },
+        { riotId: 'X#1', team: 'CHAOS', position: 'MIDDLE', rawChampionName: 'game_character_displayname_Lux', items: [{ itemID: 6655 }], scores: { kills: 2, deaths: 4, assists: 2, creepScore: 110 } },
         { riotId: 'Y#1', team: 'CHAOS', position: 'TOP', rawChampionName: 'game_character_displayname_Darius', items: [{ itemID: 6631 }], scores: { kills: 5, deaths: 1, assists: 0 } },
         { riotId: 'Z#1', team: 'CHAOS', position: 'JUNGLE', rawChampionName: 'game_character_displayname_MasterYi', items: [], scores: { kills: 3, deaths: 2, assists: 1 } },
       ],
     };
   }
+}
+// Début de partie Swiftplay : rien d'acheté, le départ passe en tête
+if (scenario === 'sringame' && process.env.ARAM_DEMO_START) {
+  s.queue = { id: 480, gameMode: 'SWIFTPLAY' };
+  const live = (s as unknown as { live: { me: { currentGold: number; level: number }; players: { riotId: string; items: unknown[] }[] } }).live;
+  live.me.currentGold = 1400;
+  live.me.level = 3;
+  live.players[0].items = [{ itemID: 3340, slot: 6 }];
 }
 // Écart d'objets : camps, niveaux et prix pour les scénarios en partie
 if (process.env.ARAM_DEMO_GAP) {

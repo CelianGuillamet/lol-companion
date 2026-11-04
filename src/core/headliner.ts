@@ -1,12 +1,14 @@
-// Headliners Mayhem (patch 26.21, « Journey to Stardom », Superfans au 26.22) : un par partie. Ni le client ni l'API Live Client ne
+// Headliners Mayhem (patch 26.21, « Journey to Stardom », Superfans vu au PBE du 26.22, absent de ses notes) : un par partie. Ni le client ni l'API Live Client ne
 // le donnent (captures du 29 oct.). On le reconnaît donc :
 //  - en partie : nom du headliner lu à l'écran (bannière du début) ou cartes propres au headliner (Pentakill :
 //    3170-3173, vues au choix 1 et au niveau 18) ;
 //  - après coup : augment marqueur dans l'historique (3176 = Pentakill), ou 5 augments depuis le 26.21 (K/DA :
-//    4 cartes ramassées = un augment en plus) — affiché « probable ».
+//    4 cartes ramassées = un augment en plus) — affiché « probable » ;
+//  - Command Line : une carte d'un cran au-dessus des 2 autres, en partie comme après coup (`rarityJump`).
 // Pur et testable.
 
 import { normText, similarity } from './cardmatch';
+import type { Rarity } from './types';
 
 export interface HeadlinerInfo {
   key: string;
@@ -23,7 +25,7 @@ export const HEADLINERS: HeadlinerInfo[] = [
   { key: 'disco', name: 'Disco', tips: ['Danse sous la boule disco entre deux combats : de l’or pour toi.'] },
   { key: 'cafecuties', name: 'Cafe Cuties', tips: ['Reliques de soin renforcées : recule dessus plutôt qu’en base, et prive-en l’adversaire.'] },
   { key: 'bees', name: 'Bees', tips: ['Ramasse les pots de miel en évitant les abeilles.'] },
-  // Superfans : 9e headliner, serveur de test du 26.22 (id « Worlds »), texte lu dans les données du PBE du 31 oct.
+  // Superfans : vu sur le serveur de test du 26.22 (id « Worlds »), données du PBE du 31 oct. Absent des notes du 26.22 : pas confirmé.
   { key: 'superfans', name: 'Superfans', tips: ['Niveau max 21 pour tout le monde, plus d’XP, et un augment en plus au niveau 21 : leur équipe l’aura aussi.', 'Les paliers 7, 11 et 15 arrivent plus tôt : regarde tes cartes plus souvent.'] },
   { key: 'commandline', name: 'Command Line', tips: ['À chaque choix, ta 1re relance monte d’un cran de rareté (Argent → Or, Or → Prismatique) : ne la saute jamais.', 'Mets-la sur ta moins bonne carte, les suivantes restent dans la rareté du tirage.'] },
 ];
@@ -114,6 +116,44 @@ export function headlinerFromCards(ids: number[]): HeadlinerInfo | null {
   return ids.length >= 2 && ids.every((id) => id >= 3170 && id <= 3173) ? BY_KEY.get('pentakill')! : null;
 }
 
+/** Le cran au-dessus. Prismatique : rien au-dessus, donc Command Line ne s'y voit pas. */
+export const NEXT_RARITY: Partial<Record<Rarity, Rarity>> = { kSilver: 'kGold', kGold: 'kPrismatic' };
+
+/**
+ * Rareté sûre d'une carte : celle de la tier list, sauf si le wiki la contredit (carte changée au patch, tier list en retard).
+ * Jamais le wiki seul : il met Flow of Spirit en Or, les notes du 26.21 en Argent, et une rareté fausse ferait croire à Command Line.
+ */
+export function cardRarity(list: Rarity | null | undefined, wiki: Rarity | null | undefined): Rarity | null {
+  return list && (!wiki || wiki === list) ? list : null;
+}
+
+/**
+ * Carte d'un cran au-dessus de 2 autres de même rareté : la trace de Command Line, qui fait monter la 1re relance.
+ * Mesuré sur 33 parties revues, raretés du wiki : 5 parties à 3 ou 4 tirages de ce genre (2 notées Command Line, 3 sans headliner),
+ * 1 cas isolé (Flow of Spirit, voir `cardRarity`), 0 sur 75 tirages ailleurs. Rend sa position, ou null.
+ */
+export function rarityJump(rarities: (Rarity | null | undefined)[]): number | null {
+  if (rarities.length !== 3 || rarities.some((r) => !r)) return null;
+  const at = rarities.findIndex((r, i) => {
+    const others = rarities.filter((_, j) => j !== i);
+    return others[0] === others[1] && NEXT_RARITY[others[0]!] === r;
+  });
+  return at < 0 ? null : at;
+}
+
+/** Bannière du début de partie : au-delà, un nom lu à l'écran n'est plus elle. */
+export const BANNER_MS = 90_000;
+/** Marge après le 1er écran de cartes : la bannière passe juste avant lui (3 nov. : 5 et 8 s avant), même si le chargement a traîné. */
+export const BANNER_AFTER_CARDS_MS = 30_000;
+
+/**
+ * La bannière peut-elle encore être à l'écran ? Passé ce moment, le nom vient d'ailleurs : « Heartsteel » lu 121 s après le début
+ * de partie, l'item étant au plan (Rell, 3 nov.), « Space Groove » lu sur un nom de skin (2 nov.).
+ */
+export function bannerOpen(now: number, gameStart: number, firstCardsAt: number | null): boolean {
+  return now - gameStart <= BANNER_MS || (firstCardsAt != null && now - firstCardsAt <= BANNER_AFTER_CARDS_MS);
+}
+
 /** Niveau de l'augment en plus de Superfans. Au-delà de 18, le niveau seul ne prouve rien : 3 parties l'ont dépassé en oct. */
 export const SUPERFANS_LEVEL = 21;
 
@@ -135,9 +175,10 @@ export const HEADLINERS_SINCE = Date.UTC(2026, 9, 21);
  * Headliner d'une partie de l'historique : noté en direct, sinon marqueur, sinon 5 augments (K/DA probable).
  * `markerName` : nom du headliner d'après l'augment marqueur (null s'il n'y en a pas).
  */
-export function historyHeadliner(g: { mode: string; createdAt: number; augments: number[]; headliner?: string; level?: number }, markerName: string | null): string | null {
+export function historyHeadliner(g: { mode: string; createdAt: number; augments: number[]; headliner?: string; level?: number }, markerName: string | null, jumps = 0): string | null {
   if (g.headliner) return BY_KEY.get(g.headliner)?.name ?? g.headliner;
   if (markerName) return markerName;
+  if (jumps >= 2) return 'Command Line (probable)';
   if (g.mode === 'mayhem' && g.createdAt >= HEADLINERS_SINCE && g.augments.length === 5) return (g.level ?? 0) >= SUPERFANS_LEVEL ? 'Superfans (probable)' : 'K/DA (probable)';
   return null;
 }

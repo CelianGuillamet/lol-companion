@@ -8,6 +8,7 @@
 import { download as fetchText } from './http';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Rarity } from './types';
 
 export type FitTag = 'crit' | 'as' | 'ad' | 'ap' | 'attacks' | 'tank' | 'heal' | 'haste';
 
@@ -77,19 +78,26 @@ function withoutNoise(text: string): string {
     .replace(/(?:dropping|falling)\s+below\s+[\d.]+%\s+(?:of your\s+)?maximum\s+health/gi, '')
     .replace(/your ally's next basic attack/gi, '')
     .replace(/enemy champion to use a basic attack(?: on-hit)?/gi, '')
+    // La carte donne ce délai à un seul sort (Mark, Spin to Win) : ta haste n'y change rien
+    .replace(/cooldowns? reduced equivalent to [\d.]+ ability haste/gi, '')
+    // Plafond ou réapparition : la carte ne monte pas avec tes PV (Glass Cannon, Hellbent)
+    .replace(/health threshold equal to [\d.]+% maximum health/gi, '')
+    .replace(/revive with [^.]*maximum health/gi, '')
     // Les stats d'une créature invoquée (Tibbers de DropBear) ne sont pas les tiennes
     .replace(/\bHe gains [^.]*attack speed[^.]*\.|\bHis stats are:.*$/gis, '');
 }
 
 // L'effet part d'un sort, ou d'une attaque OU d'un sort : il marche sans attaquer et sans critiques
 const TRIGGERED_BY_SPELL =
-  /basic attacks? (?:or|and) (?:ability|abilities)|your abilities (?:apply|can now)|damaging abilities|ability hits?\b|damaging an enemy champion with an ability|replace a summoner spell/i;
+  /basic attacks?(?: on-hit)? (?:or|and) (?:ability|abilities)|your abilities (?:apply|can now)|damaging abilities|ability hits?\b|(?:damaging|hitting) an enemy champion with an ability|replace a summoner spell/i;
 // Récompenses tirées au hasard, quêtes : la stat citée n'est pas ce que la carte demande
 const NO_SCALING = /randomly appear|assigned with a number of quests|^assigns quests/i;
 // Le jeu ne propose ces cartes qu'aux sorts qui en profitent, ou elles te donnent un sort : la stat citée vient avec la carte
 const COMES_WITH_CARD = /^upgrades one of your champion's abilities|^replace a summoner spell/i;
 // Convertit une stat en une autre : on ne dépend d'aucune des 2
 const CONVERTS = /^convert all of your/i;
+// Vitesse d'attaque visée par la conversion : tout passe par les attaques (Tickle Monster)
+const CONVERTS_TO_AS = /^convert all of your[^.]*into bonus attack speed/i;
 // Bonus de 4 s après une élimination (Get Excited!) : ne dépend pas de ton build
 const SHORT_BURST = /^scoring a (?:champion )?takedown grants you/i;
 // Les critiques portent sur tes soins, pas sur tes attaques (Critical Healing)
@@ -118,11 +126,24 @@ export function tagsOf(description: string): Set<FitTag> {
   if (/maximum health|bonus health|bonus armor|bonus magic resist|bonus resist|critical defend/.test(d)) t.add('tank');
   if (/\bheal(?:s|ing|ed)?\b|(?<!spell )\bshields?\b|shielding|omnivamp|life steal/.test(d)) t.add('heal');
   if (/ability haste|ultimate haste/.test(d)) t.add('haste');
-  if (SHORT_BURST.test(plain)) t.delete('as');
+  // Ratios AD et AP à la fois : la carte ne dépend pas d'un type de build, la vitesse d'attaque citée à côté non plus
+  // (Heavy is the Crown, The Boom and the Bass, Take'em Down Down Down)
+  if ((ap && ad) || SHORT_BURST.test(plain)) t.delete('as');
   if (CRIT_ON_HEALS.test(plain)) t.delete('crit');
   if (CONVERTS.test(plain) || NO_SCALING.test(plain) || COMES_WITH_CARD.test(plain)) for (const k of ['ad', 'ap', 'as', 'attacks', 'crit'] as FitTag[]) t.delete(k);
+  if (CONVERTS.test(plain)) t.delete('tank'); // Gift of the Drowned : les PV partent, ils ne servent plus
+  if (CONVERTS_TO_AS.test(plain)) t.add('attacks');
   return t;
 }
+
+/** Le wiki dit que la carte ne sort pas : désactivée, ou réservée à qui a déjà une autre carte (Flashbang). */
+export const neverDrawn = (description: string): boolean => /currently disabled|appears to be disabled|cannot be rolled unless/i.test(description);
+/** Carte réservée aux champions à distance, d'après son texte (Draw Your Sword). */
+export const rangedOnly = (description: string): boolean => /only available for ranged champions/i.test(plainText(description));
+/** Au-delà, ce n'est plus une portée de mêlée, même avec un bonus (lu en partie : Rell 175 à 250, Gwen 150 à 225). */
+const MELEE_RANGE_MAX = 300;
+/** `range` = plus grande portée lue dans la partie. 0 = pas encore lue : le Live Client donne 0 au niveau 1. */
+export const isMelee = (range: number): boolean => range > 0 && range <= MELEE_RANGE_MAX;
 
 /** Profil de ton build : part de chaque type parmi tes items (achetés comptent double, prévus simple). */
 export function buildProfile(owned: number[], planned: number[], cat: (id: number) => string[]): Record<FitTag, number> {
@@ -224,6 +245,18 @@ export class AugmentInfo {
   /** Carte dont on a le texte : sans lui, pas de correction, ni bonus ni malus. */
   has(name: string): boolean {
     return this.map.has(normName(name));
+  }
+
+  /** `false` seulement si le texte lu dit que la carte ne sort pas. Sans texte, elle reste au pool. */
+  drawable(name: string, melee = false): boolean {
+    const e = this.map.get(normName(name));
+    return !e || !(neverDrawn(e.description) || (melee && rangedOnly(e.description)));
+  }
+
+  /** Rareté donnée par le wiki. */
+  tier(name: string): Rarity | null {
+    const t = this.map.get(normName(name))?.tier;
+    return t === 'Silver' || t === 'Gold' || t === 'Prismatic' ? `k${t}` : null;
   }
 
   tags(name: string): Set<FitTag> {

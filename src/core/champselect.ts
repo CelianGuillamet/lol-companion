@@ -23,6 +23,8 @@ export interface RawSession {
   bans?: { myTeamBans?: number[]; theirTeamBans?: number[] };
   timer?: { phase?: string };
   trades?: { id: number; cellId: number; state: string }[];
+  /** Swiftplay : aucun choix ici, tout s'est réglé au salon. */
+  skipChampionSelect?: boolean;
 }
 
 export interface ParsedChampSelect {

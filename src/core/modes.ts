@@ -10,14 +10,26 @@ export const MAYHEM_QUEUES = new Set([2400, 2401, 2403, 2405, 2410, 2450, 3240, 
  */
 export const SR_QUEUES = new Set([400, 420, 430, 440, 480, 490, 700, 900, 1900]);
 export const URF_QUEUES = new Set([900, 1900]);
+/** Faille contre l'IA : même carte, même `gameMode` CLASSIC. Listées parce qu'une file CLASSIC inconnue ne vaut plus Faille (voir `modeOf`). */
+export const BOT_QUEUES = new Set([830, 840, 850, 870, 880, 890]);
 
-export function modeOf(queueId: number | null | undefined, gameMode?: string | null): Mode | null {
+/**
+ * League Classic : Riot demande de ne montrer ni d'agréger ses données « in any form », et les champions y ont d'anciens kits,
+ * donc les stats de la Faille seraient fausses. Absente de `queues.json`, id inconnu : on la reconnaît à son nom.
+ */
+export const isLeagueClassic = (label?: string | null): boolean => /league\s+(of\s+legends\s+)?classic/i.test(label ?? '');
+
+/** `queueLabel` : nom de la file donné par le client (`description`, à défaut `name`). */
+export function modeOf(queueId: number | null | undefined, gameMode?: string | null, queueLabel?: string | null): Mode | null {
+  if (isLeagueClassic(queueLabel)) return null;
   if (queueId != null && MAYHEM_QUEUES.has(queueId)) return 'mayhem';
   if (queueId != null && ARAM_QUEUES.has(queueId)) return 'aram';
-  if (queueId != null && SR_QUEUES.has(queueId)) return 'sr';
+  if (queueId != null && (SR_QUEUES.has(queueId) || BOT_QUEUES.has(queueId))) return 'sr';
   const gm = String(gameMode || '').toUpperCase();
   if (gm === 'KIWI') return 'mayhem'; // nom de code interne de Mayhem
   if (gm === 'ARAM') return 'aram';
+  // CLASSIC veut dire Faille, mais League Classic peut le porter aussi : une file numérotée inconnue n'est plus prise pour la Faille.
+  if (gm === 'CLASSIC' && queueId != null && queueId > 0) return null;
   if (gm === 'CLASSIC' || gm === 'SWIFTPLAY' || gm === 'URF' || gm === 'ARURF') return 'sr';
   return null;
 }

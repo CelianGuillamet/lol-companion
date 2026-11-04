@@ -19,11 +19,13 @@ export function presentOfferedCards(offered: OfferedCards | null, byId: Map<numb
       adjusted: !!fit?.delta,
     };
   });
-  const sure = !!offered && !offered.unsure && cards.length === 3 && new Set(offered.ids).size === 3
-    && cards.every((c) => c.score !== null && Number.isFinite(c.score));
+  const measured = cards.filter((c) => c.a);
+  // Une carte sans stats (nouvelle au patch) ne bloque pas les 2 autres : elle reste hors classement, en dernier.
+  const sure = !!offered && !offered.unsure && cards.length === 3 && new Set(offered.ids).size === 3 && measured.length >= 2
+    && measured.every((c) => Number.isFinite(c.score));
   // Dans le doute, aucun classement implicite : garder l'ordre de lecture.
-  if (sure) cards.sort((a, b) => b.score! - a.score!);
-  return { cards, sure };
+  if (sure) cards.sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+  return { cards, sure, unranked: sure ? cards.filter((c) => c.score === null) : [] };
 }
 
 const pts = (x: number) => `+${(x * 100).toFixed(1).replace('.', ',')} pt`;

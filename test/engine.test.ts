@@ -1,10 +1,12 @@
 // Scénario complet contre le faux client : connexion, champ select Mayhem, choix de carte,
 // banc, import runes/sorts/item set, panneau d'augments, fin de partie enregistrée.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { HEADLINERS } from '../src/core/headliner';
 import { reviewChoice, reviewGame } from '../src/core/review';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PATCHES } from '../src/core/patchchanges';
 import { Engine } from '../src/core/engine';
 import { Balance } from '../src/core/balance';
 import { Arammeta } from '../src/core/arammeta';
@@ -100,6 +102,14 @@ describe('moteur contre un faux client League', () => {
     expect(cs.candidates.find((c) => c.championId === 89)!.mastery).toEqual({ level: 12, points: 154321 });
     expect(cs.candidates.find((c) => c.championId === 54)!.mastery).toBeNull();
     expect(cs.candidates.find((c) => c.championId === 54)!.actionable).toBe(false); // banc verrouillé pendant les cartes
+    expect(cs.candidates.every((c) => !c.patchChange)).toBe(true);
+    PATCHES[0].champions.Leona = ['buff', 'test'];
+    engine.state.data.clientPatch = '16.22';
+    await engine.tick();
+    expect(engine.state.champSelect!.candidates.find((c) => c.championId === 89)!.patchChange).toMatchObject({ dir: 'buff', patch: '26.22' });
+    expect(engine.state.champSelect!.candidates.find((c) => c.championId === 54)!.patchChange).toBeUndefined();
+    delete PATCHES[0].champions.Leona;
+    delete engine.state.data.clientPatch;
 
     const res = await engine.pickChampion(89);
     expect(res.ok).toBe(true);
@@ -194,6 +204,11 @@ describe('moteur contre un faux client League', () => {
     engine.headlinerMissed(4, ['HARTSTEL']);
     const miss = engine.usage.events.filter((e) => e.type === 'headliner_miss');
     expect(miss.at(-1)).toMatchObject({ type: 'headliner_miss', championId: 54, scans: 4, near: ['HARTSTEL'] });
+    // nom lu hors bannière : noté, jamais retenu
+    const hs = HEADLINERS.find((h) => h.key === 'heartsteel')!;
+    engine.headlinerLate(hs, 'Heartsteel', 121);
+    expect(engine.state.headliner).toBeNull();
+    expect(engine.usage.events.filter((e) => e.type === 'headliner_late').at(-1)).toMatchObject({ championId: 54, key: 'heartsteel', text: 'Heartsteel', afterS: 121, known: null });
     // un choix d'augment complet lu à l'écran : sa valeur est gardée pour la revue d'après-partie
     const panelAll = Object.values(engine.state.augments?.all ?? {}).flat().filter((a) => !a.estimated);
     const panelRows = panelAll.slice(0, 3);
@@ -244,12 +259,28 @@ describe('moteur contre un faux client League', () => {
     expect(later.map((a) => a.id).some((id) => [1, 2, 3, 4].some((n) => golds[n].id === id))).toBe(false);
     const withInfo = engine as unknown as { augInfo: unknown };
     const realInfo = withInfo.augInfo;
-    withInfo.augInfo = { size: 1, has: (n: string) => n !== later[1].name, tags: () => new Set() };
-    engine.setOffered({ ids: later.map((a) => a.id), names: later.map((a) => a.name), rarity: 'kGold', unsure: null, misses: [] }, ctx);
+    // carte que le wiki dit désactivée : hors du pool de relance
+    const pool0 = (engine as unknown as { draw: { seen: Set<number> } }).draw.seen;
+    const off = golds.find((g) => !pool0.has(g.id) && !later.some((a) => a.id === g.id))!;
+    const melee: boolean[] = [];
+    withInfo.augInfo = { size: 1, has: (n: string) => n !== later[1].name, tier: () => null, tags: () => new Set(), drawable: (n: string, m: boolean) => (melee.push(m), n !== off.name) };
+    const laterRead = { ids: later.map((a) => a.id), names: later.map((a) => a.name), rarity: 'kGold' as const, unsure: null, misses: [] };
+    engine.setOffered(laterRead, ctx);
+    expect(melee.length).toBeGreaterThan(0);
+    expect(melee.every((m) => !m)).toBe(true); // portée pas lue : on ne suppose rien
+    // portée de mêlée lue en partie : le pool retire les cartes réservées aux champions à distance
+    const ranged = engine as unknown as { liveRange: number };
+    ranged.liveRange = 175;
+    melee.length = 0;
+    engine.setOffered({ ...laterRead, ids: [...laterRead.ids].reverse(), names: [...laterRead.names].reverse() }, ctx);
+    expect(melee.length).toBeGreaterThan(0);
+    expect(melee.every(Boolean)).toBe(true);
+    ranged.liveRange = 0;
+    engine.setOffered(laterRead, ctx);
     withInfo.augInfo = realInfo;
-    expect((engine as unknown as { draw: { pool?: number[] } }).draw.pool?.length).toBe(firstPool - 4);
+    expect((engine as unknown as { draw: { pool?: number[] } }).draw.pool?.length).toBe(firstPool - 5);
     const seenEvent = engine.usage.events.filter((e) => e.type === 'cards_seen').at(-1);
-    expect(seenEvent).toMatchObject({ reroll: { pool: firstPool - 4 } });
+    expect(seenEvent).toMatchObject({ reroll: { pool: firstPool - 5 } });
     // cartes dont le wiki n'a pas le texte : notées, car elles n'ont aucune correction selon le build
     expect((seenEvent as unknown as { noText?: string[] }).noText).toEqual([later[1].name]);
     // un augment d'un tirage précédent lu à l'écran : lecture partielle, pas de conseil, tirage intact (Giant Slayer, 3 nov.)

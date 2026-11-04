@@ -2,7 +2,7 @@
 // « Préparer » : la tier list, puis la fiche d'un champion. La fiche bascule entre Mayhem (augments + build
 // arammeta) et la Faille rôle par rôle (build OP.GG, matchups), sans revenir à la liste.
 import { computed, ref, watch } from 'vue';
-import { championIcon, pct, hideBroken } from '../store';
+import { championIcon, pct, hideBroken, changeLine, CHANGE_TITLE } from '../store';
 import { explore, explored, exploring } from '../explore';
 import TierView from './TierView.vue';
 import AugmentChooser from '../ingame/AugmentChooser.vue';
@@ -26,6 +26,7 @@ const viewOpts = computed(() => [
   { value: '', label: 'Mayhem', title: 'Augments et build ARAM: Mayhem (arammeta)' },
   ...lanes.value.map((l) => ({ value: l.lane, label: LANE_LABEL[l.lane], title: `Faille : joué ${Math.round(l.roleRate * 100)} % du temps dans ce rôle (classée)` })),
 ]);
+const change = computed(() => (explored.value?.lane ? b.value?.change : a.value?.change) ?? null);
 const view = computed({ get: () => explored.value?.lane ?? '', set: (v: string) => void switchTo(v || null) });
 </script>
 
@@ -41,6 +42,7 @@ const view = computed({ get: () => explored.value?.lane ?? '', set: (v: string) 
         <h1>{{ a?.championName ?? b?.championName }}</h1>
         <div v-if="a" class="faint small">Mayhem · {{ pct(a.championWinrate) }} de victoires (patch {{ a.patch }})</div>
         <div v-else-if="b?.mode === 'sr'" class="faint small">{{ b.note }}</div>
+        <div v-if="change" class="chg small" :title="CHANGE_TITLE">{{ changeLine(change) }}</div>
       </div>
       <Segmented v-model="view" :options="viewOpts" label="Mode et rôle" />
     </header>
@@ -88,6 +90,7 @@ header { display: flex; gap: 14px; align-items: center; padding: 14px var(--page
 .id { flex: 1; min-width: 200px; }
 header h1 { font-size: 22px; }
 .small { font-size: var(--fs-sm); }
+.chg { color: var(--muted); }
 .pad { padding: 16px var(--page-x) 0; }
 .cols { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr); gap: 18px; padding: 16px var(--page-x) 28px; align-items: start; transition: opacity var(--dur); }
 .cols.busy { opacity: 0.5; }

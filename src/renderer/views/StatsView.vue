@@ -2,13 +2,14 @@
 import { computed, ref, watch } from 'vue';
 import { tone, state, championIcon, pct, hideBroken } from '../store';
 import { aggregate, recap } from '../insights';
+import { played } from '../../core/remake';
 import Notice from '../ui/Notice.vue';
 import Confidence from '../ui/Confidence.vue';
 import type { AugmentPanel, HistoryEntry } from '../../core/types';
 
 const games = ref<HistoryEntry[]>([]);
 // recharge aussi quand le client et les données arrivent (noms des champions, winrates globaux)
-watch(() => `${state.value?.stats.total}-${state.value?.connection}-${state.value?.data.patch}`, async () => (games.value = await window.api.getHistory()), { immediate: true });
+watch(() => `${state.value?.stats.recorded}-${state.value?.connection}-${state.value?.data.patch}`, async () => (games.value = played(await window.api.getHistory())), { immediate: true });
 // Winrate par headliner (Mayhem 26.21+), sinon « sans headliner identifié »
 const headliners = computed(() => {
   const m = new Map<string, { games: number; wins: number }>();

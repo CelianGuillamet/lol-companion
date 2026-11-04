@@ -6,9 +6,11 @@ import { computed } from 'vue';
 import { state, pct, hideBroken, wrAt, ROUND_LABEL } from './store';
 import type { AugmentRow, Rarity } from '../core/types';
 import { presentOfferedCards, rerollLine } from './offered-cards';
-import { purchaseOf } from './purchase';
+import { purchaseOf, starterText } from './purchase';
 import PurchaseLine from './ui/PurchaseLine.vue';
+import AnvilLine from './ui/AnvilLine.vue';
 import ElixirLine from './ui/ElixirLine.vue';
+import StarterLine from './ui/StarterLine.vue';
 
 const panel = computed(() => state.value?.augments ?? null);
 const round = computed(() => state.value?.augRound ?? null);
@@ -34,6 +36,8 @@ const reroll = computed(() => (presentation.value.sure ? rerollLine(offered.valu
 const cards = computed(() => presentation.value.cards);
 const buy = computed(() => purchaseOf(state.value?.nextBuy));
 const elixir = computed(() => state.value?.nextBuy?.elixir ?? null);
+const anvil = computed(() => state.value?.nextBuy?.anvil ?? null);
+const starter = computed(() => state.value?.nextBuy?.starter ?? null);
 // Faille : pas d'augments, le panneau montre ton adversaire de lane et le prochain achat
 const density = computed(() => state.value?.settings.overlayDensity ?? 'compact');
 const threats = computed(() => (state.value?.counters?.threats ?? []).slice(0, 2));
@@ -41,7 +45,11 @@ const threats = computed(() => (state.value?.counters?.threats ?? []).slice(0, 2
 const one = computed(() => {
   const c = cards.value[0];
   if (presentation.value.sure && c) return { what: `Prends ${c.name} · ${c.position}`, num: c.adjusted ? `${(c.score! * 100).toFixed(0)} pts` : pct(c.score, 0), good: true };
+  const st = starter.value;
+  if (st) return { what: `Départ : ${starterText(st.items)}`, num: '', good: true };
   const b = buy.value;
+  const an = anvil.value;
+  if ((!b || b.kind === 'full') && an?.buy) return { what: `Achète : ${an.item.name}`, num: `${an.price.toLocaleString('fr-FR')} or`, good: true };
   const e = elixir.value;
   if ((!b || b.kind === 'full') && e?.buy) return { what: `Achète ${e.item.name}`, num: `${e.price.toLocaleString('fr-FR')} or`, good: true };
   if (b) return {
@@ -70,7 +78,9 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
       <span class="name">contre {{ sr.lane.opponent.name }}</span>
       <span class="num" :class="sr.lane.verdict === 'favorable' ? 'good' : sr.lane.verdict === 'défavorable' ? 'bad' : ''">{{ sr.lane.games ? pct(sr.lane.myWinRate, 0) : '—' }}</span>
     </div>
+    <StarterLine v-if="starter" :starter="starter" />
     <PurchaseLine v-if="buy" :purchase="buy" />
+    <AnvilLine v-if="anvil" :anvil="anvil" />
     <ElixirLine v-if="elixir" :elixir="elixir" />
     <section v-if="density === 'full' && threats.length" class="th">
       <div class="rar">En face</div>
@@ -92,7 +102,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
         <img v-if="c.a?.icon" @error="hideBroken" :src="c.a.icon" width="22" height="22" alt="" />
         <span v-else />
         <span class="name"><span v-if="c.position" class="position">{{ presentation.sure && i === 0 ? 'À prendre · ' : '' }}{{ c.position }}</span>{{ c.name }}<span v-if="offered.combos?.[c.id]" :class="{ good: offered.combos[c.id].good === true, bad: offered.combos[c.id].good === false }"> · {{ offered.combos[c.id].label }}</span><span v-if="myTraps.has(c.id)" class="bad"> · tu perds avec</span><span v-else-if="offered.fit?.[c.id]" :class="offered.fit[c.id].good ? 'good' : 'bad'"> · {{ offered.fit[c.id].good ? 'va avec ton build' : 'pas ton build' }}</span></span>
-        <span class="num" :aria-label="c.adjusted ? 'Score ajusté selon le build' : c.a?.estimated ? 'Winrate estimé' : 'Winrate'">{{ c.score == null ? '—' : c.adjusted ? `${(c.score * 100).toFixed(0)} pts` : pct(c.score, 0) }}</span>
+        <span class="num" :aria-label="c.adjusted ? 'Score ajusté selon le build' : c.a?.estimated ? 'Winrate estimé' : 'Winrate'">{{ c.score == null ? 'sans stats' : c.adjusted ? `${(c.score * 100).toFixed(0)} pts` : pct(c.score, 0) }}</span>
       </div>
     </section>
 
@@ -108,6 +118,7 @@ const myTraps = computed(() => new Set((panel.value?.myTraps ?? []).map((t) => t
       </section>
     </template>
     <PurchaseLine v-if="buy" :purchase="buy" />
+    <AnvilLine v-if="anvil" :anvil="anvil" />
     <ElixirLine v-if="elixir" :elixir="elixir" />
     <section v-if="density === 'full' && threats.length" class="th">
       <div class="rar">En face</div>

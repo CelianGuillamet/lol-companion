@@ -111,7 +111,7 @@ Toujours regarder ces fichiers avant de deviner un format ou de régler un seuil
 ## Faille de l'invocateur (v1.52)
 - Mode `sr` (modes.ts : SR_QUEUES). Données : serveur MCP public d'OP.GG (`src/core/opgg.ts`, cache disque 6 h).
   Appel d'analyse vérifié en vrai : nom anglais, `desired_output_fields: ["data"]`. La méta des rôles
-  (`lol_list_lane_meta_champions`) n'est pas encore vue en vrai : `probe-output/opgg-sample-lanemeta.json`.
+  (`lol_list_lane_meta_champions`) est vue en vrai depuis le 3 nov. (`probe-output/opgg-sample-lanemeta.json`, 173 champions, `roleRate` en fraction de 0 à 1).
 - Rôle : `assignedPosition` au champ select, `position` du Live Client en partie. Les rôles adverses au champ
   select sont devinés (OP.GG role_rate), affichés « rôle deviné ».
 - Confiance : `src/core/stats.ts` (Wilson 95 %). Counter-pick gardé seulement si la borne basse > 50 %.
@@ -150,6 +150,9 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - v1.59 : une lettre d'écart tolérée pour les noms ≥ 9 lettres ; « Bees » seul accepté pendant `BANNER_MS` (90 s,
   cardreader.ts) hors écran de cartes. Bannière ratée → `Engine.headlinerMissed` (journal + `usage.json`
   `headliner_miss` : lectures, textes approchants via `headlinerNearMisses`).
+
+## Bannière du headliner (v1.95)
+- `bannerOpen` (headliner.ts, pur et testé) borne la lecture du nom : 90 s après le début, ou 30 s après le 1er écran de cartes. Hors bannière, `Engine.headlinerLate` note seulement (`headliner_late`, une fois par partie). « Heartsteel » est aussi un item : ne pas élargir cette fenêtre sans lire `headliner_late`. Le journal d'une partie se lit avec `items` de `historique.json`.
 
 ## Revue des choix (v1.60)
 - `src/core/review.ts` est pur et testé. `Engine.reviewCards` garde au moment du tirage la valeur affichée en partie
@@ -265,6 +268,94 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - Zéro effet sur le classement (`rowValue`, `bestOffered`). `protectCombos` retire seulement les cibles de relance. `assumedBefore` exclut le choix en cours : un tirage relu ne compte pas comme pris.
 - arammayhem.com : WebFetch passe (page tronquée à 65-70 Ko, le CSV tient en entier), `curl` refusé par le proxy du conteneur et du shell du Mac. Capture : écrire un CSV de plus de 100 lignes dans `$ARAM_DATA_DIR/cache/arammayhem-combos.csv` et `ARAM_SMOKE_CARDS="Goliath|Firebrand|Outlaw's Grit"` avec `dist/demo.mjs ingame` (Leona).
 
+## Cartes et items (v1.105)
+- `BOUND` (itembound.ts) : `items` = item qui fait marcher la carte, le 1er sert au message et au repli. `parts` et `done` sont des noms anglais (`named`), à utiliser quand l'id n'est pas prouvé : Data Dragon reste tronqué en WebFetch (Sheen, Tiamat, Bami's introuvables à l'offset 30 000), `itemLut` n'a que 123 items. `parts` : la carte marche, l'item fini reste visé. `done` : plus rien à viser. `noSell` passe par `guard`, donc ni revente ni place au sac plein.
+- `legendaryHint` : `buildFit.legendary` = items finis hors bottes, triés par `slot`. `null` si le Live Client ne donne pas `slot`, liste vide si le sac est vide. Texte dans `state.offered.hints`, recalculé à chaque tick (ton sac peut bouger pendant le choix).
+- Capture : `ARAM_DEMO_BAG=full dist/demo.mjs purchase`, `ARAM_SMOKE_CARDS="King Me|Goliath|Firebrand"`. Le scénario `ingame` ignore `ARAM_DEMO_BAG` et ses items n'ont pas de `slot` : pas de ligne.
+
+## Cartes selon ta partie (v1.106)
+- `newCardHint` (cardhints.ts, pur et testé) passe par `Engine.cardHints`, qui ne dépend plus de `buildFit.legendary`. Une carte de ce type s'ajoute là, avec des faits lus, jamais un gain chiffré. `liveCard` vient du tick. `hints` est recalculé à chaque tick dans `nextBuyPanel`, comme `legendaryHint`.
+- `players[].champion` de `liveclient-choix*` porte le vrai nom : l'item d'un joueur se lit là, pas de mémoire.
+
+## Texte réel des cartes (v1.94)
+- `test/fixtures/mayhem-augments-wiki-nov.lua` = copie du 3 nov. de `probe-output/wiki-mayhem-augments.lua`. La copie de juin reste pour les anciens tests (ses 49 cartes retirées y sont encore). Refaire la comparaison à chaque nouveau patch : tags avant et après sur tout le module, jamais sur une sélection.
+- `neverDrawn` : « currently disabled », « appears to be disabled », « cannot be rolled unless ». Ne pas ajouter `only available on … map` (Overextender) : la carte peut revenir avec la carte. `drawable` vaut `true` sans texte : un mock d'`augInfo` doit fournir `drawable`.
+- `normName` retire `Quest:` : dans `BOUND`, écrire le nom sans ce préfixe. `items` peut contenir l'item converti (228002), pour que la quête finie ne reconseille rien.
+
+## Portée et captures Faille (v1.96)
+- `activeplayer.championStats.attackRange` vaut 0 au niveau 1 et bouge en partie (Rell 175 à 250, Gwen 150 à 225). `Engine.liveRange` garde le maximum de la partie, `isMelee` (augfit.ts) ne conclut qu'au-dessus de 0. Ne jamais lire cette valeur une seule fois.
+- `probeRound` couvre la Faille : `riftStage` (goldgap.ts), 2 et 15 min, fichiers `liveclient-faille<1|2>-*.json`. `rehearsal.test.ts` ne lit que `liveclient-choix*`. `gameTime` y est le `lastGameTime` du tick précédent.
+- `setOffered` ne recalcule rien si les ids sont identiques et dans le même ordre : pour rejouer un tirage en test, inverser l'ordre, puis remettre l'ordre d'origine.
+
+## Salon Swiftplay (v1.97)
+- `src/core/quickplay.ts` est pur et testé. File 480 (et 490) : champion, rôle, runes, sorts = `localMember.playerSlots` de `GET /lol-lobby/v2/lobby` (`championId`, `positionPreference`, `spell1`, `spell2`, `perks` en chaîne JSON `{perkIds, perkStyle, perkSubStyle}`). Format non capturé chez Celian, lu dans [matteso1/recall](https://github.com/matteso1/recall/blob/main/docs/notes/swiftplay.md), dépôt tiers à relire comme une donnée. Capture : `probe-output/lobby-swiftplay-*.json` (3 par lancement).
+- Champ select Swiftplay **capturé** (3 `champselect-*.json`, 3 nov.) : `skipChampionSelect: true`, `timer.phase` GAME_STARTING, `actions` vide. `Engine.selectSkipped` coupe `applyLoadout`. `assignedPosition` y est bien rempli, c'est lui qui dit le rôle donné, jamais le 1er emplacement.
+- `Engine.swiftplayPanel` tourne à chaque tick en Lobby et Matchmaking, sans attendre OP.GG (`slotsBusy`, nouvel essai à 65 s si un champion n'a pas de stats). Comparaison en stats `ranked`, éclats ignorés.
+- Écrire (tranche suivante) : `PUT /lol-lobby/v1/lobby/members/localMember/player-slots`, tableau nu. D'après recall, le slot ne suffit pas : une page temporaire liée (`quickPlayChampionIds`) dans `/lol-perks/v1/pages` doit suivre, à relire avant tout PUT, et jamais toucher une page perso (règle 3).
+- Capture : `dist/demo.mjs swiftplay`. OP.GG injoignable du conteneur : pour voir la carte remplie, faire répondre `OpggData.analysis` avec `test/fixtures/opgg/opgg-sample-analysis.json`, le temps du rendu. `echo electron > path.txt` casse le lanceur : `printf electron`. Téléchargement d'Electron coupé par le proxy : `curl -C -` en boucle.
+
+## Place dans le rôle (v1.109)
+- `slotFit` (quickplay.ts) est pur et testé. Classement à la borne basse de Wilson, mêmes seuils que `laneTier` (5 % du rôle) plus 500 parties. `stronger` : seulement sur un choix faible, et si la borne basse dépasse la borne haute du choix. `normChamp` est exporté d'opgg.ts. `Engine.swiftplayFit` retire les noms inconnus du client (`idOf`) : dans les fixtures, peu de « Plus forts ici » sortent.
+- Rendu : copier le projet, y faire répondre `OpggData.laneMeta` (table écrite à la main) et `analysis` (fixture), `dist/demo.mjs swiftplay`, `ARAM_SMOKE_TAB=now`. Pas de `rsync` dans le conteneur : copier avec `tar`.
+- `game_end` (usage.json) : `endFlags` (history.ts). `isRemake` reste à la durée, voir ROADMAP.
+
+## Départ et quêtes (v1.98)
+- `swiftplayStarter`, `nothingBought` (quickplay.ts) sont purs et testés. `Engine.starterPanel` tourne à chaque tick dans `nextBuyPanel`, Faille seulement. Les objets du Gardien coûtent 950 or : `isComplete` faux, donc ni rang (`itemSlot`) ni `item_bought`. `buildCache` a `-swift` dans sa clé. L'id répété d'OP.GG (2 potions) est normal : `starterText`, clés d'index.
+- `quest` (itembound.ts) = tous les items, `items` seul = un seul suffit. `questDone` juge sur `seen` d'avant le tick. `gone` ne touche que le `owned` interne de `nextBuys`, pas le sac ni la revente.
+- Rendu avec des stats : copier le projet ailleurs, y faire répondre `OpggData.analysis` avec la fixture, `node dist/demo.mjs sringame` avec `ARAM_DEMO_START=1`. Le Data Dragon du conteneur tient en 9 items (prix indisponibles dans le rendu). WebFetch sur `item.json` est tronqué à 85 Ko : 3177, 3184 et 3112 n'y sont pas, 2051 oui, `maps` 11 vrai.
+
+## Notes de patch (v1.99)
+- `src/core/patchchanges.ts` est pur et testé. **À chaque patch : ajouter une entrée à `PATCHES`**, relevée dans les notes officielles (WebFetch passe sur leagueoflegends.com depuis le 4 nov., poser des questions précises : le modèle de lecture résume). `patch` = version du jeu (16.22 pour les notes 26.22). Noms anglais, comparés avec `normName`. Une ligne sans effet sur ces modes (Shen, dégâts aux monstres) n'y va pas ; les champions de la section Classic non plus.
+- Affiché si stats arammeta < patch et client ≥ patch (client inconnu = affiché). Disparaît seul quand arammeta suit. Jamais dans `rowValue`, `bestOffered` ni la revue : aucun chiffre de winrate derrière. Faille exclue de `championChange`.
+- Rendu : `ARAM_DEMO_CLIENT=16.22.725.1 dist/demo.mjs ingame`, `ARAM_SMOKE_CARDS="Ravenous Bind|Armored Impact|Goliath"` (ces 2 cartes sont dans la fixture, pas Weapon of Destiny). Scénario `champselect` : Thresh ressort tout seul. `npm ci --ignore-scripts`, puis Electron par curl : le zip se contrôle avec `grep -c "$(sha256sum e.zip | cut -d' ' -f1)" SHASUMS256.txt`.
+
+## Patch en Faille (v1.101)
+- `readStatsPatch` (opgg.ts, pur et testé) lit `trends.win` : liste en JSON, objet seul en compact. `Engine.noteOpggPatch` tient `state.data.opggPatch` (jamais à reculons), `Engine.srChange` appelle `championChange` en mode `sr`. `championChange` ne filtre plus la Faille : l'appelant donne le patch de ses stats, et le classement ARAM garde son test `mode !== 'sr'`.
+- La section « Classic » des notes est un mode à part, pas la Faille. `AugmentsView.vue` n'est plus branché nulle part (code mort) : les cartes de Préparer passent par `AugmentChooser`.
+- Rendu : copier le projet, dans la copie faire répondre `OpggData.analysis` avec la fixture et `guessLanes` avec le 1er ennemi en mid, ajouter des lignes de test à `PATCHES`. `dist/demo.mjs` sans argument connu (`none`) donne un client vide, pour `ARAM_SMOKE_EXPLORE=<id>`. Le faux client écrit `port` dans sa sortie.
+
+## Guide de lane (v1.100)
+- `src/core/laneguide.ts` est pur et testé. `OpggData.matchupGuide` appelle `lol_get_lane_matchup_guide` (2 appels : toi contre lui, lui contre toi, chacun donne le `game_lengths` du 1er champion, supposé ; `summary.id` contrôlé). `Engine.withGuide` ne bloque jamais l'écran : le guide apparaît à la lecture suivante, clé `moi|lui|rôle|court`, `g` dans `gameKey`.
+- Format vu : `game_lengths` (`game_length` 0, 25, 30, 35, 40). **Jamais vus remplis** : `opponent_champion_tip`, `recommended_play_style`, `lane_advantage_champion`, `lane_solo_kill_advantage_champion`, aussi `runes`, `single_items`, `core_items` du matchup. Lire `probe-output/opgg-sample-matchup-ahri-zed.json` et `opgg-matchup-*.json`, puis resserrer `readGuide`. `lang: fr_FR` sur cet outil seulement.
+- `liveLane` : `position` vide = `this.lane` (salon), puis `guessOpponent`, une fois par partie. Rendu : copier le projet, faire répondre `analysis` et `matchupGuide` dans la copie, `dist/demo.mjs sringame`. Lancer Electron avec `timeout` et sortie dans un fichier : `| tail` peut rester bloqué après la capture.
+
+## Matchups complets au champ select (v1.111)
+- `Engine.roleGuide(id, lane, contre)` : clé `id|rôle`, vidée à chaque partie, jamais bloquant. `loadGuide` marque ses 2 clés avant son premier `await`, donc `withGuide` doit rester appelé **avant** `roleGuide`, sinon le même guide part 2 fois. `guideCounters` contrôle `summary.id`.
+- `counterPicksFrom` reçoit `{ losesTo }` et `dangersFrom` une liste : l'analyse sert de repli, jamais de complément (pas de mélange des 2 sources). `banOptions` reçoit `mine` avec `losesTo` remplacé.
+- Test : `test/engine-sr-matchups.test.ts`, `gate` retient la réponse d'OP.GG : sans ça le mock répond avant la fin du tick et le repli ne se voit pas. Collection du faux client : au moins 20 champions (`MIN_OWNED`), sinon rien n'est filtré.
+
+## Duels et matchups (v1.110)
+- `readAnalysis` (`beats`, `losesTo`) = 6 matchups seulement. `readGuide(...).counters` = tout le rôle, `win` du point de vue du champion demandé (vérifié sur les 6 lignes communes). Tout nouveau chiffre de matchup passe par `guideRate` ; `matchupFrom` reste pour ne pas attendre le guide. `Engine.laneRates`, clé `moi|lui|rôle`, rempli par `loadGuide` et `loadLaneMap`. `gameKey` compte `games` : sans ça, le chiffre arrivé après coup ne s'affiche pas.
+- `laneMapPanel` (lanemap.ts, pur et testé). `Engine.laneMapView` tourne à chaque tick, `loadLaneMap` une fois par équipe, 1 appel OP.GG par duel. `placeTeam` : `position`, puis salon (`allyLanes`, rempli dans `srSelect`) ou Châtiment (`hasSmite`), puis `guessLanes(foes, known)`. Faille seulement, jusqu'à `LANE_MAP_END_SEC`.
+- Wording : faits seulement (« Point fort »), jamais « va », « gank », « aide » : pas de décision dictée en partie (règle 1).
+- Rendu : copier le projet, y faire répondre `matchupGuide` avec des `counters`, `ARAM_DEMO_GAP=roles dist/demo.mjs sringame`, `ARAM_SMOKE_TAB=now`. Seuls Ahri, Yasuo, Lux, Darius, Master Yi sont connus du faux client : 2 duels à l'écran. Électron : `python3 zipfile` extrait sans `unzip`, puis `chmod +x` et `printf electron > path.txt`. Ne pas écrire `cat > fichier` sans heredoc dans une commande : le shell attend stdin jusqu'au délai.
+
+## Parties annulées (v1.108)
+- `src/core/remake.ts` est pur et testé. `isRemake` : `durationSec` > 0 et < 240. **Tout nouveau chiffre perso passe par `played()`**, côté `History` comme côté interface ; `getHistory()` et `history.games` gardent les parties annulées pour la liste. `recordPicks(…, remake)` vide les tirages sans rien noter.
+- `stats.total` = ARAM + Mayhem seulement. Pour réagir à une fin de partie, quel que soit le mode : `stats.recorded`.
+- `laneOfGame` (history.ts) : timeline, puis Châtiment = jungle. `recordFinishedGame` complète avec `this.lane`. `position` des anciennes parties : recalculée à `load()`, en mémoire.
+- Rendu sur l'historique réel : `<OUT>.history.json` en `history.json`, `dist/demo.mjs stats`, `ARAM_SMOKE_TAB=games` et `ARAM_SMOKE_JS` qui clique « Toutes les parties » puis « Faille ». Retirer `allyNames` de la copie.
+
+## Répétition Faille (v1.102)
+- `test/rehearsal-sr.test.ts`, même lancement que `npm run rehearsal` avec `npx vitest run test/rehearsal-sr.test.ts`, `ARAM_REHEARSAL_OUT` à part. Apparie `champselect-*.json` (file 480) et `historique.json` par date, joue chaque partie 3 fois selon `position`. `st.teams` doit porter les `puuid`, sinon `counters` reste nul et le test ne prouve rien. `liveclient-faille*` n'existent pas encore : les remplacer aux frames synthétiques dès qu'il y en a.
+- `damageSplit` (counters.ts) = même formule que `physShare` d'`enemyThreats`, à garder alignée. Sous 3 ennemis connus : `null`.
+
+## CS de lane et League Classic (v1.103)
+- `laneCs` (lanecs.ts) est pur et testé. `Engine.laneCsPanel` tourne après `goldGapPanel` : il lui faut `lastGameTime` et `state.counters.lane` (l'adversaire, même deviné). `creepScore` du Live Client n'avance que par dizaines, jamais un chiffre présenté comme exact.
+- `modeOf` : 3e argument, le nom de la file (`queue.description`, à défaut `name`). League Classic = `null`, et `Engine.leagueClassic` coupe aussi `intelligence`. `gameMode` CLASSIC avec un id > 0 hors listes = `null` : toute nouvelle file Faille va dans `SR_QUEUES` ou `BOT_QUEUES`.
+- `test/rehearsal-sr.test.ts` : `engine.start` tourne en parallèle des `tick` du test, garder le `waitFor` qui relance un tick au salon. Rendu : `ARAM_SMOKE_TAB=now` pour la vue en partie.
+
+## Carte sans stats (v1.104)
+- `presentOfferedCards` : `sure` dès 2 cartes avec ligne de stats, `unranked` = cartes sans ligne, en dernier. Une ligne présente avec une valeur invalide (NaN) garde `sure` faux. `bestOffered` suit la même règle : ne pas la relâcher, la notification en dépend.
+- `measuredCards` (reroll.ts, pur et testé) : carte sans stats = valeur plancher et `rolled: true`, donc ni gardée ni visée. `reviewCards` la saute : `reviewChoice` rend `unknown` si elle est prise, `reviewDraw` rend null (3 cartes requises).
+- Rendu : dans une copie de `test/fixtures`, retirer 1058 de `tier-list.json` et remplacer 1058 dans `champions/*.json`, `ARAM_SMOKE_CARDS="Goliath|Poing mystique|Firebrand"` avec `dist/demo.mjs ingame`. Seul 1058 est dans les `cherry-augments` du faux client.
+- `npm run rehearsal` : à part `--ignore-scripts`, rien à installer. Le tgz des captures se dépose sous un nom neuf, puis se vide (`: >`).
+
+## Command Line par les cartes (v1.107)
+- `rarityJump`, `cardRarity` (headliner.ts) sont purs et testés. `Engine.noteRarityJump` tourne au début de `rerollAdvice`, après le suivi du tirage : le headliner est posé avant le calcul de `up`. La carte montée entre dans `draw.rolled` même si la relance est passée avant la 1re lecture. `DrawTrack.stayed` traverse la partie comme `seen`.
+- Un mock d'`augInfo` doit aussi fournir `tier`. `review.choices[].cards` donne `id` et `name` des 3 cartes finales d'un tirage : c'est là que se mesure une règle sur les tirages passés, avec `tier` de `probe-output/wiki-mayhem-augments.lua`. Le journal (« Cartes lues ») donne les lectures intermédiaires, donc les relances. Comparer une règle au journal, pas seulement aux comptes : le faux positif de Xin Zhao ne se voyait que là.
+- `normName` compte : un script Python sur les noms bruts avait raté Flow of Spirit, passer par `parseAugmentModule`.
+
 ## Timers de sorts ennemis : retirés (v1.93)
 - `enemyspells.ts`, `intelligence/enemy-spell.ts`, `intelligence/advanced-cooldown.ts`, `EnemySpells.vue`, `EnemyPanelDialog.vue`, `EnemyWindow.vue`, ⌘⇧E, `POST /api/spell` et `markEnemySpell` n'existent plus. Ne pas les recréer, même « à la main » : interdit par Riot (règle 1). L'équipe ennemie garde ses sorts d'invocateur **équipés** (`intelligence.enemies[].spells`, ce que montre le tableau des scores), sans disponibilité.
 - `cooldowns.ts` reste pour Data Dragon (prix de revente, items par carte) ; ses fonctions de haste d'ultime et d'invocateur ne servent plus.
@@ -274,6 +365,11 @@ Barlow. Coins vifs (--radius 2px), cadres .card à filet d'or. **Une seule chose
 - L'API ne montre pas un élixir bu : `elixirBought` compare l'or et l'inventaire d'un tick à l'autre, seulement si le tick d'avant conseillait d'acheter (`elixirTick`). Horloge murale, pas `gameTime` (lu après `nextBuyPanel`, et absent de `liveclient-choix*`).
 - `CooldownData.onMap` lit `maps` de `item.json` : `false` masque, `null` (pas lu) laisse passer, car vérifié au 16.21. Carte 11 en Faille, 12 sinon, Mayhem compris : supposé.
 - WebFetch sur `https://ddragon.leagueoflegends.com/cdn/16.21.1/data/en_US/item.json` passe, contrairement à `curl`. Le modèle de lecture tronque les longues listes : demander 3 à 5 ids à la fois. Capture : `ARAM_DEMO_BAG=full ARAM_DEMO_GOLD=2600 dist/demo.mjs purchase`, fixtures `ddragon` copiées dans `cache/` de `ARAM_DATA_DIR`.
+
+## Enclumes (v1.112)
+- `src/core/anvil.ts` est pur et testé. `Engine.anvilPanel` tourne avant `elixirPanel` et lui passe `reserved` (prix de l'enclume) : l'or disponible pour l'élixir baisse d'autant, en Mayhem seulement. `idle` est partagé. `this.state.mode === 'mayhem'` : l'élixir reste seul en ARAM et Faille.
+- `anvilsBought` : `spent` entre `n × prix − 15 % d'un prix` et `n × prix`, `n` ≤ 4. Intervalles disjoints de l'élixir à 500 or. `onMap(220008, 12)` vrai au 16.21, `null` dans les fixtures.
+- Rendu : `ARAM_DEMO_BAG=full ARAM_DEMO_GOLD=2600 dist/demo.mjs purchase`, `ARAM_SMOKE_TAB=now`, fixtures `ddragon` dans `cache/`. Tester `ANVIL_LEVEL` ou un chiffre de stat seulement avec une source Mayhem : la page du wiki lisible est celle d'Arena, valeurs différentes possibles.
 
 ## Tags des augments (v1.86)
 - `tagsOf` lit `plainText` (gras, liens et modèles `{{as|x|y}}` retirés ; `tip`, `sti`, `stil` gardent leur dernier argument). `crit`, `as`, `ad`, `ap`, `attacks` donnent un malus dans `fitOf` : ne les poser que si la carte dépend vraiment de la stat. Vérifier toute regex sur `test/fixtures/mayhem-augments-wiki.lua`, copie de juin 2026 du module, pas sur `mayhem-augments.lua` (faux textes, rempli de `Filler`).

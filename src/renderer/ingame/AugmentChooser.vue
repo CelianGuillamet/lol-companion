@@ -3,7 +3,7 @@
 // en tête, classées, la meilleure au liseré prismatique (seulement si les 3 sont reconnues : dans le doute, on se
 // tait). Sinon : choisis la rareté, repère tes 3 cartes dans la liste classée pour ce moment de la partie.
 import { computed, ref, watch } from 'vue';
-import { tone, state, pct, hideBroken, wrAt, ROUND_LABEL } from '../store';
+import { tone, state, pct, hideBroken, wrAt, ROUND_LABEL, changeLine, CHANGE_TITLE } from '../store';
 import type { AugmentPanel, AugmentRow, Rarity } from '../../core/types';
 import { presentOfferedCards, rerollLine } from '../offered-cards';
 import Confidence from '../ui/Confidence.vue';
@@ -56,6 +56,7 @@ const cards = computed(() => presentation.value.cards);
 const reroll = computed(() => (presentation.value.sure ? rerollLine(offered.value?.reroll, cards.value) : null));
 const fitOf = (id: number) => offered.value?.fit?.[id] ?? null;
 const sure = computed(() => presentation.value.sure);
+const unranked = computed(() => presentation.value.unranked.map((c) => c.name).join(', '));
 const showAll = ref(false);
 watch(offered, (o) => {
   if (!o) showAll.value = false;
@@ -72,6 +73,10 @@ const champWr = computed(() => props.panel.championWinrate ?? 0.5);
 const comboOf = (id: number) => offered.value?.combos?.[id] ?? props.panel.combos?.[id] ?? null;
 const comboClass = (id: number) => ({ true: 'good', false: 'bad', null: 'faint' })[String(comboOf(id)?.good ?? null) as 'true' | 'false' | 'null'];
 const COMBO_TITLE = 'Avis de la communauté sur ce champion (Data: arammayhem.com), pas une statistique. N’entre pas dans le classement.';
+
+const changeOf = (id: number) => offered.value?.changes?.[id] ?? props.panel.changes?.[id] ?? null;
+const changeClass = (id: number) => ({ buff: 'good', nerf: 'bad', mixed: 'faint', new: 'faint' })[changeOf(id)?.dir ?? 'mixed'];
+const changeText = (id: number) => changeLine(changeOf(id)!);
 
 const pool = computed<AugmentRow[]>(() => {
   const all = props.panel.all?.[rarity.value];
@@ -97,19 +102,22 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
       </div>
       <p v-if="reroll" class="reroll" :class="{ act: reroll.targets.length }">{{ reroll.text }}</p>
       <p class="decision" v-if="sure && offered?.reroll?.kind !== 'free'">Prends la première, puis retrouve sa position dans le jeu.</p>
+      <p v-if="unranked" class="metric-note">{{ unranked }} : pas encore de stats, hors classement. Le conseil compare les 2 autres, lis son effet dans le jeu.</p>
       <p v-if="!sure" class="doubt" role="status">{{ doubt }}. Aucun conseil pour ce tirage. Vérifie dans la liste ou relis avec <kbd>⌘⇧R</kbd>.</p>
       <ol class="list offered-list" :aria-label="sure ? 'Tes cartes classées par recommandation' : 'Cartes reconnues, sans classement'">
         <li v-for="(c, i) in cards" :key="c.id" :class="{ best: sure && i === 0, reco: sure && i === 0, top: true, trap: traps.has(c.id) || myTraps.has(c.id) || comboOf(c.id)?.kind === 'trap' }">
           <img v-if="c.a?.icon" @error="hideBroken" :src="c.a.icon" width="30" height="30" class="ic" alt="" />
           <span v-else class="ic" />
           <span class="name">
-            <span class="card-cue"><b v-if="sure">{{ i === 0 ? 'À prendre' : reroll?.targets.includes(c.id) ? 'À relancer' : 'Alternative' }}</b><span v-if="c.position">{{ c.position }} dans le jeu</span></span>
+            <span class="card-cue"><b v-if="sure">{{ i === 0 ? 'À prendre' : !c.a ? 'À juger' : reroll?.targets.includes(c.id) ? 'À relancer' : 'Alternative' }}</b><span v-if="c.position">{{ c.position }} dans le jeu</span></span>
             <span class="n">{{ c.name }}</span>
             <span class="tags">
+              <span v-if="changeOf(c.id)" class="tag" :class="changeClass(c.id)" :title="CHANGE_TITLE">{{ changeText(c.id) }}</span>
               <span v-if="comboOf(c.id)" class="tag" :class="comboClass(c.id)" :title="COMBO_TITLE">{{ comboOf(c.id)!.label }}</span>
               <span v-if="myTraps.has(c.id)" class="tag bad">tu perds avec ({{ myTraps.get(c.id)!.wins }}V {{ myTraps.get(c.id)!.games - myTraps.get(c.id)!.wins }}D)</span>
               <span v-else-if="c.a?.personal && c.a.personal.games >= 2" class="tag" :class="tone(c.a.personal.wins, c.a.personal.games)">toi {{ c.a.personal.wins }}V {{ c.a.personal.games - c.a.personal.wins }}D</span>
               <span v-if="fitOf(c.id)" class="tag" :class="fitOf(c.id)!.good ? 'good' : 'bad'" title="Correction selon tes items achetés et prévus (description de l’augment sur le wiki)">{{ fitOf(c.id)!.why }} {{ fmtDelta(fitOf(c.id)!.delta * 100) }}</span>
+              <span v-if="offered?.hints?.[c.id]" class="tag faint" title="Texte de la carte et état de ta partie. N’entre pas dans le classement.">{{ offered.hints[c.id] }}</span>
               <span v-if="traps.has(c.id)" class="tag bad">piège fréquent</span>
               <span v-if="!c.a" class="tag faint">pas de données</span>
               <span v-else-if="c.a.estimated" class="tag faint" title="Rarement pris sur ce champion : winrate du champion + effet moyen de l’augment">estimé</span>
@@ -159,6 +167,7 @@ const fmtDelta = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)
         <span class="name">
           <span class="n">{{ a.name }}</span>
           <span class="tags">
+            <span v-if="changeOf(a.id)" class="tag" :class="changeClass(a.id)" :title="CHANGE_TITLE">{{ changeText(a.id) }}</span>
             <span v-if="comboOf(a.id)" class="tag" :class="comboClass(a.id)" :title="COMBO_TITLE">{{ comboOf(a.id)!.label }}</span>
             <span v-if="myTraps.has(a.id)" class="tag bad">tu perds avec ({{ myTraps.get(a.id)!.wins }}V {{ myTraps.get(a.id)!.games - myTraps.get(a.id)!.wins }}D)</span>
             <span v-else-if="a.personal && a.personal.games >= 2" class="tag" :class="tone(a.personal.wins, a.personal.games)">toi {{ a.personal.wins }}V {{ a.personal.games - a.personal.wins }}D</span>

@@ -6,7 +6,11 @@
 import { computed, ref } from 'vue';
 import { state, championIcon, hideBroken } from '../store';
 import { purchaseOf } from '../purchase';
+import { damageText } from '../../core/counters';
+import AnvilLine from '../ui/AnvilLine.vue';
 import ElixirLine from '../ui/ElixirLine.vue';
+import LaneGuide from '../ui/LaneGuide.vue';
+import StarterLine from '../ui/StarterLine.vue';
 
 withDefaults(defineProps<{ emphasize?: boolean }>(), { emphasize: true });
 
@@ -42,6 +46,7 @@ const pct = (v: number) => `${Math.round(v * 100)} %`;
     <p v-if="!nb" class="faint small">L’or et tes items s’affichent dès que la partie a commencé.</p>
 
     <template v-else>
+      <StarterLine v-if="nb.starter" :starter="nb.starter" />
       <article v-if="purchase && next" class="next" :class="{ reco: emphasize && purchase.canBuy }">
         <img @error="hideBroken" :src="purchase.item.icon ?? ''" width="48" height="48" class="ic big" alt="" />
         <div class="what">
@@ -67,8 +72,9 @@ const pct = (v: number) => `${Math.round(v * 100)} %`;
       <p v-if="purchase?.kind === 'component' && purchase.missing != null" class="goal-note">
         Objectif : {{ purchase.target.name }} · encore {{ fmt(purchase.missing) }} or à économiser pour le terminer.
       </p>
+      <AnvilLine v-if="nb.anvil" :anvil="nb.anvil" />
       <ElixirLine v-if="nb.elixir" :elixir="nb.elixir" />
-      <p v-if="!next && !nb.elixir" class="faint small">Aucun achat conseillé pour cet inventaire. Le build complet reste consultable ci-dessous.</p>
+      <p v-if="!next && !nb.elixir && !nb.anvil" class="faint small">Aucun achat conseillé pour cet inventaire. Le build complet reste consultable ci-dessous.</p>
 
       <div class="path" aria-label="Ton build : achetés puis à venir">
         <div v-for="(s, i) in plan" :key="i" class="slot" :class="{ owned: s?.owned, now: i === nextIndex, empty: !s }" :title="s ? `${s.item.name}${s.owned ? ' (acheté)' : s.why ? ` — ${s.why}` : ''}` : ''">
@@ -90,14 +96,19 @@ const pct = (v: number) => `${Math.round(v * 100)} %`;
     <div v-if="lane" class="lane" :class="lane.verdict">
       <img @error="hideBroken" :src="championIcon(lane.opponent.id)" width="30" height="30" class="ch" alt="" />
       <div>
-        <div class="n">Ta lane : contre {{ lane.opponent.name }}</div>
+        <div class="n">{{ ct?.jungle ? 'Jungler adverse' : 'Ta lane : contre' }} {{ lane.opponent.name }}<span v-if="lane.guessed" class="faint small"> (rôle deviné)</span></div>
         <div class="t" v-if="lane.games">{{ Math.round(lane.myWinRate * 100) }} % de victoires sur {{ fmt(lane.games) }} parties ({{ Math.round(lane.lo * 100) }}–{{ Math.round(lane.hi * 100) }} %) : {{ lane.verdict }}</div>
         <div class="t" v-else>Pas assez de parties sur ce matchup pour conclure.</div>
+        <LaneGuide v-if="lane.guide" :guide="lane.guide" :opponent="lane.opponent.name" />
       </div>
     </div>
 
     <template v-if="ct">
       <h3>Contre leur équipe</h3>
+      <div v-if="ct.damage" class="split" title="D’après leurs champions et leurs objets finis. Un ennemi en avance pèse plus.">
+        <div class="bar" aria-hidden="true"><i class="magic" :style="{ width: `${ct.damage.magic * 100}%` }" /><i class="true" :style="{ width: `${ct.damage.true * 100}%` }" /></div>
+        <span class="small">Leurs dégâts : {{ damageText(ct.damage) }}</span>
+      </div>
       <ul v-if="ct.threats.length || ct.notes?.length" class="reads">
         <li v-for="t in ct.threats" :key="t.key" :class="{ urgent: t.urgent }">
           <div>
@@ -206,6 +217,11 @@ h3 { margin: 8px 0 0; }
 .allies { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ally { position: relative; display: flex; flex-direction: column; align-items: center; }
 .mini { font-size: 9.5px; color: var(--muted); }
+.split { display: grid; gap: 3px; color: var(--muted); }
+.split .bar { display: flex; height: 4px; background: #ff9b6b; }
+.split .bar i { display: block; }
+.split .bar .magic { background: #8fb8ff; }
+.split .bar .true { background: var(--text); }
 .lane { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 8px 10px; background: var(--surface-1); border: 1px solid var(--border); }
 .lane .n { font-weight: 650; font-size: 13px; }
 .lane .t { font-size: 12px; color: var(--muted); }

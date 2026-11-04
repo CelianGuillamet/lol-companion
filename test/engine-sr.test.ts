@@ -1,6 +1,6 @@
 // Faille de l'invocateur (classée solo) contre le faux client, avec OP.GG remplacé par la vraie analyse Ahri
 // enregistrée (le conteneur de test n'a pas accès à OP.GG) : rôle, matchup, build, runes et sorts importés.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { Balance } from '../src/core/balance';
 import { Arammeta } from '../src/core/arammeta';
 import { readAnalysis } from '../src/core/opgg';
 import { startMockLcu } from './mock-lcu';
+import { PATCHES } from '../src/core/patchchanges';
 
 const fixtures = join(__dirname, 'fixtures');
 const ahri = readAnalysis(JSON.parse(readFileSync(join(fixtures, 'opgg', 'opgg-sample-analysis.json'), 'utf8')).result, 'mid')!;
@@ -26,6 +27,7 @@ const banMeta = new Map([
 let mock: Awaited<ReturnType<typeof startMockLcu>>;
 let engine: Engine;
 const asked: string[] = [];
+const guideCalls: string[] = [];
 
 beforeAll(async () => {
   mock = await startMockLcu();
@@ -46,6 +48,11 @@ beforeAll(async () => {
     mainLane: async () => 'mid',
     guessLanes: async (enemies: { id: number }[]) => new Map(enemies.map((e) => [e.id, e.id === lux.id ? 'mid' : 'top'])),
     laneMeta: async () => banMeta,
+    matchupGuide: async (my: { name: string }, _opp: { name: string }, lane: string) => {
+      guideCalls.push(`${my.name}|${lane}`);
+      const early = my.name === 'Ahri';
+      return { data: { summary: { positions: [{ name: 'MID', stats: { play: 200_000 } }] }, game_lengths: [0, 25, 30, 35, 40].map((game_length, i) => ({ game_length, rate: early ? 0.54 - i * 0.015 : 0.48 + i * 0.015 })), opponent_champion_tip: ['Garde ton charme pour son engagement'] } };
+    },
   };
   await engine.refreshData(false);
 });
@@ -53,6 +60,89 @@ beforeAll(async () => {
 afterAll(async () => {
   engine.stop();
   await mock.close();
+});
+
+describe('Swiftplay', () => {
+  const perks = JSON.stringify({ perkIds: ahri.runes!.perks, perkStyle: ahri.runes!.primary, perkSubStyle: ahri.runes!.sub });
+  const tick = async () => {
+    await engine.tick();
+    await vi.waitFor(() => expect((engine as unknown as { slotsBusy: boolean }).slotsBusy).toBe(false));
+  };
+
+  it('au salon : 2 choix comparés à OP.GG, stats de classée, jungle sans Châtiment signalée', async () => {
+    mock.state.phase = 'Lobby';
+    mock.state.queue = { id: 480, gameMode: 'SWIFTPLAY' };
+    mock.state.lobby = {
+      gameConfig: { queueId: 480 },
+      localMember: { playerSlots: [{ championId: 103, positionPreference: 'MIDDLE', spell1: ahri.spells[1], spell2: ahri.spells[0], perks }, { championId: 54, positionPreference: 'JUNGLE', spell1: 4, spell2: 14, perks }] },
+    };
+    await tick();
+    const l = engine.state.swiftplay!;
+    expect(l.queueLabel).toBe('Swiftplay');
+    expect(l.queued).toBe(false);
+    expect(l.slots[0]).toMatchObject({ championId: 103, lane: 'milieu', spellsOk: true, smiteMissing: false, runes: 'same' });
+    expect(l.slots[1]).toMatchObject({ championId: 54, lane: 'jungle', smiteMissing: true });
+    expect(l.slots[0].starter.length).toBe(ahri.starter?.ids.length ?? 0);
+    expect(l.slots[0].fit).toBeNull(); // méta de test trop mince pour classer
+    expect(l.slots[0].mine).toEqual({ games: 0, wins: 0 });
+    expect(asked.some((a) => a.endsWith('|mid|ranked'))).toBe(true);
+    const events = (engine as unknown as { usage: { events: { type: string }[] } }).usage.events.filter((e) => e.type === 'swiftplay_slots');
+    expect(events).toHaveLength(1);
+    await tick();
+    expect((engine as unknown as { usage: { events: { type: string }[] } }).usage.events.filter((e) => e.type === 'swiftplay_slots')).toHaveLength(1);
+  });
+
+  it('en file : le panneau reste, marqué trop tard, sans nouvelle ligne', async () => {
+    mock.state.phase = 'Matchmaking';
+    await tick();
+    expect(engine.state.swiftplay?.queued).toBe(true);
+    expect((engine as unknown as { usage: { events: { type: string }[] } }).usage.events.filter((e) => e.type === 'swiftplay_slots')).toHaveLength(1);
+  });
+
+  it('méta assez large : rang dans le rôle, rôle principal, plus forts connus du client seulement', async () => {
+    const extra = [['ahri', 'Ahri', 0.47, 'mid', 0.9], ['lux2', 'Lux', 0.56, 'mid', 0.9], ['p1', 'Inconnu', 0.57, 'mid', 0.9], ['p2', 'Autre', 0.51, 'mid', 0.9], ['p3', 'Encore', 0.5, 'mid', 0.9], ['p4', 'Dernier', 0.49, 'mid', 0.9]] as const;
+    mock.state.phase = 'Lobby';
+    const saved = new Map(banMeta);
+    banMeta.clear();
+    for (const [k, champion, winRate, lane, roleRate] of extra) banMeta.set(k, [{ champion, lane: lane as 'mid', roleRate, winRate, tier: 2, games: 100_000 }]);
+    (engine as unknown as { slotsKey: string }).slotsKey = '';
+    await tick();
+    banMeta.clear();
+    for (const [k, v] of saved) banMeta.set(k, v);
+    const fit = engine.state.swiftplay!.slots[0].fit!;
+    expect(fit).toMatchObject({ rank: 6, of: 6, main: null });
+    expect(fit.stronger.map((c) => c.name)).toEqual(['Lux']); // « Inconnu » n'est pas un champion du client
+    (engine as unknown as { slotsKey: string }).slotsKey = '';
+    await tick();
+    expect(engine.state.swiftplay!.slots[0].fit).toBeNull();
+  });
+
+  it('session sans choix : rien écrit, le bouton explique pourquoi, le panneau disparaît', async () => {
+    mock.state.phase = 'ChampSelect';
+    mock.state.subset = [];
+    mock.calls.length = 0;
+    mock.state.session = { localPlayerCellId: 0, skipChampionSelect: true, myTeam: [{ cellId: 0, championId: 103, assignedPosition: 'middle' }], theirTeam: [], actions: [], timer: { phase: 'GAME_STARTING' } };
+    await engine.tick();
+    await engine.tick();
+    await engine.tick();
+    expect(engine.state.swiftplay).toBeNull();
+    expect(engine.state.champSelect?.sr?.laneLabel).toBe('milieu');
+    expect(mock.calls.filter((c) => c.method !== 'GET')).toEqual([]);
+    expect((await engine.applyLoadout()).message).toContain('au salon');
+    mock.state.lobby = undefined;
+    mock.state.session = null;
+    mock.state.phase = 'None';
+    await engine.tick();
+  });
+
+  it('hors Swiftplay : pas de panneau', async () => {
+    mock.state.phase = 'Lobby';
+    mock.state.queue = { id: 420, gameMode: 'CLASSIC' };
+    mock.state.lobby = { gameConfig: { queueId: 420 }, localMember: {} };
+    await tick();
+    expect(engine.state.swiftplay).toBeNull();
+    mock.state.lobby = undefined;
+  });
 });
 
 describe('Faille : champ select classée', () => {
@@ -81,6 +171,35 @@ describe('Faille : champ select classée', () => {
     expect(sr.matchup?.verdict).toBe(lux.games >= 100 && sr.matchup!.hi < 0.5 ? 'défavorable' : sr.matchup!.verdict);
     for (const c of sr.counterPicks) expect(c.lo).toBeGreaterThan(0.5);
     expect(asked.some((a) => a.endsWith('|mid|ranked'))).toBe(true);
+  });
+
+  it('patch : changement de l’adversaire tant qu’OP.GG est au patch d’avant, ensuite plus rien', async () => {
+    expect(engine.state.data.opggPatch).toBe('16.21');
+    PATCHES[0].champions.Lux = ['nerf', 'test'];
+    const client = engine.state.data.clientPatch;
+    engine.state.data.clientPatch = '16.22';
+    try {
+      await engine.tick();
+      expect(engine.state.champSelect?.sr?.matchup?.opponent.change).toMatchObject({ dir: 'nerf', text: 'test' });
+      engine.state.data.opggPatch = '16.22';
+      await engine.tick();
+      expect(engine.state.champSelect?.sr?.matchup?.opponent.change).toBeUndefined();
+    } finally {
+      delete PATCHES[0].champions.Lux;
+      engine.state.data.clientPatch = client;
+      engine.state.data.opggPatch = '16.21';
+    }
+  });
+
+  it('guide de lane : arrive au tour suivant, sans retarder le matchup, rythme lu et conseils', async () => {
+    await vi.waitFor(() => expect(guideCalls.length).toBeGreaterThanOrEqual(2));
+    await engine.tick();
+    const g = engine.state.champSelect!.sr!.matchup!.guide!;
+    expect(g.pace?.text).toContain('Cherche ton avance tôt');
+    expect(g.tips).toEqual(['Garde ton charme pour son engagement']);
+    const calls = guideCalls.length;
+    await engine.tick();
+    expect(guideCalls.length).toBe(calls);
   });
 
   it('bans : aucune action de ban (Swiftplay, phase passée) → rien', () => {

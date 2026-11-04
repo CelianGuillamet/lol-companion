@@ -94,9 +94,9 @@ describe('shouldNudge', () => {
 });
 
 describe('probePlayers', () => {
-  it('garde objets, rôle et runes, sans identifiant', () => {
-    const out = probePlayers([{ championName: 'Jinx', team: 'CHAOS', level: 7, position: 'BOTTOM', items: [{ itemID: 3031 }, { itemID: 1055 }], runes: null, riotId: 'Secret#EUW', summonerName: 'Secret' } as never]);
-    expect(out).toEqual([{ champion: 'Jinx', team: 'CHAOS', level: 7, position: 'BOTTOM', items: [3031, 1055], runes: null }]);
+  it('garde objets, rôle, runes et CS, sans identifiant', () => {
+    const out = probePlayers([{ championName: 'Jinx', team: 'CHAOS', level: 7, position: 'BOTTOM', items: [{ itemID: 3031 }, { itemID: 1055 }], runes: null, scores: { creepScore: 80 }, riotId: 'Secret#EUW', summonerName: 'Secret' } as never]);
+    expect(out).toEqual([{ champion: 'Jinx', team: 'CHAOS', level: 7, position: 'BOTTOM', items: [3031, 1055], runes: null, cs: 80 }]);
     expect(JSON.stringify(out)).not.toContain('Secret');
   });
 });

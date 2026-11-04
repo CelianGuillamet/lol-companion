@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { OpggData, opggNames, parseCompact, parseRpc, readAnalysis, type OpggClient } from '../src/core/opgg';
+import { OpggData, opggNames, parseCompact, parseRpc, readAnalysis, readStatsPatch, type OpggClient } from '../src/core/opgg';
 
 const sample = JSON.parse(readFileSync(new URL('./fixtures/opgg/opgg-sample-analysis.json', import.meta.url), 'utf8'));
 
@@ -47,5 +47,19 @@ describe('méta des rôles', () => {
     const meta = await new OpggData(client as unknown as OpggClient).laneMeta();
     expect(meta.get('ahri')![0].winRate).toBeCloseTo(0.516, 5);
     expect(meta.get('lux')![0].winRate).toBe(0.49);
+  });
+});
+
+describe('patch des stats OP.GG', () => {
+  it('format compact : un seul objet Win', () => {
+    expect(readAnalysis(sample.result, 'mid')!.statsPatch).toBe('16.21');
+  });
+
+  it('format JSON : la liste, le plus récent gagne, 16.9 reste avant 16.21', () => {
+    expect(readStatsPatch({ win: [{ version: '16.9' }, { version: '16.21' }, { version: '16.20' }] })).toBe('16.21');
+  });
+
+  it('format inconnu : null, jamais une erreur', () => {
+    for (const t of [undefined, null, {}, { win: null }, { win: [{ version: 16.21 }] }, { win: [null] }, 'x']) expect(readStatsPatch(t)).toBeNull();
   });
 });

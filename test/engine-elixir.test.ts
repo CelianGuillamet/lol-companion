@@ -72,15 +72,49 @@ describe('élixir quand il ne reste rien à acheter', () => {
     spy.mockRestore();
   });
 
+  it('enclume : passe avant l’élixir, vue à l’or, comptée, jamais hors Mayhem', async () => {
+    const live = (mock.state as unknown as { live: { me: { currentGold: number; level: number }; players: { items: { itemID: number; slot: number }[]; isDead: boolean; respawnTimer: number }[] } }).live;
+    (engine as unknown as { elixirEnd: number | null; elixirTick: null }).elixirEnd = null;
+    (engine as unknown as { elixirTick: null }).elixirTick = null;
+
+    live.me.currentGold = 1000;
+    await engine.tick();
+    expect(engine.state.nextBuy!.anvil).toMatchObject({ price: 750, buy: true, missing: 0, bought: 0, item: { name: 'Enclume de stats' } });
+    expect(engine.state.nextBuy!.anvil!.pick).toContain('Côté défense'); // Leona : tank
+    expect(engine.state.nextBuy!.elixir).toBeNull(); // 1 000 - 750 : pas de quoi prendre les deux
+    expect(engine.usage.events.filter((e) => e.type === 'anvil')).toMatchObject([{ bought: false, gold: 3000, level: 15 }]);
+
+    live.me.currentGold = 260;
+    await engine.tick();
+    expect(engine.state.nextBuy!.anvil).toMatchObject({ buy: false, missing: 490, bought: 1 });
+    expect(engine.state.nextBuy!.elixir).toBeNull();
+    expect(engine.usage.events.filter((e) => e.type === 'anvil').pop()).toMatchObject({ bought: true, count: 1, gold: 260 });
+
+    live.me.currentGold = 1300;
+    await engine.tick();
+    expect(engine.state.nextBuy!.anvil).toMatchObject({ buy: true, bought: 1 });
+    expect(engine.state.nextBuy!.elixir).toMatchObject({ buy: true }); // assez pour les deux
+    expect(engine.usage.events.filter((e) => e.type === 'anvil' && !e.bought)).toHaveLength(1);
+
+    const was = engine.state.mode;
+    engine.state.mode = 'aram';
+    await engine.tick();
+    expect(engine.state.nextBuy?.anvil ?? null).toBeNull();
+    engine.state.mode = was;
+    live.me.currentGold = 3000;
+  });
+
   it('niveau 8, ou un achat reste possible : rien', async () => {
     const live = (mock.state as unknown as { live: { me: { level: number }; players: { items: { itemID: number; slot: number }[] }[] } }).live;
     live.me.level = 8;
     await engine.tick();
     expect(engine.state.nextBuy!.elixir).toBeNull();
+    expect(engine.state.nextBuy!.anvil).toBeNull();
     live.me.level = 15;
     live.players[0].items = live.players[0].items.slice(0, 3);
     await engine.tick();
     expect(engine.state.nextBuy!.rows.length).toBeGreaterThan(0);
     expect(engine.state.nextBuy!.elixir).toBeNull();
+    expect(engine.state.nextBuy!.anvil).toBeNull();
   });
 });

@@ -34,3 +34,10 @@ export function purchaseOf(panel: NextBuyPanel | null | undefined) {
 }
 
 export type Purchase = NonNullable<ReturnType<typeof purchaseOf>>;
+
+/** « Doran's Ring + 2 × Health Potion » : OP.GG répète l'id d'un item acheté 2 fois. */
+export function starterText(items: { id: number; name: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const x of items) counts.set(x.name, (counts.get(x.name) ?? 0) + 1);
+  return [...counts].map(([name, n]) => (n > 1 ? `${n} × ${name}` : name)).join(' + ');
+}

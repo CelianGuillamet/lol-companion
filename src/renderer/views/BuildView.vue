@@ -128,6 +128,7 @@ const known = (n?: string | null) => (n && !/^#\d+$/.test(n) ? n : null);
       <div class="sk">
         <div v-if="b.starter?.length" class="items">
           <img @error="hideBroken" v-for="it in b.starter" :key="it.id" :src="it.icon ?? ''" :title="it.name" width="34" height="34" class="ic" alt="" />
+          <p v-if="b.starterSwapped" class="faint small">Swiftplay : Doran n'existe pas, remplacé par le Gardien.</p>
         </div>
         <div v-if="b.skills">
           <div class="maxo">Monte <b v-for="(k, i) in b.skills.max" :key="i">{{ i ? ' › ' : '' }}{{ k }}</b><span v-if="b.skills.source" class="faint"> · {{ b.skills.source }}</span></div>

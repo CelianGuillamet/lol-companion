@@ -18,6 +18,24 @@ describe('cartes proposées : décision et position dans le jeu', () => {
     ]);
   });
 
+  it('une carte sans stats ne bloque pas les 2 autres : elle reste hors classement, en dernier', () => {
+    const sans = new Map(rows);
+    sans.delete(2);
+    const { cards, sure, unranked } = presentOfferedCards(offer({ names: ['Gauche', 'RISE!', 'Droite'] }), sans, null);
+    expect(sure).toBe(true);
+    expect(cards.map((c) => c.id)).toEqual([3, 1, 2]);
+    expect(cards[2]).toMatchObject({ name: 'RISE!', a: null, score: null, position: 'Au milieu' });
+    expect(unranked.map((c) => c.name)).toEqual(['RISE!']);
+  });
+
+  it('une seule carte mesurée ne fait pas un conseil', () => {
+    const seule = new Map([[1, rows.get(1)!]]);
+    const { sure, unranked, cards } = presentOfferedCards(offer(), seule, null);
+    expect(sure).toBe(false);
+    expect(unranked).toEqual([]);
+    expect(cards.map((c) => c.id)).toEqual([1, 2, 3]);
+  });
+
   it('garde la correction du build et la distingue du winrate', () => {
     const { cards } = presentOfferedCards(offer({ fit: { 1: { delta: 0.2, good: true, why: 'Build' } } }), rows, null);
     expect(cards[0]).toMatchObject({ id: 1, score: 0.7, adjusted: true });
@@ -36,12 +54,6 @@ describe('cartes proposées : décision et position dans le jeu', () => {
     expect(cards.map((c) => [c.id, c.position])).toEqual([[1, null], [2, null]]);
   });
 
-  it('ne conseille pas quand une carte manque de statistiques, même avec une OCR complète', () => {
-    const { sure, cards } = presentOfferedCards(offer(), new Map([...rows].slice(0, 2)), null);
-    expect(sure).toBe(false);
-    expect(cards[2].score).toBeNull();
-  });
-
   it('refuse les doublons et les lectures incomplètes sans diagnostic', () => {
     expect(presentOfferedCards(offer({ ids: [1, 1, 2] }), rows, null).sure).toBe(false);
     expect(presentOfferedCards(offer({ ids: [1, 2] }), rows, null).sure).toBe(false);
@@ -55,6 +67,6 @@ describe('cartes proposées : décision et position dans le jeu', () => {
   });
 
   it('revient à un état vide après disparition des cartes', () => {
-    expect(presentOfferedCards(null, rows, null)).toEqual({ cards: [], sure: false });
+    expect(presentOfferedCards(null, rows, null)).toEqual({ cards: [], sure: false, unranked: [] });
   });
 });

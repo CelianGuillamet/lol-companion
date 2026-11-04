@@ -6,6 +6,8 @@ import { state, championIcon, pct, hideBroken, ROUND_LABEL } from '../store';
 import AugmentChooser from './AugmentChooser.vue';
 import BuyPanel from './BuyPanel.vue';
 import SkillNext from './SkillNext.vue';
+import LaneCs from './LaneCs.vue';
+import LaneMap from './LaneMap.vue';
 import GoldGap from './GoldGap.vue';
 import GoldGapTable from './GoldGapTable.vue';
 import BuildView from '../views/BuildView.vue';
@@ -67,6 +69,8 @@ const headliner = computed(() => state.value?.headliner ?? null);
       <AugmentChooser v-if="panel && (!narrow || activeView === 'augs')" :panel="panel" class="left" />
       <EnemyIntelligence v-if="narrow && activeView === 'enemy'" />
       <div v-if="!narrow || activeView === 'buy'" class="right">
+        <LaneCs />
+        <LaneMap />
         <SkillNext />
         <BuyPanel v-if="champ" :emphasize="!panel || narrow" />
         <EnemyIntelligence v-if="!narrow && intelligence" />

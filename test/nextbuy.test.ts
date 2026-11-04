@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bestComponent, consumedBy, itemToSell, nextBuys, itemSlot, optionsForSlot, resaleFor } from '../src/core/nextbuy';
+import { bestComponent, consumedBy, itemToSell, nextBuys, itemSlot, optionsForSlot, resaleFor, optionLabel } from '../src/core/nextbuy';
 
 const PRICES: Record<number, number> = { 1: 3000, 2: 3100, 3: 2800, 4: 2900, 9: 1100, 3047: 1200, 3075: 2450 };
 const base = {
@@ -434,5 +434,12 @@ describe('menace qui coûte plus que le build', () => {
     const r = nextBuys({ ...base, boots: [], allBoots: new Set([3111]), owned: [HEART], gold: 3000, cores: [{ core: [HEART, RIFT], options: [] }], counters: [{ title: 'RM', items: [3111], urgent: true }], value: tahm({ ...measured, 3111: { winrate: 0.4, games: 50000 } }) }, 6);
     expect(r.rows.map((x) => x.id)).toContain(3111);
     expect(r.deferred).toEqual([]);
+  });
+});
+
+describe('libellé d’une option', () => {
+  it('« 3e item » seulement au 3e rang', () => {
+    expect(optionLabel(3)).toBe('3e item');
+    expect(optionLabel(5)).toBe('option du build');
   });
 });

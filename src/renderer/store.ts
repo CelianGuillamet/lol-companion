@@ -118,6 +118,22 @@ export const confidenceOf = (winrate: number, games: number) => {
 export const hideBroken = (e: Event) => ((e.target as HTMLImageElement).style.visibility = 'hidden');
 
 /** Le client a changé de patch, pas encore les stats arammeta (quelques jours de décalage). */
+const CHANGE_MARK = { buff: '▲', nerf: '▼', mixed: '≈', new: '✦' } as const;
+/** Une ligne pour un changement de patch : « ▼ 26.22 : pénétration réduite… ». */
+export const changeLine = (c: { patch: string; dir: keyof typeof CHANGE_MARK; text: string }) => `${CHANGE_MARK[c.dir]} ${c.patch} : ${c.text}`;
+export const CHANGE_TITLE = 'Notes de patch de Riot. Le winrate affiché date d’avant ce changement. N’entre pas dans le classement.';
+
+/** Faille : le client a changé de patch, pas encore les stats OP.GG. */
+export function opggBehind(data?: { opggPatch?: string; clientPatch?: string } | null): boolean {
+  const num = (v?: string) => {
+    const m = v?.match(/^(\d+)\.(\d+)/);
+    return m ? Number(m[1]) * 1000 + Number(m[2]) : null;
+  };
+  const stats = num(data?.opggPatch);
+  const client = num(data?.clientPatch);
+  return stats != null && client != null && client > stats;
+}
+
 export function statsBehind(data?: { patch: string | null; clientPatch?: string } | null): boolean {
   const c = data?.clientPatch;
   const p = data?.patch;

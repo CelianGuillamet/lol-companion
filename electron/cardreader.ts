@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { matchCards, dropCovered, type CardRead, type OcrLine } from '../src/core/cardmatch';
 import type { Engine } from '../src/core/engine';
-import { extraDrawAt, headlinerFromText, headlinerNearMisses, type HeadlinerInfo } from '../src/core/headliner';
+import { bannerOpen, extraDrawAt, headlinerFromText, headlinerNearMisses, type HeadlinerInfo } from '../src/core/headliner';
 import { windowBounds, GAME_BUNDLE } from './displays';
 
 const VISION_JXA = `
@@ -96,6 +96,8 @@ export class CardReader {
   private bannerScans = 0;
   private bannerNear: string[] = [];
   private bannerReported = false;
+  private firstCards: number | null = null;
+  private lateNoted = false;
 
   constructor(private engine: Engine) {}
 
@@ -132,14 +134,17 @@ export class CardReader {
     const now = Date.now();
     if (!this.inGame) {
       this.inGame = true;
-      this.activeUntil = now + 150_000; // cartes du début de partie
+      this.activeUntil = now + FIRST_WINDOW_MS; // cartes du début de partie
       this.gameStart = now;
       this.bannerScans = 0;
       this.bannerNear = [];
       this.bannerReported = false;
+      this.firstCards = null;
+      this.lateNoted = false;
     }
     // Bannière passée sans headliner reconnu : on le note une fois (taux de lecture, textes lus à la place)
-    if (!this.bannerReported && now - this.gameStart > BANNER_MS) {
+    const banner = bannerOpen(now, this.gameStart, this.firstCards);
+    if (!this.bannerReported && !banner && (this.firstCards != null || now - this.gameStart > FIRST_WINDOW_MS)) {
       this.bannerReported = true;
       if (!s.headliner && this.bannerScans > 0) this.engine.headlinerMissed(this.bannerScans, this.bannerNear);
     }
@@ -159,19 +164,25 @@ export class CardReader {
       this.warned = true;
       return;
     }
-    const r = await this.scan(false, now - this.gameStart <= BANNER_MS);
+    const r = await this.scan(false, banner);
     if (this.stopped) return;
     // La partie a changé pendant la capture (fin, autre champion, niveau 7 / 11 / 15) : lecture périmée, on la jette
     // sans toucher au compteur « plus de cartes » ; la lecture suivante repart du bon contexte.
     if (!this.engine.isCurrentRead(r.context)) return;
-    if (!r.error && now - this.gameStart <= BANNER_MS) {
+    if (!r.error && banner) {
       this.bannerScans++;
       for (const t of r.near ?? []) if (this.bannerNear.length < 5 && !this.bannerNear.includes(t)) this.bannerNear.push(t);
     }
-    if (r.headliner) this.engine.setHeadliner(r.headliner.info, 'écran', r.headliner.text, r.context);
+    if (r.headliner && banner) this.engine.setHeadliner(r.headliner.info, 'écran', r.headliner.text, r.context);
+    else if (r.headliner && !this.lateNoted) {
+      // Hors bannière, le nom vient d'ailleurs (boutique, tooltip) : noté une fois, pour vérifier qu'aucun vrai headliner n'est perdu
+      this.lateNoted = true;
+      this.engine.headlinerLate(r.headliner.info, r.headliner.text, Math.round((now - this.gameStart) / 1000));
+    }
     // Un seul nom reconnu n'est pas un écran de cartes : c'est un texte du jeu qui ressemble à un augment (vraies
     // parties du 28 oct. : « Vulnerability — 1 carte sur 3 » en plein combat). On l'ignore.
     if (r.read && r.read.ids.length >= 2) {
+      this.firstCards ??= now;
       this.empty = 0;
       this.engine.setOffered(r.read, r.context);
       this.activeUntil = Math.max(this.activeUntil, now + 30_000); // reroll possible : on continue à lire
@@ -211,8 +222,8 @@ let lastArea: Rectangle | null = null;
 /** K/DA : une lecture toutes les 5 s hors des paliers (une par seconde pendant un palier). */
 const KDA_SCAN_MS = 5_000;
 
-/** Durée de la bannière du headliner au début de la partie (au-delà, « Bees » seul n'est plus accepté). */
-const BANNER_MS = 90_000;
+/** Première fenêtre de lecture de la partie : cartes du début. */
+const FIRST_WINDOW_MS = 150_000;
 
 /**
  * Capture de la zone des cartes dans la fenêtre du jeu (ou du centre de l'écran principal si le jeu n'est pas

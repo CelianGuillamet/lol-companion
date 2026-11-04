@@ -4,15 +4,17 @@
 import { computed, ref, watch } from 'vue';
 import { tone, state, championIcon, pct, hideBroken } from './store';
 import { recap } from './insights';
+import { played } from '../core/remake';
 import PageHeader from './ui/PageHeader.vue';
 import Notice from './ui/Notice.vue';
 import ReviewPanel from './ui/ReviewPanel.vue';
 import BuyReviewPanel from './ui/BuyReviewPanel.vue';
+import SwiftplaySlots from './ui/SwiftplaySlots.vue';
 import type { HistoryEntry } from '../core/types';
 
 const games = ref<HistoryEntry[]>([]);
 // recharge aussi quand le client et les données arrivent (noms des champions, winrates globaux)
-watch(() => `${state.value?.stats.total}-${state.value?.connection}-${state.value?.data.patch}-${state.value?.reviews ?? 0}`, async () => (games.value = await window.api.getHistory()), { immediate: true });
+watch(() => `${state.value?.stats.recorded}-${state.value?.connection}-${state.value?.data.patch}-${state.value?.reviews ?? 0}`, async () => (games.value = played(await window.api.getHistory())), { immediate: true });
 
 const form = computed(() => games.value.slice(0, 10).reverse());
 // Session du jour (depuis 6 h du matin, pour garder la soirée qui déborde après minuit sur la même journée)
@@ -78,6 +80,8 @@ const winsOf = (x: { n: number; wr: number }) => Math.round(x.wr * x.n);
       <button class="btn" title="Rechercher un champion (⌘K)" @click="openSearch">Chercher un champion <kbd>⌘K</kbd></button>
       <button class="btn" @click="go('prepare')">Tier list</button>
     </PageHeader>
+
+    <SwiftplaySlots v-if="state?.swiftplay" :lobby="state.swiftplay" />
 
     <Notice v-if="!games.length" kind="empty">
       <p>Aucune partie enregistrée pour l’instant. Tes parties ARAM, Mayhem et Faille s’ajoutent seules à la fin de chaque partie.</p>

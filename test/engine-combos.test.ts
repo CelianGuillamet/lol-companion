@@ -81,6 +81,30 @@ describe('combos en partie', () => {
     expect(seen.best).toBe(engine.bestOffered([REVOLUTION, FIRE, GOLIATH]));
   });
 
+  it('carte modifiée au patch : étiquette tant que les stats ont du retard, conseil inchangé', () => {
+    const BIND = idOf('Ravenous Bind');
+    const IMPACT = idOf('Armored Impact');
+    const best = engine.bestOffered([BIND, IMPACT, GOLIATH]);
+    engine.state.data.clientPatch = '16.22';
+    engine.setOffered(null);
+    read([BIND, IMPACT, GOLIATH]);
+    const o = engine.state.offered!;
+    expect(o.changes?.[BIND]).toMatchObject({ dir: 'buff', patch: '26.22' });
+    expect(o.changes?.[IMPACT]).toMatchObject({ dir: 'nerf' });
+    expect(o.changes?.[GOLIATH]).toBeUndefined();
+    expect(engine.bestOffered([BIND, IMPACT, GOLIATH])).toBe(best);
+    const seen = engine.usage.events.filter((e) => e.type === 'cards_seen').at(-1) as unknown as { changes: Record<string, string> };
+    expect(seen.changes).toEqual({ [BIND]: 'buff', [IMPACT]: 'nerf' });
+    // Stats à jour : plus rien à dire.
+    engine.state.data.patch = '16.22';
+    engine.setOffered(null);
+    read([BIND, IMPACT, GOLIATH]);
+    expect(engine.state.offered!.changes).toBeUndefined();
+    engine.state.data.patch = '16.21';
+    delete engine.state.data.clientPatch;
+    engine.setOffered(null);
+  });
+
   it('plan : la carte conseillée au choix d\'avant compte, pas celle du tirage en cours', () => {
     engine.setOffered(null);
     (engine as unknown as { draw: null }).draw = null;
@@ -94,5 +118,31 @@ describe('combos en partie', () => {
     engine.setOffered(null);
     read([SCIENTIST, REVOLUTION, FIRE]);
     expect(engine.state.offered!.combos?.[SCIENTIST]).toBeUndefined();
+  });
+});
+
+describe('carte sans stats (nouvelle au patch)', () => {
+  const NEW = 9_999_001;
+  const readNew = (ids: number[]) =>
+    engine.setOffered({ ids, names: ids.map((id) => (id === NEW ? 'RISE!' : tier.augs[id].name_en)), rarity: 'kGold', unsure: null, misses: [] }, engine.readContext());
+  const rawUsage = () => (engine as unknown as { usage: { events: { type: string; noStats?: string[]; best?: number | null }[] } }).usage.events.filter((e) => e.type === 'cards_seen');
+
+  it('le conseil et la relance restent sur les 2 cartes mesurées, la nouvelle n’est jamais visée', () => {
+    readNew([GOLIATH, NEW, FIRE]);
+    const o = engine.state.offered!;
+    expect(o.extra?.some((a) => a.id === NEW) ?? false).toBe(false);
+    const best = engine.bestOffered(o.ids);
+    expect([GOLIATH, FIRE]).toContain(best);
+    expect(o.reroll).not.toBeNull();
+    expect(o.reroll!.targets).not.toContain(NEW);
+    const seen = rawUsage().at(-1)!;
+    expect(seen.noStats).toEqual(['RISE!']);
+    expect(seen.best).toBe(best);
+  });
+
+  it('2 cartes sans stats sur 3 : pas de conseil, comme à l’écran', () => {
+    engine.setOffered({ ids: [REVOLUTION, NEW, NEW + 1], names: ['Ultimate Revolution', 'RISE!', 'One Hit Wonder'], rarity: 'kGold', unsure: null, misses: [] }, engine.readContext());
+    expect(engine.bestOffered(engine.state.offered!.ids)).toBeNull();
+    expect(engine.state.offered!.reroll).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NextBuyPanel } from '../src/core/types';
-import { purchaseOf } from '../src/renderer/purchase';
+import { purchaseOf, starterText } from '../src/renderer/purchase';
 
 const target = { id: 4401, name: 'Force de la nature', icon: null };
 const component = { id: 1057, name: 'Manteau de Négatron', icon: null };
@@ -101,5 +101,11 @@ describe('sac plein', () => {
     const buy = purchaseOf(panel({ remaining: 400, room: { sell: null } }));
     expect(buy).toMatchObject({ kind: 'full', canBuy: false, cost: null, missing: null, goldAfter: null });
     expect(buy!.title).toMatch(/^Inventaire plein/);
+  });
+});
+
+describe('départ', () => {
+  it('regroupe un item acheté 2 fois', () => {
+    expect(starterText([{ id: 1, name: "Doran's Ring" }, { id: 2, name: 'Health Potion' }, { id: 2, name: 'Health Potion' }])).toBe("Doran's Ring + 2 × Health Potion");
   });
 });

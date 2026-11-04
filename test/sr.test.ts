@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { counterPicksFrom, laneOf, matchupFrom, readAnalysis, type OpggAnalysis } from '../src/core/opgg';
+import { counterPicksFrom, dangersFrom, laneOf, matchupFrom, readAnalysis, type OpggAnalysis } from '../src/core/opgg';
 import { verdictOf, wilson } from '../src/core/stats';
 import { modeOf, opggModeOf } from '../src/core/modes';
 
@@ -40,6 +40,13 @@ describe('Matchups Faille (vraie analyse Ahri)', () => {
     for (const c of cps) expect(wilson(c.winRate, c.games).lo).toBeGreaterThan(0.5);
     const weak: OpggAnalysis = { ...ahri, losesTo: [{ id: 1, name: 'A', games: 60, myWinRate: 0.4 }, { id: 2, name: 'B', games: 30000, myWinRate: 0.46 }] };
     expect(counterPicksFrom(weak, (wr, n) => wilson(wr, n).lo).map((c) => c.id)).toEqual([2]);
+  });
+  it('dangers : ennemi connu, assez de parties, tout l’intervalle sous ton winrate, le pire en tête', () => {
+    const hi = (wr: number, n: number) => wilson(wr, n).hi;
+    const row = (id: number, games: number, myWinRate: number) => ({ id, name: '', games, myWinRate });
+    const list = [row(1, 5000, 0.48), row(2, 5000, 0.44), row(3, 5000, 0.5), row(4, 150, 0.3), row(5, 5000, 0.4), row(6, 5000, 0.45)];
+    expect(dangersFrom(list, [1, 2, 3, 4, 6], 6, 0.51, hi).map((c) => c.id)).toEqual([2, 1]); // 3 trop proche, 4 trop peu joué, 5 absent, 6 ton adversaire
+    expect(dangersFrom(list, [1], undefined, 0.48, hi)).toEqual([]); // sous ton winrate habituel seulement
   });
 });
 

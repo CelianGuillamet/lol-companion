@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adviseReroll, reviewDraw, thin, MIN_POOL, RISKY_MIN, type RerollCard } from '../src/core/reroll';
+import { adviseReroll, measuredCards, reviewDraw, thin, MIN_POOL, RISKY_MIN, type RerollCard } from '../src/core/reroll';
 import type { ReviewCard } from '../src/core/review';
 import { rerollLine } from '../src/renderer/offered-cards';
 
@@ -159,5 +159,25 @@ describe('reviewDraw', () => {
     // déjà relancé une fois : la montée de rareté est passée, on retombe sur le pool normal
     const rolled = [[card(1, 0.5), card(2, 0.49), card(3, 0.48)], [card(1, 0.5), card(2, 0.49), card(4, 0.47)]];
     expect(reviewDraw(rolled, pool, high)!.delta).toBeCloseTo(reviewDraw(rolled, pool, null)!.delta);
+  });
+});
+
+describe('relance avec une carte sans stats', () => {
+  it('jamais visée, jamais gardée à la place d’une carte mesurée', () => {
+    const cards = measuredCards([{ id: 1, value: 0.47, rolled: false }, { id: 2, value: null, rolled: false }, { id: 3, value: 0.46, rolled: false }])!;
+    expect(cards.find((c) => c.id === 2)).toMatchObject({ rolled: true });
+    expect(cards.find((c) => c.id === 2)!.value).toBeLessThan(0.46);
+    const a = adviseReroll(cards, pool, null)!;
+    expect(a.targets).not.toContain(2);
+    expect(a.fallback ?? 0).not.toBe(2);
+  });
+
+  it('moins de 2 cartes mesurées : rien à comparer', () => {
+    expect(measuredCards([{ id: 1, value: 0.5, rolled: false }, { id: 2, value: null, rolled: false }, { id: 3, value: null, rolled: false }])).toBeNull();
+  });
+
+  it('3 cartes mesurées : rien ne change', () => {
+    const cards = [{ id: 1, value: 0.5, rolled: true }, { id: 2, value: 0.48, rolled: false }, { id: 3, value: 0.46, rolled: false }];
+    expect(measuredCards(cards)).toEqual(cards);
   });
 });

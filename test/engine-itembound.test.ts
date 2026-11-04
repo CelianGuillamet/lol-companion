@@ -47,6 +47,42 @@ afterAll(async () => {
 const read = (ids: number[], names: string[]) => engine.setOffered({ ids, names, rarity: 'kSilver', unsure: null, misses: [] }, engine.readContext());
 
 describe('augments liés à un item', () => {
+  it('dit sur quel item ira King Me, dans l’ordre du sac, et le recalcule', async () => {
+    const seen = () => read([1337, COLLECTOR, 2076], ['King Me', 'Upgrade Collector', 'Quelconque']);
+    const b = (engine as unknown as { buildFit: { legendary: string[] | null } }).buildFit;
+    const old = b.legendary;
+    b.legendary = ['Sunfire Aegis', 'Thornmail'];
+    seen();
+    expect(engine.state.offered!.hints![1337]).toContain('Sunfire Aegis, 1er item de ton sac');
+    expect(engine.state.offered!.hints![COLLECTOR]).toBeUndefined();
+    expect(engine.usage.events.filter((e) => e.type === 'cards_seen').at(-1)).toMatchObject({ hints: [1337] });
+    b.legendary = null;
+    engine.setOffered(null);
+    seen();
+    expect(engine.state.offered!.hints).toBeUndefined();
+    b.legendary = old;
+    engine.setOffered(null);
+    (engine as unknown as { draw: null }).draw = null;
+    (engine as unknown as { offersThisGame: Map<string, unknown> }).offersThisGame.clear();
+  });
+
+  it('One Hit Wonder et RISE! lisent ton accélération et ton ultime, sans toucher au classement', async () => {
+    const before = live.me;
+    live.me = { ...before, championStats: { abilityHaste: 26, attackRange: 175 }, abilities: { R: { displayName: 'Unstoppable Force' } } } as typeof live.me;
+    await engine.tick();
+    const ids = [9001, 9002, COLLECTOR];
+    (engine as unknown as { augNameEn: (id: number) => string }).augNameEn = ((orig) => (id: number) => (id === 9001 ? 'One Hit Wonder' : id === 9002 ? 'RISE!' : orig.call(engine, id)))((engine as unknown as { augNameEn: (id: number) => string }).augNameEn);
+    read(ids, ['One Hit Wonder', 'RISE!', 'Upgrade Collector']);
+    const hints = engine.state.offered!.hints!;
+    expect(hints[9001]).toContain('Ton accélération : 26');
+    expect(hints[9002]).toContain('Unstoppable Force doit donner le coup de grâce');
+    expect(hints[COLLECTOR]).toBeUndefined();
+    live.me = before;
+    engine.setOffered(null);
+    (engine as unknown as { draw: null }).draw = null;
+    (engine as unknown as { offersThisGame: Map<string, unknown> }).offersThisGame.clear();
+  });
+
   it('signale une fois un « Upgrade X » inconnu, jamais sur une lecture partielle', () => {
     const count = () => engine.usage.events.filter((e) => e.type === 'bound_unknown').length;
     engine.setOffered({ ids: [1, 2], names: ['Upgrade Riftmaker', 'Goredrink'], rarity: 'kSilver', unsure: '2 cartes sur 3 reconnues', misses: [] }, engine.readContext());
@@ -93,7 +129,7 @@ describe('augments liés à un item', () => {
     mock.state.itemData = [[3084, ['Health']], [2502, ['Health', 'Armor']], [3118, ['SpellDamage']], [4645, ['SpellDamage']], [6655, ['SpellDamage']]].map(([id, categories]) => ({ id, name: `Objet ${id}`, priceTotal: 3000, categories }));
     const game = (engine as unknown as { game: { items: Map<number, unknown> } }).game;
     for (const row of mock.state.itemData as { id: number }[]) game.items.set(row.id, row);
-    internals.augInfo = { size: 1, tags: () => new Set(['ap']) };
+    internals.augInfo = { size: 1, tags: () => new Set(['ap']), drawable: () => true, tier: () => null };
     const build = engine.state.build!;
     const tank = build.cores[0];
     const apCore = build.cores[1];

@@ -11,6 +11,7 @@ import { Balance } from '../src/core/balance';
 import { PhoneServer } from './phone';
 import { applyAutoLaunch, BACKGROUND_ARG } from './autolaunch';
 import { recap } from '../src/renderer/insights';
+import { isRemake, played } from '../src/core/remake';
 import { canRelaunch, parseChangelog, shouldNudge, updateFrom, type AppVersionEntry } from '../src/core/appversion';
 import { randomBytes } from 'node:crypto';
 import { Arammeta } from '../src/core/arammeta';
@@ -420,12 +421,12 @@ let lastTotal = -1;
 
 /** Fin de partie enregistrée : notification avec le bilan (écarts nets par rapport à tes autres parties). */
 function notifyGameRecorded(s: AppState): void {
-  const total = s.stats.total;
+  const total = s.stats.recorded;
   if (lastTotal >= 0 && total > lastTotal && s.settings.notifications) {
     const games = engine.getHistory();
     const g = games[0];
-    if (g) {
-      const r = recap(g, games);
+    if (g && !isRemake(g)) {
+      const r = recap(g, played(games));
       const lines = r?.lines.map((l) => `${l.good ? '▲' : '▼'} ${l.text}`) ?? [];
       notify(`${g.win ? 'Victoire' : 'Défaite'} avec ${g.championName} · ${g.kills}/${g.deaths}/${g.assists}`, lines.join('\n') || 'Partie dans ta moyenne.', true);
     }
@@ -474,7 +475,7 @@ function notifyOffered(s: AppState): void {
     return a ? ((round ? a.rounds?.[round - 1] : null) ?? a.winrate) + (o.fit?.[id]?.delta ?? 0) : null;
   };
   const p = (x: number | null) => (x == null ? '—' : `${Math.round(x * 100)} %`);
-  const others = o.ids.filter((id) => id !== best).map((id) => `${rows.get(id)?.name ?? '?'} ${p(at(id))}`);
+  const others = o.ids.filter((id) => id !== best).map((id) => `${o.names[o.ids.indexOf(id)] || rows.get(id)?.name || '?'} ${rows.has(id) ? p(at(id)) : 'sans stats'}`);
   const why = o.fit?.[best]?.why;
   notify(`Prends ${rows.get(best)?.name ?? '?'} · ${p(at(best))}`, `${why ? `${why[0].toUpperCase()}${why.slice(1)}. ` : ''}Devant ${others.join(', ')}`, true);
 }

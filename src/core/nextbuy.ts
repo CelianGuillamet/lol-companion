@@ -31,6 +31,10 @@ export interface NextBuyInput {
   labels?: { core: string; option: string };
   /** Items exigés par un augment lié (itembound.ts) : ils passent avant le reste, l'augment ne vaut rien sans eux. */
   bound?: { id: number; why: string }[];
+  /** Items qu'un augment interdit de vendre (itembound.ts). */
+  noSell?: number[];
+  /** Items d'une quête finie, convertis dans ton inventaire : obtenus, à ne pas reconseiller. */
+  gone?: number[];
   /** Build poussé par tes augments (buildchoice.ts) : départage les builds à égalité, jamais devant un item de ton inventaire. */
   prefer?: number | null;
   /** Ce qui occupe les 6 places du sac (Live Client, `slot` 0 à 5), sans la relique. Absent : place non vérifiée. */
@@ -232,6 +236,9 @@ function sellable(bag: number[], isFinished: (id: number) => boolean, isBoots: (
  * Seul un item fini justifie une vente, et avec de la place dans le sac on ne vend qu'un consommable : un composant
  * absent du plan est le plus souvent celui de l'item que tu construis, le plan ne suit pas tout ce que tu fais.
  */
+/** Hors Faille, le chiffre d'une option vient du 3e rang : au-delà, ne pas parler de « 3e item ». */
+export const optionLabel = (slot: number): string => (slot > 3 ? 'option du build' : '3e item');
+
 export function resaleFor(target: number, gap: number, bag: number[], planned: number[], forced: number | null, isFinished: (id: number) => boolean, isBoots: (id: number) => boolean, price: (id: number) => number | null, components: (id: number) => number[], sellValue: (id: number) => number | null, keep: ReadonlySet<number> = NOTHING): Resale | null {
   if (!isFinished(target)) return null;
   const roomy = bag.length < BAG_SLOTS;
@@ -284,7 +291,7 @@ export function optionsForSlot<O extends { id: number; winrate: number; games?: 
 }
 
 export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: NextBuyRow[]; plan: PlanSlot[]; deferred: DeferredThreat[] } {
-  const owned = new Set(expandOwned(i.owned, i.specialRecipe));
+  const owned = new Set([...expandOwned(i.owned, i.specialRecipe), ...(i.gone ?? [])]);
   // Le build suivi : celui qui recoupe le plus tes items (sinon le meilleur)
   let coreIndex = 0;
   let best = -1;
@@ -354,7 +361,7 @@ export function nextBuys(i: NextBuyInput, max = 3): { coreIndex: number; rows: N
   const finished = i.complete ?? ((id: number) => (i.price(id) ?? 0) >= 2000);
   const isBoots = (id: number) => i.allBoots.has(id);
   // Le composant qui couvre une menace reste : le vendre rouvre la menace que l'app vient de faire couvrir.
-  const guard = new Set(i.counters.flatMap((t) => t.items).filter((id) => owned.has(id) && !i.allBoots.has(id)));
+  const guard = new Set([...i.counters.flatMap((t) => t.items).filter((id) => owned.has(id) && !i.allBoots.has(id)), ...(i.noSell ?? [])]);
   if (full) {
     // L'item fini qui part de ce composant : c'est la seule façon de libérer sa place sans perdre la couverture.
     for (const t of i.counters) {

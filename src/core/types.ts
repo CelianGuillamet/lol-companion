@@ -31,6 +31,7 @@ export interface Candidate {
   fills?: string[]; // ce que ce champion apporte à l'équipe qui lui manquait
   balance?: { label: string; good: boolean }[]; // modificateurs ARAM du wiki (affichage seulement)
   balanceChange?: string; // ex. « modifié le 28/10 : dégâts −5 % → −10 % »
+  patchChange?: PatchChange; // modifié par un patch que les stats n'ont pas encore (affichage seulement)
   mastery?: { level: number; points: number } | null; // ta maîtrise (tous modes), affichage seulement
 }
 
@@ -62,7 +63,7 @@ export interface ChampSelectView {
 
 /** Ton winrate contre l'adversaire de lane, avec l'intervalle de confiance à 95 % (Wilson). */
 export interface MatchupView {
-  opponent: { id: number; name: string };
+  opponent: { id: number; name: string; change?: PatchChange };
   myWinRate: number;
   games: number;
   lo: number;
@@ -70,16 +71,65 @@ export interface MatchupView {
   verdict: 'favorable' | 'défavorable' | 'serré' | 'incertain';
   /** Rôle de l'adversaire deviné (champ select : le client ne montre pas les rôles adverses). */
   guessed: boolean;
+  /** Guide OP.GG du matchup : arrive après le reste, absent si OP.GG n'a rien de lisible. */
+  guide?: LaneGuide;
+}
+
+export type LaneEdge = 'me' | 'them';
+
+export interface GuidePhase {
+  label: string;
+  mine: number;
+  theirs: number;
+  edge: LaneEdge | 'even';
+}
+
+/** Winrate selon la durée de la partie, ton champion contre le sien, tous adversaires confondus. */
+export interface Pace {
+  text: string;
+  detail: string;
+  phases: GuidePhase[];
+}
+
+export interface LaneGuide {
+  pace: Pace | null;
+  tips: string[];
+  style: string | null;
+  laneEdge: LaneEdge | null;
+  killEdge: LaneEdge | null;
+}
+
+/** Un duel de la partie, vu de ton équipe (winrate de classée, OP.GG). */
+export interface LaneMapRow {
+  lane: string;
+  laneLabel: string;
+  ally: { id: number; name: string };
+  enemy: { id: number; name: string };
+  guessed: boolean;
+  mine: boolean;
+  rate: number | null;
+  games: number;
+  lo: number;
+  hi: number;
+  /** null = pas de chiffre fiable. Couleur seulement si l'écart sort du bruit. */
+  edge: 'ally' | 'enemy' | 'even' | null;
+}
+
+export interface LaneMapPanel {
+  rows: LaneMapRow[];
+  strong: string | null;
+  weak: string | null;
+  guessed: boolean;
 }
 
 export interface SrSelect {
   lane: string | null;
   laneLabel: string | null;
   queueLabel: string;
-  me: { id: number; name: string; locked: boolean; winRate: number; games: number; lo: number; hi: number; tier: number | null } | null;
+  me: { id: number; name: string; locked: boolean; winRate: number; games: number; lo: number; hi: number; tier: number | null; change?: PatchChange } | null;
   matchup: MatchupView | null;
   /** Champions qui battent ton adversaire de lane (seulement si tout l'intervalle de confiance est au-dessus de 50 %). */
-  counterPicks: { id: number; name: string; winRate: number; games: number; lo: number; mastery: number | null }[];
+  counterPicks: { id: number; name: string; winRate: number; games: number; lo: number; mastery: number | null; change?: PatchChange }[];
   /** Ennemis connus pour bien jouer contre ton champion. */
   dangers: { id: number; name: string; myWinRate: number; games: number }[];
   /** Bans conseillés, tant que ton ban n'est pas validé (rien si la file n'a pas de bans). */
@@ -93,10 +143,18 @@ export interface SrBans {
   hovered: number;
   /** Nombre de rôles comptés sur 5 : le tien et ceux des alliés qui ont montré leur champion. */
   lanes: number;
-  options: { id: number; name: string; gain: number; laneLabel: string; share: number; myWinRate: number | null; winRate: number }[];
+  options: { id: number; name: string; gain: number; laneLabel: string; share: number; myWinRate: number | null; winRate: number; change?: PatchChange }[];
 }
 
 /** Avis sur une carte pour ce champion (arammayhem.com), pas une statistique. `plan` = va avec un augment déjà pris. */
+export type PatchChangeDir = 'buff' | 'nerf' | 'mixed' | 'new';
+/** Ce que les notes de patch changent à une carte ou un champion, tant que ses stats datent d'avant ce patch. */
+export interface PatchChange {
+  patch: string;
+  dir: PatchChangeDir;
+  text: string;
+}
+
 export type ComboKind = 'trap' | 'strong' | 'good' | 'tech' | 'listed' | 'bug' | 'fun' | 'plan';
 export interface ComboNote {
   kind: ComboKind;
@@ -144,6 +202,10 @@ export interface NextBuyPanel {
   respawn?: number | null;
   /** Rien d'autre à acheter : l'élixir de ton build (`left` = secondes d'effet, `buy` = à racheter maintenant). */
   elixir?: { item: IconItem; perk: string; price: number; left: number | null; buy: boolean } | null;
+  /** Mayhem, build fini : stat permanente. `bought` = enclumes vues cette partie, `pick` = repère de choix. */
+  anvil?: { item: IconItem; price: number; buy: boolean; missing: number; bought: number; pick: string } | null;
+  /** Faille, rien d'acheté : le départ OP.GG. `swapped` : Doran remplacé par le Gardien (Swiftplay). */
+  starter?: { items: IconItem[]; swapped: boolean } | null;
   /** Menaces repoussées après le build : leur item gagne nettement moins qu'un item du plan (`key` = clé de la menace). */
   deferred?: { key: string; item: IconItem; by: IconItem; value: number; byValue: number }[];
 }
@@ -158,6 +220,10 @@ export interface CounterPanel {
   notes?: string[];
   /** Faille : ton adversaire direct (même rôle d'après la partie en cours). */
   lane?: MatchupView | null;
+  /** Faille : `lane` est le jungler adverse. */
+  jungle?: boolean;
+  /** Répartition de leurs dégâts d'après leurs champions et leurs objets (parts de 0 à 1), mêmes chiffres que les menaces. */
+  damage?: { phys: number; magic: number; true: number } | null;
 }
 
 export interface TeamPlayer {
@@ -180,6 +246,8 @@ export interface BuildPanel {
   championId: number;
   championName: string;
   mode: Mode;
+  /** Modifié par un patch que ces stats n'ont pas encore : fiche Préparer. */
+  change?: PatchChange | null;
   runes: { primary: IconItem | null; secondary: IconItem | null; perks: IconItem[] } | null;
   spells: { items: IconItem[]; winrate: number; games: number }[];
   cores: { name: string; core: IconItem[]; options: StatItem[]; winrate: number; games: number }[];
@@ -193,6 +261,8 @@ export interface BuildPanel {
   balance?: { label: string; good: boolean }[];
   /** Faille : départ, rôle, source et taille de l'échantillon. */
   starter?: IconItem[];
+  /** Swiftplay : objets de Doran remplacés par ceux du Gardien. */
+  starterSwapped?: boolean;
   /** Ordre des compétences (OP.GG, tous modes). `source` : précisé quand les chiffres ne viennent pas du mode joué. */
   skills?: { order: string[]; max: string[]; source?: string } | null;
   lane?: string | null;
@@ -214,6 +284,8 @@ export interface AugmentPanel {
   championId: number;
   championName: string;
   patch: string;
+  /** Modifié par un patch que ces stats n'ont pas encore (lecture Mayhem) : fiche Préparer. */
+  change?: PatchChange | null;
   championWinrate: number | null;
   top: Record<Rarity, AugmentRow[]>;
   avoid: Record<Rarity, AugmentRow[]>;
@@ -228,6 +300,8 @@ export interface AugmentPanel {
   myTraps?: { id: number; name: string; icon: string | null; games: number; wins: number }[];
   /** Avis sur les augments du pool pour ce champion, sans tenir compte des augments pris. */
   combos?: Record<number, ComboNote>;
+  /** Cartes du pool modifiées par un patch que les stats n'ont pas encore. */
+  changes?: Record<number, PatchChange>;
 }
 
 export interface HistoryGame {
@@ -332,6 +406,8 @@ export interface DuoStat {
 
 export interface StatsView {
   total: number;
+  /** Toutes les parties enregistrées, Faille et parties annulées comprises : ce qui bouge à chaque fin de partie. */
+  recorded: number;
   byMode: Record<Mode, { games: number; wins: number }>;
   champions: ChampionStat[];
   augments: AugmentStat[];
@@ -381,8 +457,12 @@ export interface OfferedCards {
   extra?: AugmentRow[];
   /** Correction selon ton build en cours (items achetés + prévus) : écart de winrate et raison, par augment. */
   fit?: Record<number, { delta: number; why: string | null; good: boolean }>;
+  /** Carte posée sur ton 1er item légendaire : où ira l'effet, dans l'ordre de ton sac. */
+  hints?: Record<number, string>;
   /** Avis sur les cartes pour ce champion, en tenant compte des cartes conseillées aux choix passés. */
   combos?: Record<number, ComboNote>;
+  /** Cartes modifiées par un patch que les stats n'ont pas encore. */
+  changes?: Record<number, PatchChange>;
   /** Conseil de relance (absent en lecture partielle, hors données ou pour les cartes de headliner). */
   reroll?: RerollAdvice | null;
 }
@@ -432,6 +512,17 @@ export interface GoldGapRow {
   mine: boolean;
 }
 
+export interface LaneCsPanel {
+  mine: number;
+  /** null : adversaire de lane inconnu. */
+  theirs: number | null;
+  gap: number | null;
+  /** Tes CS par minute, arrondis au dixième. */
+  perMin: number;
+  opponent: { id: number; name: string } | null;
+  guessed: boolean;
+}
+
 export interface GoldGapPanel {
   allyGold: number;
   enemyGold: number;
@@ -444,6 +535,41 @@ export interface GoldGapPanel {
   byRole: boolean;
   /** Objets sans prix connu, comptés 0. */
   unknown: number;
+}
+
+/** Un des 2 choix préparés au salon Swiftplay, comparé à OP.GG. */
+export interface SwiftplaySlot {
+  championId: number;
+  name: string;
+  change?: PatchChange;
+  lane: string | null;
+  /** Rôle pris par défaut : le salon n'en donne pas pour ce choix. */
+  laneGuessed: boolean;
+  /** null : OP.GG injoignable ou pas de données pour ce champion dans ce rôle. */
+  winRate: number | null;
+  games: number;
+  /** Place du champion dans le rôle (OP.GG, classée). null : méta des rôles indisponible. */
+  fit: { rank: number | null; of: number; main: { lane: string; share: number; winRate: number } | null; stronger: { id: number; name: string; winRate: number }[] } | null;
+  /** Tes parties sur ce champion dans ce rôle, parties annulées exclues. */
+  mine: { games: number; wins: number };
+  spellsOk: boolean | null;
+  smiteMissing: boolean;
+  spells: IconItem[];
+  spellsWanted: IconItem[];
+  runes: 'same' | 'minor' | 'keystone' | 'style' | 'unknown';
+  runesOff: number;
+  keystone: IconItem | null;
+  keystoneWanted: IconItem | null;
+  styleWanted: IconItem | null;
+  /** Achat de départ conseillé, objets du Gardien à la place de Doran. */
+  starter: IconItem[];
+}
+
+export interface SwiftplayLobby {
+  queueLabel: string;
+  /** En file : trop tard pour changer quoi que ce soit. */
+  queued: boolean;
+  slots: SwiftplaySlot[];
 }
 
 export interface AppState {
@@ -461,8 +587,10 @@ export interface AppState {
   mode: Mode | null;
   queueId: number | null;
   summonerName: string | null;
-  data: { patch: string | null; loadedAt: number | null; error: string | null; balance?: string; combos?: string; clientPatch?: string };
+  data: { patch: string | null; loadedAt: number | null; error: string | null; balance?: string; combos?: string; clientPatch?: string; /** Patch des stats OP.GG, connu à la 1re analyse lue. */ opggPatch?: string };
   champSelect: ChampSelectView | null;
+  /** Salon Swiftplay : tes 2 choix préparés, null ailleurs. */
+  swiftplay?: SwiftplayLobby | null;
   augments: AugmentPanel | null;
   build: BuildPanel | null;
   counters: CounterPanel | null;
@@ -472,6 +600,10 @@ export interface AppState {
   /** Timers des sorts ennemis signalés à la main, en partie. */
   /** Valeur des objets des deux équipes, en partie. */
   goldGap?: GoldGapPanel | null;
+  /** Faille : tes CS face à ton adversaire de lane, null ailleurs. */
+  laneCs?: LaneCsPanel | null;
+  /** Faille : les 5 duels de la partie, jusqu'à 15 min. */
+  laneMap?: LaneMapPanel | null;
   /** Choix d'augment en cours d'après ton niveau en jeu (1 à 4), null hors partie. */
   augRound: number | null;
   /** Ton niveau en jeu (ARAM, Mayhem), null hors partie. */

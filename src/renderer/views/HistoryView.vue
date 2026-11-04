@@ -9,6 +9,7 @@ const LANE_FR: Record<string, string> = { top: 'haut', jungle: 'jungle', mid: 'm
 import { computed, ref, watch } from 'vue';
 import { tone, state, championIcon, pct, hideBroken } from '../store';
 import type { GameDetail, HistoryEntry } from '../../core/types';
+import { isRemake, played } from '../../core/remake';
 
 const games = ref<HistoryEntry[]>([]);
 const loading = ref(true);
@@ -18,7 +19,7 @@ async function load() {
   loading.value = false;
 }
 // recharge quand une partie est ajoutée ou complétée
-watch(() => `${state.value?.stats.total}-${state.value?.log[0]?.at}-${state.value?.connection}-${state.value?.data.patch}-${state.value?.reviews ?? 0}`, load, { immediate: true });
+watch(() => `${state.value?.stats.recorded}-${state.value?.log[0]?.at}-${state.value?.connection}-${state.value?.data.patch}-${state.value?.reviews ?? 0}`, load, { immediate: true });
 
 const mode = ref<'all' | 'aram' | 'mayhem' | 'sr'>('all');
 const result = ref<'all' | 'win' | 'loss'>('all');
@@ -51,14 +52,17 @@ const filtered = computed(() =>
   games.value.filter(
     (g) =>
       (mode.value === 'all' || g.mode === mode.value) &&
-      (result.value === 'all' || g.win === (result.value === 'win')) &&
+      (result.value === 'all' || (g.win === (result.value === 'win') && !isRemake(g))) &&
       (!champ.value || g.championId === champ.value) &&
       (!augment.value || g.augments.includes(augment.value)),
   ),
 );
 
+// Une partie annulée reste dans la liste, jamais dans un chiffre.
+const counted = computed(() => played(filtered.value));
+
 const kpi = computed(() => {
-  const list = filtered.value;
+  const list = counted.value;
   const n = list.length;
   const wins = list.filter((g) => g.win).length;
   const k = list.reduce((s, g) => s + g.kills, 0);
@@ -78,12 +82,12 @@ const kpi = computed(() => {
   return { n, wins, kda: n ? { k: k / n, d: d / n, a: a / n, ratio: (k + a) / Math.max(1, d) } : null, dpm, kp, dur, streak, streakWin: list[0]?.win ?? false };
 });
 
-const form = computed(() => filtered.value.slice(0, 20).reverse());
+const form = computed(() => counted.value.slice(0, 20).reverse());
 
 // Winrate par semaine (12 dernières semaines avec des parties)
 const weeks = computed(() => {
   const m = new Map<number, { start: number; games: number; wins: number }>();
-  for (const g of filtered.value) {
+  for (const g of counted.value) {
     const d = new Date(g.createdAt);
     const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime();
     const e = m.get(monday) ?? { start: monday, games: 0, wins: 0 };
@@ -97,7 +101,7 @@ const maxWeekGames = computed(() => Math.max(1, ...weeks.value.map((w) => w.game
 
 // Fatigue / tilt : winrate selon le rang de la partie dans la session (pause de plus de 45 min = nouvelle session)
 const sessionRank = computed(() => {
-  const list = [...filtered.value].sort((a, b) => a.createdAt - b.createdAt);
+  const list = [...counted.value].sort((a, b) => a.createdAt - b.createdAt);
   const buckets = [1, 2, 3, 4, 5].map((r) => ({ label: r === 5 ? '5e et +' : `${r}${r === 1 ? 're' : 'e'}`, games: 0, wins: 0 }));
   let rank = 0;
   let lastEnd = 0;
@@ -113,7 +117,7 @@ const sessionRank = computed(() => {
 const weekLabel = (ms: number) => new Date(ms).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 
 // ---------------------------------------------------------------- détail
-const reviewed = computed(() => reviewSummary(filtered.value.map((g) => g.review)));
+const reviewed = computed(() => reviewSummary(counted.value.map((g) => g.review)));
 const open = ref<number | null>(null);
 const details = ref<Record<number, GameDetail | null | 'loading'>>({});
 
@@ -169,7 +173,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
     <Notice v-else-if="!games.length" kind="empty"><p>Aucune partie enregistrée. Tes parties sont importées depuis le client à la connexion, puis enregistrées à chaque fin de partie.</p></Notice>
 
     <template v-else>
-      <div v-if="filtered.length" class="kpis">
+      <div v-if="counted.length" class="kpis">
         <div class="kpi card">
           <div class="faint small">Winrate</div>
           <div class="big num" :class="kpi.n ? (kpi.wins / kpi.n >= 0.5 ? 'good' : 'bad') : ''">{{ pct(kpi.n ? kpi.wins / kpi.n : null) }}</div>
@@ -202,7 +206,7 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
         <span v-for="g in form" :key="g.gameId" class="pip" :class="g.win ? 'w' : 'l'" role="img" :aria-label="g.win ? 'victoire' : 'défaite'" :title="`${g.championName} · ${g.win ? 'victoire' : 'défaite'}`" />
       </div>
 
-      <div v-if="filtered.length >= 5" class="trends">
+      <div v-if="counted.length >= 5" class="trends">
         <section class="card trend">
           <h2>Par semaine</h2>
           <div class="weeks">
@@ -244,13 +248,13 @@ const maxDamage = (d: GameDetail) => Math.max(1, ...d.teams.flatMap((t) => t.pla
       <section class="card list">
         <div v-if="!filtered.length" class="faint pad">Aucune partie pour ces filtres{{ mode === 'sr' ? ' : tes parties de Faille s’ajoutent à la fin de chaque partie classée, normale ou Swiftplay' : '' }}.</div>
         <template v-for="g in filtered.slice(0, shown)" :key="g.gameId">
-          <button class="game" :class="[g.win ? 'w' : 'l', { open: open === g.gameId }]" @click="toggle(g)">
+          <button class="game" :class="[isRemake(g) ? 'r' : g.win ? 'w' : 'l', { open: open === g.gameId }]" @click="toggle(g)">
             <div class="champ">
               <img @error="hideBroken" :src="championIcon(g.championId)" width="40" height="40" class="icon" alt="" />
               <span v-if="g.level" class="lvl">{{ g.level }}</span>
             </div>
             <div class="meta">
-              <div class="res">{{ g.win ? 'Victoire' : 'Défaite' }} <span class="faint">· {{ g.mode === 'mayhem' ? 'Mayhem' : g.mode === 'sr' ? (QUEUE_LABEL[g.queueId] ?? 'Faille') : 'ARAM' }}<template v-if="g.position"> · {{ LANE_FR[g.position] }}</template></span><span v-if="g.headliner" class="hl">{{ g.headliner }}</span></div>
+              <div class="res">{{ isRemake(g) ? 'Annulée' : g.win ? 'Victoire' : 'Défaite' }} <span class="faint">· {{ g.mode === 'mayhem' ? 'Mayhem' : g.mode === 'sr' ? (QUEUE_LABEL[g.queueId] ?? 'Faille') : 'ARAM' }}<template v-if="g.position"> · {{ LANE_FR[g.position] }}</template></span><span v-if="g.headliner" class="hl">{{ g.headliner }}</span></div>
               <div class="faint small">{{ when(g.createdAt) }} · {{ dur(g.durationSec) }}</div>
             </div>
             <div class="kda">

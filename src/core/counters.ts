@@ -68,6 +68,12 @@ const ITEMS: Record<ThreatKey, Record<BuildRole, number[]>> = {
   },
 };
 
+export interface DamageSplit {
+  phys: number;
+  magic: number;
+  true: number;
+}
+
 const TOTAL = (c: MetaComp) => Math.max(1, c.phys + c.magic + (c.true ?? 0));
 
 /** Profil de build de ton champion : tank si c'est une ligne de front, sinon AD ou AP selon ses dégâts. */
@@ -75,6 +81,22 @@ export function buildRole(comp: MetaComp | null | undefined): BuildRole {
   if (!comp) return 'ad';
   if (comp.front >= 2.3 && comp.damage < 1) return 'tank';
   return comp.phys >= comp.magic ? 'ad' : 'ap';
+}
+
+/** Répartition des dégâts d'une équipe (parts de 0 à 1), pondérée comme les menaces : un ennemi en avance pèse plus. */
+export function damageSplit(enemies: EnemyInput[]): DamageSplit | null {
+  const known = enemies.filter((e) => !!e.comp);
+  const sum = (f: (e: { comp: MetaComp; weight?: number }) => number) => known.reduce((s, e) => s + f(e as { comp: MetaComp; weight?: number }) * (e.weight ?? 1), 0);
+  const all = sum((e) => TOTAL(e.comp));
+  if (known.length < 3 || all <= 0) return null;
+  return { phys: sum((e) => e.comp.phys) / all, magic: sum((e) => e.comp.magic) / all, true: sum((e) => e.comp.true ?? 0) / all };
+}
+
+/** « 64 % magiques, 31 % physiques » : le plus gros d'abord, les dégâts bruts seulement s'ils pèsent (5 % ou plus). */
+export function damageText(d: DamageSplit): string {
+  const parts: [number, string][] = [[d.magic, 'magiques'], [d.phys, 'physiques']];
+  if (d.true >= 0.05) parts.push([d.true, 'bruts']);
+  return parts.sort((a, b) => b[0] - a[0]).map(([v, w]) => `${Math.round(v * 100)} % ${w}`).join(', ');
 }
 
 export function enemyThreats(enemies: EnemyInput[], role: BuildRole): Threat[] {
